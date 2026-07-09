@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "_description": "ラベル定数を環境変数としてセッション内に展開",
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/constants.sh"
+            ]
+          },
+          {
+            "_description": "監視対象リポと Wiki を最新化する",
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/session-start/auto-pull.sh"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "_description": "マージ前に master 取り込み確認＋dry-run コンフリクトチェック",
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/pre-merge-check.py"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Read",
+        "hooks": [
+          {
+            "_description": "編集対象ファイルにマッチする開発ルールを注入",
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/inject-rules/injector.py"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-# gh-kit 規約: 外部API一覧
+# ai-monitor 規約: 外部API一覧
 
 採用済み外部 API のインデックス。
 各 API の詳細 Wiki (`docs/wiki/外部API/{API名}.md`) へのリンクと、どこで使われているかの索引を兼ねる。

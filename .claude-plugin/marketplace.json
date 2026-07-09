@@ -1,0 +1,14 @@
+{
+  "name": "ai-monitor",
+  "owner": {
+    "name": "shuhei1101"
+  },
+  "plugins": [
+    {
+      "name": "ai-monitor",
+      "source": "./plugins/ai-monitor",
+      "description": "GitHub Issue/PR を tmux + Claude Code + gh CLI で自動オーケストレーションするワークフロープラグイン（intake → epic → story → subsystem → merge の全モニターとサブエージェントを提供）",
+      "version": "0.1.0"
+    }
+  ]
+}

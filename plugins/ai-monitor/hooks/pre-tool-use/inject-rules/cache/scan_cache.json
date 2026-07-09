@@ -1,0 +1,20 @@
+[
+  {
+    "rel_path": "wiki/wiki管理.md",
+    "paths": [
+      "**/docs/wiki/**"
+    ]
+  },
+  {
+    "rel_path": "wiki/テンプレート.md",
+    "paths": [
+      "**/docs/wiki/**/テンプレート/*.md"
+    ]
+  },
+  {
+    "rel_path": "wiki/モック画面構成規約.md",
+    "paths": [
+      "**/docs/mock/**"
+    ]
+  }
+]

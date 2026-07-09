@@ -1,6 +1,6 @@
-# gh-kit 状態遷移
+# ai-monitor 状態遷移
 
-gh-kit のワークフローを Issue / PR のラベル状態遷移で表現したページ群。
+ai-monitor のワークフローを Issue / PR のラベル状態遷移で表現したページ群。
 
 ## 目次
 
