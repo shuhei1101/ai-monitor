@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>retro - スタイルサンプル</title>
+  <link rel="stylesheet" href="../../../assets/style.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">my-plugins mock</div>
+</header>
+  <div class="layout">
+    <aside class="sidebar">
+      <ul>
+        <li class="active">顧客</li>
+        <li>受注</li>
+        <li>請求</li>
+        <li>設定</li>
+      </ul>
+    </aside>
+    <main class="main">
+      <p class="breadcrumb"><a href="../">スタイル</a> &gt; <span>retro</span></p>
+      <div class="page-header">
+        <h1>retro サンプル</h1>
+        <div class="actions">
+          <button class="ghost">キャンセル</button>
+          <button class="primary">保存</button>
+        </div>
+      </div>
+      <p class="hint">候補スタイル。等幅フォント・太枠・限定色で 80〜90 年代風の見た目を出す。</p>
+
+      <section class="card">
+        <h2>テーブル</h2>
+        <table class="data-table">
+          <thead><tr><th>ID</th><th>顧客名</th><th>状態</th></tr></thead>
+          <tbody>
+            <tr><td>C-1001</td><td>株式会社アルファ</td><td><span class="badge ok">取引中</span></td></tr>
+            <tr><td>C-1002</td><td>ベータ工業</td><td><span class="badge warn">保留</span></td></tr>
+            <tr><td>C-1003</td><td>ガンマ商事</td><td><span class="badge danger">停止</span></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>フォーム</h2>
+        <div class="field-row"><span class="field-label">顧客名</span><span class="field-value"><input type="text" value="株式会社アルファ"></span></div>
+        <div class="field-row"><span class="field-label">業種</span><span class="field-value"><input type="text" value="製造"></span></div>
+        <div class="field-row"><span class="field-label">メモ</span><span class="field-value"><textarea rows="3">重要顧客。月末締め翌月末払い。</textarea></span></div>
+      </section>
+
+      <section class="card">
+        <h2>ボタン</h2>
+        <div class="actions">
+          <button class="primary">プライマリ</button>
+          <button class="ghost">ゴースト</button>
+          <button class="danger">危険</button>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>トップバー - カタログ</title>
+  <link rel="stylesheet" href="../../../assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">my-plugins mock</div>
+</header>
+  <main class="main">
+    <p class="breadcrumb"><a href="../">コンポーネント</a> &gt; <span>トップバー</span></p>
+    <div class="page-header"><h1>トップバー</h1></div>
+    <p class="hint">配置・含める要素のバリエーションを 1 ページに並べたカタログ。</p>
+
+    <section class="card">
+      <h2>案 A: 標準（ロゴ + ナビ + ユーザー）</h2>
+      <div class="topbar" style="position: static;">
+        <div class="brand">my-plugins mock</div>
+</div>
+    </section>
+
+    <section class="card">
+      <h2>案 B: 検索付き</h2>
+      <div class="topbar" style="position: static;">
+        <div class="brand">my-plugins mock</div>
+        <input type="search" placeholder="検索..." style="flex: 1; max-width: 480px;">
+</div>
+    </section>
+
+    <section class="card">
+      <h2>案 C: ミニマル（ロゴのみ）</h2>
+      <div class="topbar" style="position: static;">
+        <div class="brand">my-plugins mock</div>
+        <div></div>
+</div>
+    </section>
+  </main>
+</body>
+</html>

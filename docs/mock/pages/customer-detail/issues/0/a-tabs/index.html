@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>顧客詳細 - 案 A: タブ</title>
+  <link rel="stylesheet" href="../../../../../../assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">my-plugins mock</div>
+</header>
+  <main class="main">
+    <p class="breadcrumb"><a href="../">案リスト</a> &gt; <span>案 A</span></p>
+    <div class="page-header">
+      <h1>顧客詳細</h1>
+      <div class="actions">
+        <button class="ghost" id="edit-btn">編集</button>
+        <button class="ghost" id="cancel-btn" hidden>キャンセル</button>
+        <button class="primary" id="save-btn" hidden>保存</button>
+      </div>
+    </div>
+    <p class="hint">タブで「基本」「関連」「履歴」を切り替える設計。</p>
+
+    <section class="card">
+      <div style="display: flex; gap: var(--space-md); border-bottom: 1px solid var(--border); margin-bottom: var(--space-md);">
+        <span style="padding: var(--space-sm); border-bottom: 2px solid var(--accent); color: var(--text);">基本情報</span>
+        <span style="padding: var(--space-sm); color: var(--text-muted); cursor: pointer;">関連</span>
+        <span style="padding: var(--space-sm); color: var(--text-muted); cursor: pointer;">履歴</span>
+      </div>
+      <div class="field-row"><span class="field-label">顧客名</span><span class="field-value"><input type="text" value="株式会社アルファ" readonly></span></div>
+      <div class="field-row"><span class="field-label">業種</span><span class="field-value"><input type="text" value="製造" readonly></span></div>
+      <div class="field-row"><span class="field-label">担当</span><span class="field-value"><input type="text" value="山田 太郎" readonly></span></div>
+      <div class="field-row"><span class="field-label">電話</span><span class="field-value"><input type="text" value="03-1234-5678" readonly></span></div>
+      <div class="field-row"><span class="field-label">メモ</span><span class="field-value"><textarea rows="3" readonly>重要顧客。月末締め翌月末払い。</textarea></span></div>
+    </section>
+  </main>
+  <div class="toast" id="toast" hidden></div>
+  <script src="../../../../../../assets/app.js"></script>
+</body>
+</html>

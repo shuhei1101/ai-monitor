@@ -1,0 +1,692 @@
+/* ==========================================================================
+   my-plugins docs 共通スタイル
+   docs/ 配下のすべてのページ（Mock / Wiki 共通）で読み込む単一 CSS。
+   個別ページ用のスタイルは、当該ページのディレクトリ配下に別 CSS を置き、
+   本ファイルを上書き / 補強する形で使う。
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1. デザイントークン
+   カラー・余白・角丸などの基本値を CSS 変数で定義する。
+   Retro など別スタイルは当該ページ側で --accent などを上書きするだけで済む。
+   ========================================================================== */
+:root {
+  /* 背景・前景 */
+  --bg: #f7f8fa;
+  --bg-elevated: #ffffff;
+  --bg-hover: #eef1f5;
+  --bg-code: #f3f4f6;
+
+  /* 罫線・文字 */
+  --border: #e1e4e8;
+  --text: #1f2328;
+  --text-muted: #6e7681;
+
+  /* アクセント（リンク・ボタン primary） */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+
+  /* ステート色 */
+  --ok: #16a34a;
+  --warn: #ca8a04;
+  --danger: #dc2626;
+
+  /* 角丸 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  /* 余白 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+
+  /* レイアウト固定値 */
+  --topbar-h: 56px;
+  --sidebar-w: 220px;
+
+  /* フォント */
+  --font-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* ダークモード用オーバーライド。html[data-theme="dark"] を app.js が付ける */
+html[data-theme="dark"] {
+  --bg: #0d1117;
+  --bg-elevated: #161b22;
+  --bg-hover: #21262d;
+  --bg-code: #1c2128;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --accent-hover: #79b8ff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --danger: #f85149;
+}
+
+
+/* ==========================================================================
+   2. リセット・ベース
+   ========================================================================== */
+* { box-sizing: border-box; }
+
+/* # アンカージャンプで見出しが sticky topbar の下に隠れないよう、
+   スクロール位置を topbar の高さだけ下げる */
+html {
+  scroll-padding-top: calc(var(--topbar-h) + var(--space-md));
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-base);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); }
+
+
+/* ==========================================================================
+   3. トップバー
+   全ページ共通のヘッダ帯。左にサイト名、右にツールボタン（MD DL 等）を置く。
+   ========================================================================== */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-h);
+  padding: 0 var(--space-lg);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; font-size: 16px; }
+.brand a { color: var(--text); }
+
+/* トップバー中央の全ページ検索 */
+.topbar-search {
+  position: relative;
+  flex: 1;
+  max-width: 480px;
+  margin: 0 var(--space-md);
+}
+.topbar-search input[type="search"] {
+  width: 100%;
+  height: 32px;
+}
+.search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-xs) 0;
+  list-style: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 20;
+}
+.search-results li a {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-xs) var(--space-md);
+  color: var(--text);
+}
+.search-results li a:hover { background: var(--bg-hover); }
+.search-title { font-weight: 600; }
+.search-path { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+/* トップバー右側のツールボタン群 */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.md-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.md-download::before { content: "📄"; }
+.md-download:hover { color: var(--accent); border-color: var(--accent); }
+
+/* テーマ切替ボタン */
+.theme-toggle {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+.theme-toggle:hover { background: var(--bg-hover); }
+
+.nav { display: flex; gap: var(--space-md); }
+.nav a {
+  color: var(--text-muted);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+}
+.nav a.active { color: var(--text); background: var(--bg-hover); }
+
+.user { display: flex; align-items: center; gap: var(--space-sm); color: var(--text-muted); }
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+
+/* ==========================================================================
+   4. レイアウト
+   layout: サイドバー + メインの 2 カラム構成（Mock demo 用）
+   main : シングルカラム（MD 描画ページ / 索引ページ用）
+   ========================================================================== */
+.layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: calc(100vh - var(--topbar-h));
+}
+.sidebar {
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  padding: var(--space-md) 0;
+}
+.sidebar ul { list-style: none; margin: 0; padding: 0; }
+.sidebar li { padding: var(--space-sm) var(--space-lg); color: var(--text-muted); cursor: pointer; }
+.sidebar li:hover { background: var(--bg-hover); color: var(--text); }
+.sidebar li.active {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-left: 3px solid var(--accent);
+  padding-left: calc(var(--space-lg) - 3px);
+}
+
+.main { padding: var(--space-lg); max-width: 1280px; margin: 0 auto; }
+
+/* MD ページ用: 本文と TOC の 2 カラム（狭幅では TOC を隠す） */
+.main-with-toc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: var(--space-lg);
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-lg);
+}
+.main-content { min-width: 0; }
+@media (max-width: 960px) {
+  .main-with-toc { grid-template-columns: 1fr; }
+  .toc { display: none; }
+}
+
+
+/* ==========================================================================
+   5. ページ見出し
+   ========================================================================== */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+.page-header h1 { margin: 0; font-size: 22px; }
+.actions { display: flex; gap: var(--space-sm); }
+
+.hint { color: var(--text-muted); margin-top: 0; margin-bottom: var(--space-md); }
+
+
+/* ==========================================================================
+   6. パンくずリスト
+   URL 階層から app.js が自動生成する。data-breadcrumb 要素に描画される。
+   ========================================================================== */
+.breadcrumb {
+  color: var(--text-muted);
+  margin: 0 0 var(--space-md) 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.breadcrumb a { color: var(--text-muted); }
+.breadcrumb a:hover { color: var(--accent); }
+.breadcrumb .sep { margin: 0 var(--space-xs); opacity: 0.6; }
+.breadcrumb .current { color: var(--text); font-weight: 500; }
+
+
+/* ==========================================================================
+   7. フォーム・ボタン
+   ========================================================================== */
+input[type="search"],
+input[type="text"],
+textarea {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: var(--font-base);
+}
+input[type="search"]:focus,
+input[type="text"]:focus,
+textarea:focus { outline: none; border-color: var(--accent); }
+
+button {
+  cursor: pointer;
+  font-family: var(--font-base);
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid transparent;
+  transition: background 0.15s ease;
+}
+button.primary { background: var(--accent); color: #fff; }
+button.primary:hover { background: var(--accent-hover); }
+button.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+button.ghost:hover { background: var(--bg-hover); }
+button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+button.danger:hover { background: var(--danger); color: #fff; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+
+/* ==========================================================================
+   8. テーブル
+   .data-table: Mock demo 用の詳細付きテーブル
+   .markdown-body table: MD から生成されるテーブル
+   共通機能: ソート（クリック可能ヘッダ）+ フィルタ（テーブル上部の検索）
+   ========================================================================== */
+.data-table,
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--space-md);
+}
+.data-table th,
+.data-table td,
+.markdown-body th,
+.markdown-body td {
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.data-table th,
+.markdown-body th {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.data-table tbody tr,
+.markdown-body tbody tr { transition: background 0.1s ease; }
+.data-table tbody tr:hover,
+.markdown-body tbody tr:hover { background: var(--bg-hover); }
+.data-table tr.hidden,
+.markdown-body tr.hidden { display: none; }
+
+/* ソート可能ヘッダ（app.js が付与） */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: calc(var(--space-md) + 14px);
+}
+th.sortable::after {
+  content: "⇅";
+  position: absolute;
+  right: var(--space-sm);
+  opacity: 0.3;
+  font-size: 11px;
+}
+th.sort-asc::after { content: "▲"; opacity: 1; color: var(--accent); }
+th.sort-desc::after { content: "▼"; opacity: 1; color: var(--accent); }
+
+/* テーブル上部のフィルタ検索ボックス */
+.table-filter {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: var(--space-sm);
+}
+
+
+/* ==========================================================================
+   9. バッジ・カード・その他表示要素
+   ========================================================================== */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge.ok { background: rgba(22, 163, 74, 0.12); color: var(--ok); }
+.badge.warn { background: rgba(202, 138, 4, 0.15); color: var(--warn); }
+.badge.danger { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  margin-top: var(--space-md);
+  color: var(--text-muted);
+}
+
+/* 画面下部の一時通知 */
+.toast {
+  position: fixed;
+  bottom: var(--space-lg);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.card h2 { margin: 0 0 var(--space-md) 0; font-size: 16px; }
+
+.section-spacer { margin-top: var(--space-lg); }
+
+/* 採用案リストで採用済みを目立たせる帯 */
+.adopted-banner {
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid var(--ok);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  color: var(--ok);
+  font-weight: 600;
+}
+
+
+/* ==========================================================================
+   10. 詳細画面用グリッド
+   ========================================================================== */
+.detail-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-lg);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border);
+}
+.field-row:last-child { border-bottom: none; }
+.field-label { color: var(--text-muted); }
+.field-value input,
+.field-value textarea { width: 100%; }
+
+.meta-list { list-style: none; margin: 0; padding: 0; }
+.meta-list li { padding: var(--space-xs) 0; color: var(--text-muted); }
+.meta-list strong { color: var(--text); }
+
+
+/* ==========================================================================
+   11. Markdown 描画エリア
+   app.js が MD を marked で HTML 化して #md-content に流し込む。
+   一般的な GFM 風の見た目に整える。
+   ========================================================================== */
+.markdown-body {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+}
+.markdown-body > *:first-child { margin-top: 0; }
+.markdown-body > *:last-child { margin-bottom: 0; }
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin-top: var(--space-lg);
+  margin-bottom: var(--space-sm);
+  line-height: 1.3;
+}
+.markdown-body h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: var(--space-xs); }
+.markdown-body h2 { font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: var(--space-xs); }
+.markdown-body h3 { font-size: 16px; }
+.markdown-body h4 { font-size: 14px; color: var(--text-muted); }
+
+/* # アンカージャンプ時に sticky topbar の下に見出しが隠れないよう
+   個別の要素側にも余白を持たせる（html の scroll-padding-top と二重で担保） */
+.markdown-body :is(h1, h2, h3, h4) {
+  scroll-margin-top: calc(var(--topbar-h) + var(--space-md));
+}
+
+/* 見出しの右横に付く # アンカー。hover で薄く表示 */
+.heading-anchor {
+  margin-left: var(--space-sm);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  text-decoration: none;
+  font-weight: normal;
+}
+.markdown-body h2:hover .heading-anchor,
+.markdown-body h3:hover .heading-anchor,
+.markdown-body h4:hover .heading-anchor { opacity: 0.6; }
+.heading-anchor:hover { opacity: 1 !important; color: var(--accent); }
+
+/* コードブロック右上のコピーボタン */
+.code-copy {
+  position: absolute;
+  top: var(--space-xs);
+  right: var(--space-xs);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: var(--font-base);
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.markdown-body pre:hover .code-copy { opacity: 1; }
+.code-copy:hover { color: var(--accent); border-color: var(--accent); }
+
+.markdown-body p { margin: var(--space-sm) 0; }
+
+.markdown-body ul,
+.markdown-body ol { padding-left: var(--space-lg); margin: var(--space-sm) 0; }
+.markdown-body li { margin: var(--space-xs) 0; }
+
+.markdown-body blockquote {
+  margin: var(--space-sm) 0;
+  padding: var(--space-xs) var(--space-md);
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--bg-code);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+.markdown-body pre {
+  background: var(--bg-code);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.markdown-body pre code { background: transparent; padding: 0; }
+
+.markdown-body img { max-width: 100%; height: auto; }
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-lg) 0;
+}
+
+/* MD 読み込み中の placeholder */
+.md-loading { color: var(--text-muted); font-style: italic; }
+.md-error {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  background: rgba(220, 38, 38, 0.05);
+}
+
+
+/* ==========================================================================
+   12. トップに戻るボタン
+   app.js がスクロール量に応じて .visible を切り替える。
+   ========================================================================== */
+.back-to-top {
+  position: fixed;
+  bottom: var(--space-lg);
+  right: var(--space-lg);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 20;
+}
+.back-to-top.visible { opacity: 1; pointer-events: auto; }
+.back-to-top:hover { background: var(--accent-hover); transform: translateY(-2px); }
+
+
+/* ==========================================================================
+   14. 目次サイドバー（MD ページ用）
+   ========================================================================== */
+.toc {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--space-md));
+  align-self: start;
+  max-height: calc(100vh - var(--topbar-h) - var(--space-lg));
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-md);
+  font-size: 13px;
+  border-left: 1px solid var(--border);
+}
+.toc-title {
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.toc-list { list-style: none; margin: 0; padding: 0; }
+.toc-item { margin: 2px 0; }
+.toc-item a {
+  display: block;
+  padding: 2px 6px;
+  border-left: 2px solid transparent;
+  color: var(--text-muted);
+  border-radius: 2px;
+  line-height: 1.4;
+}
+.toc-item a:hover { color: var(--text); background: var(--bg-hover); }
+.toc-item a.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--bg-hover);
+}
+.toc-lv3 a { padding-left: 18px; font-size: 12px; }
+
+
+/* ==========================================================================
+   15. コード言語ラベル
+   ========================================================================== */
+.code-lang {
+  position: absolute;
+  top: var(--space-xs);
+  left: var(--space-sm);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+
+/* ==========================================================================
+   16. Mermaid ホルダー
+   ========================================================================== */
+.mermaid-holder {
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  text-align: center;
+}
+.mermaid-holder svg { max-width: 100%; height: auto; }
+
+
+/* ==========================================================================
+   17. 狭幅対応
+   ========================================================================== */
+@media (max-width: 720px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .main { padding: var(--space-md); }
+  .topbar-search { display: none; }
+}

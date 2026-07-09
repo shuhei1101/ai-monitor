@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>顧客一覧 - 案 A: 左サイドフィルター</title>
+  <link rel="stylesheet" href="../../../../../../assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">my-plugins mock</div>
+</header>
+  <div class="layout">
+    <aside class="sidebar">
+      <ul>
+        <li class="active">フィルター</li>
+        <li>業種: 製造</li>
+        <li>業種: 建設</li>
+        <li>状態: 取引中</li>
+        <li>状態: 保留</li>
+      </ul>
+    </aside>
+    <main class="main">
+      <p class="breadcrumb"><a href="../">案リスト</a> &gt; <span>案 A</span></p>
+      <div class="page-header">
+        <h1>顧客一覧</h1>
+        <div class="actions">
+          <input type="search" id="search" placeholder="検索...">
+          <button class="primary" id="new-btn">新規追加</button>
+        </div>
+      </div>
+      <table class="data-table" id="customer-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>顧客名</th>
+            <th>業種</th>
+            <th>担当</th>
+            <th>状態</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-id="1001"><td>C-1001</td><td>株式会社アルファ</td><td>製造</td><td>山田 太郎</td><td><span class="badge ok">取引中</span></td></tr>
+          <tr data-id="1002"><td>C-1002</td><td>ベータ工業</td><td>建設</td><td>佐藤 花子</td><td><span class="badge warn">保留</span></td></tr>
+          <tr data-id="1003"><td>C-1003</td><td>ガンマ商事</td><td>卸売</td><td>鈴木 一郎</td><td><span class="badge ok">取引中</span></td></tr>
+        </tbody>
+      </table>
+      <div class="pager">
+        <button class="ghost">前へ</button>
+        <span>1 / 12</span>
+        <button class="ghost">次へ</button>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" hidden></div>
+  <script src="../../../../../../assets/app.js"></script>
+</body>
+</html>

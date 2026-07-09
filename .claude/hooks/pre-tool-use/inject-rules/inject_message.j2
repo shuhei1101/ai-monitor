@@ -1,0 +1,28 @@
+<!--
+ファイル編集ルールが注入されました。
+今後、`適用パターン`に一致するファイルを編集するときは該当ルールに従ってください。
+ -->
+
+{% for block in blocks %}
+
+---
+
+> 適用ルール: {{ block.abs_path }}
+{% if block.patterns %}
+> 適用パターン: {{ block.patterns | join(", ") }}
+
+{% endif %}
+
+{{ block.body | trim }}
+
+{% endfor %}
+
+---
+
+---
+{% if remaining_count > 0 %}
+⚠️ **ルール読み込み中** ({{ loaded_files }}/{{ total_files }} ファイル / {{ packed_chars }}/{{ total_chars }} 文字をこのバッチで注入)
+残り **{{ remaining_count }}** 未完了です。**同じツール呼び出しを再実行してください。**次のバッチが自動的に注入されます。
+{% else %}
+{{ loaded_files }}/{{ total_files }} ファイル読み込み完了
+{% endif %}

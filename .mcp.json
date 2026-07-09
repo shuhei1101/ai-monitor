@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "ai-monitor-tools": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with", "mcp",
+        "--with", "pydantic",
+        "python",
+        "${CLAUDE_PROJECT_DIR}/mcp/server.py"
+      ]
+    }
+  }
+}

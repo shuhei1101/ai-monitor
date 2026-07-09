@@ -1,0 +1,58 @@
+/* retro スタイル: 等幅フォント・限定色・太枠の 80〜90 年代風 UI */
+:root {
+  --bg: #f5e8c8;
+  --bg-elevated: #fffceb;
+  --bg-hover: #ead9a0;
+  --border: #1a1a1a;
+  --text: #1a1a1a;
+  --text-muted: #5a4a30;
+  --accent: #d8431f;
+  --accent-hover: #a73315;
+  --ok: #2f7a2f;
+  --warn: #b07a00;
+  --danger: #b00020;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --font-base: "Courier New", "Hiragino Maru Gothic ProN", monospace;
+}
+
+body { background: var(--bg); }
+
+.topbar,
+.sidebar,
+.card,
+.data-table {
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 var(--border);
+}
+
+.topbar { border-radius: 0; }
+.card { border-radius: 0; margin-bottom: 24px; }
+
+button {
+  border: 2px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: 3px 3px 0 var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+button.primary { background: var(--accent); color: #fffceb; }
+button.ghost { background: var(--bg-elevated); color: var(--text); }
+button.danger { background: var(--bg-elevated); color: var(--danger); }
+
+input[type="text"],
+input[type="search"],
+textarea {
+  border: 2px solid var(--border) !important;
+  border-radius: 0 !important;
+  background: var(--bg-elevated);
+}
+
+.badge { border: 1px solid var(--border); border-radius: 0; }
+
+.data-table th {
+  background: var(--border);
+  color: var(--bg-elevated);
+}
+
+h1, h2 { font-family: var(--font-base); letter-spacing: 0.04em; }

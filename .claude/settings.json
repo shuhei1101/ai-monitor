@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "_description": "定数を環境変数としてセッション内に展開する",
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "./scripts/constants.sh"
+            ]
+          },
+          {
+            "_description": "GH_KIT_REPO_PATH / GH_KIT_WIKI_PATH のリポジトリを pull して最新化する",
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "./hooks/session-start/auto-pull.sh"
+            ]
+          }
+        ]
+      }
+    ],
+  "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "_description": "マージ前に master 取り込み確認＋dry-run コンフリクトチェック（AI 自動マージの安全網）",
+            "type": "command",
+            "command": "python",
+            "args": [
+              "./hooks/pre-tool-use/pre-merge-check.py"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Read",
+        "hooks": [
+          {
+            "_description": "編集対象ファイルにマッチする開発ルールを注入",
+            "type": "command",
+            "command": "python",
+            "args": [
+              "./hooks/pre-tool-use/inject-rules/injector.py"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

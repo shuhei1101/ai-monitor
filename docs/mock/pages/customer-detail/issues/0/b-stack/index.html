@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>顧客詳細 - 案 B: 縦積み</title>
+  <link rel="stylesheet" href="../../../../../../assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">my-plugins mock</div>
+</header>
+  <main class="main">
+    <p class="breadcrumb"><a href="../">案リスト</a> &gt; <span>案 B</span></p>
+    <div class="page-header">
+      <h1>顧客詳細</h1>
+      <div class="actions">
+        <button class="ghost" id="edit-btn">編集</button>
+        <button class="ghost" id="cancel-btn" hidden>キャンセル</button>
+        <button class="primary" id="save-btn" hidden>保存</button>
+      </div>
+    </div>
+    <p class="hint">全セクションを縦に積む設計。</p>
+
+    <section class="card">
+      <h2>基本情報</h2>
+      <div class="field-row"><span class="field-label">顧客名</span><span class="field-value"><input type="text" value="株式会社アルファ" readonly></span></div>
+      <div class="field-row"><span class="field-label">業種</span><span class="field-value"><input type="text" value="製造" readonly></span></div>
+      <div class="field-row"><span class="field-label">担当</span><span class="field-value"><input type="text" value="山田 太郎" readonly></span></div>
+    </section>
+
+    <section class="card">
+      <h2>関連</h2>
+      <ul class="meta-list">
+        <li>受注: 3 件（直近 90 日）</li>
+        <li>請求: 2 件（未回収 0）</li>
+        <li>担当者メモ: 2 件</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>履歴</h2>
+      <ul class="meta-list">
+        <li>2026-06-15: 担当変更</li>
+        <li>2026-05-12: 取引開始</li>
+      </ul>
+    </section>
+  </main>
+  <div class="toast" id="toast" hidden></div>
+  <script src="../../../../../../assets/app.js"></script>
+</body>
+</html>
