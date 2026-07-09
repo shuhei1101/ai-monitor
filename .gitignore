@@ -11,6 +11,7 @@ dist/
 
 # uv
 .venv/
+uv.lock
 
 # Environment
 .env
