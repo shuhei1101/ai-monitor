@@ -23,7 +23,8 @@ ai-monitor/
 │       ├── agents/                          # サブエージェント定義
 │       ├── hooks/hooks.json                 # SessionStart / PreToolUse フック
 │       ├── mcp/server.py                    # gh 操作 MCP サーバ (ai-monitor-tools)
-│       ├── scripts/                         # constants.sh / gh ヘルパー
+│       ├── scripts/                         # gh ヘルパー
+│       ├── constants.env                    # ラベル等の静的定数（SoT・bash / python 両対応）
 │       └── .mcp.json                        # MCP 起動定義
 ├── src/ai_monitor/                          # Python オーケストレーター（別プロセス）
 │   ├── features/  integrations/  runtime/  server/  shared/
@@ -150,7 +151,7 @@ skill の SKILL.md は raw URL 経由で Wiki を参照するため、master pus
 
 - Wiki → skill: raw URL fetch（`${WIKI_BASE}/...`）
 - skill → MCP: `.mcp.json` の `ai-monitor-tools`
-- skill → 定数: `${AI_MONITOR_LABEL_*}` 環境変数（SessionStart フックで `constants.sh` を eval）
+- skill → 定数: `${AI_MONITOR_LABEL_*}` 環境変数（SessionStart フックの `load-constants.sh` が `constants.env` を `CLAUDE_ENV_FILE` 経由で展開）
 - skill → gh スクリプト: `${CLAUDE_PLUGIN_ROOT}/scripts/gh/*.py`
 
 ---

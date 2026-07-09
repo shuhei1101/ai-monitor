@@ -4,11 +4,11 @@
       {
         "hooks": [
           {
-            "_description": "ラベル定数を環境変数としてセッション内に展開",
+            "_description": "constants.env の定数を CLAUDE_ENV_FILE 経由でセッション内に展開",
             "type": "command",
             "command": "bash",
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/scripts/constants.sh"
+              "${CLAUDE_PLUGIN_ROOT}/hooks/session-start/load-constants.sh"
             ]
           },
           {
