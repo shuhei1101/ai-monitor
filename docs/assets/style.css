@@ -678,6 +678,15 @@ th.sort-desc::after { content: "▼"; opacity: 1; color: var(--accent); }
   text-align: center;
 }
 .mermaid-holder svg { max-width: 100%; height: auto; }
+/* click リンク付きノードはカーソルで押せると分かるようにする */
+.mermaid-holder svg a { cursor: pointer; }
+/* click リンク付きノードのラベルに下線を引いて参照と分かるようにする（SVG text / HTML ラベル両対応） */
+.mermaid-holder svg a text,
+.mermaid-holder svg a .nodeLabel {
+  text-decoration: underline;
+}
+/* click リンク付きノードのホバー強調 */
+.mermaid-holder svg a:hover { opacity: 0.7; }
 
 
 /* ==========================================================================

@@ -17,6 +17,10 @@ uv.lock
 .env
 .env.local
 
+# Settings（秘匿情報を含むためコミットしない。コミットするのは *.example のみ）
+settings.yaml
+settings.*.yaml
+
 # IDE
 .vscode/
 .idea/
@@ -39,3 +43,4 @@ logs/
 
 # Migration workspace (temporary during setup)
 _migration_source/
+plugins/ai-monitor/hooks/pre-tool-use/inject-rules/cache/

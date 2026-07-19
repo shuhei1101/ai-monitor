@@ -194,8 +194,8 @@ function insertHeadingAnchors() {
   const used = new Set();
 
   root.querySelectorAll("h2, h3, h4").forEach((h) => {
-    // id が既にあればそれを、無ければ本文から生成
-    let id = h.id || slugify(h.textContent || "");
+    // kramdown の自動 id は日本語を落とす（例: "section"）ため、本文から生成した slug を優先する
+    let id = slugify(h.textContent || "") || h.id;
     if (!id) return;
     // 重複回避
     let unique = id;
@@ -348,7 +348,7 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   // Mermaid にも反映（再描画）
   if (window.mermaid && typeof window.mermaid.initialize === "function") {
-    window.mermaid.initialize({ startOnLoad: false, theme: theme === "dark" ? "dark" : "default" });
+    window.mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: theme === "dark" ? "dark" : "default" });
   }
 }
 
@@ -376,13 +376,24 @@ function bindThemeToggle() {
  * 10. Mermaid 自動描画
  * ---------------------------------------------------------------------------- */
 
+/** click 構文のリンク先 .md を Pages の .html に書き換える（Jekyll の relative_links はコードブロック内に効かないため） */
+function rewriteMermaidLinks(holder) {
+  holder.querySelectorAll("a").forEach((a) => {
+    const attr = a.hasAttribute("href") ? "href" : "xlink:href";
+    const href = a.getAttribute(attr);
+    if (!href) return;
+    a.setAttribute(attr, href.replace(/\.md(#|$)/, ".html$1"));
+  });
+}
+
 /** 元 MD テキストを data 属性に退避して SVG に置き換える */
 async function renderMermaid() {
   if (!window.mermaid) return;
   const blocks = document.querySelectorAll("pre > code.language-mermaid");
   if (blocks.length === 0) return;
 
-  window.mermaid.initialize({ startOnLoad: false, theme: document.documentElement.dataset.theme === "dark" ? "dark" : "default" });
+  // securityLevel: loose で click 構文をリンクとして描画する（GitHub 上では strict のため飾りになる）
+  window.mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: document.documentElement.dataset.theme === "dark" ? "dark" : "default" });
 
   for (const [i, code] of blocks.entries()) {
     const pre = code.parentElement;
@@ -395,6 +406,7 @@ async function renderMermaid() {
       const id = `mermaid-${Date.now()}-${i}`;
       const { svg } = await window.mermaid.render(id, src);
       holder.innerHTML = svg;
+      rewriteMermaidLinks(holder);
     } catch (e) {
       holder.innerHTML = `<div class="md-error">Mermaid の描画に失敗: ${e?.message ?? e}</div>`;
     }
@@ -406,13 +418,14 @@ async function renderMermaid() {
 async function rerenderMermaid() {
   if (!window.mermaid) return;
   const holders = document.querySelectorAll(".mermaid-holder[data-mermaid-src]");
-  window.mermaid.initialize({ startOnLoad: false, theme: document.documentElement.dataset.theme === "dark" ? "dark" : "default" });
+  window.mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: document.documentElement.dataset.theme === "dark" ? "dark" : "default" });
   for (const [i, holder] of holders.entries()) {
     const src = holder.dataset.mermaidSrc;
     try {
       const id = `mermaid-re-${Date.now()}-${i}`;
       const { svg } = await window.mermaid.render(id, src);
       holder.innerHTML = svg;
+      rewriteMermaidLinks(holder);
     } catch (e) {
       holder.innerHTML = `<div class="md-error">Mermaid の描画に失敗: ${e?.message ?? e}</div>`;
     }

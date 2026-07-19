@@ -4,10 +4,10 @@
 
 ## 関連画面
 
-| No  | 画面     | 案リスト                                                        | 採用案                                                                        |
-| --- | -------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| 1   | 顧客一覧 | [案リスト](../../pages/customer-list/issues/0/)                 | [a-left-filter](../../pages/customer-list/issues/0/a-left-filter/)            |
-| 2   | 顧客詳細 | [案リスト](../../pages/customer-detail/issues/0/)               | [a-tabs](../../pages/customer-detail/issues/0/a-tabs/)                        |
+| 画面 | 案リスト | 採用案 |
+| -------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 顧客一覧 | [案リスト](../../pages/customer-list/issues/0/) | [a-left-filter](../../pages/customer-list/issues/0/a-left-filter/) |
+| 顧客詳細 | [案リスト](../../pages/customer-detail/issues/0/) | [a-tabs](../../pages/customer-detail/issues/0/a-tabs/) |
 
 ## 概要
 

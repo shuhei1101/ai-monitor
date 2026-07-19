@@ -8,17 +8,41 @@
 
 ## 一覧
 
-| No | 種別 | シナリオ / 機能名 | 概要 | リンク | 補足 |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 単一ユースケース | Issue分解と子起票 | intake Issue の分解 → 承認 → Sub-issue 起票 | [Issue分解と子起票](./単一ユースケース/Issue分解と子起票.md) | intake-issue-triager |
-| 2 | 〃 | epic要件確定 | epic 本文 5 セクション確定 + PoC 要否判定 | [epic要件確定](./単一ユースケース/epic要件確定.md) | epic-conductor 初回 |
-| 3 | 〃 | 実現可能性PoC検証 | 核心機構の成立検証・PoC PR はマージせず close | [実現可能性PoC検証](./単一ユースケース/実現可能性PoC検証.md) | epic-poc-runner・条件付き |
-| 4 | 〃 | PoC結果確認 | PoC 結果の確認 → epic Draft PR 作成 + 引き継ぎ | [PoC結果確認](./単一ユースケース/PoC結果確認.md) | epic-conductor 復帰・条件付き |
-| 5 | 〃 | 全体UI設計 | 画面一覧・遷移全体像・モックで画面の方向性を確定 | [全体UI設計](./単一ユースケース/全体UI設計.md) | mock-designer・画面の新規作成 / レイアウト変更を含む epic のみ |
-| 6 | 〃 | 複合シナリオ設計 | 複合 UC シナリオを epic ブランチに commit | [複合シナリオ設計](./単一ユースケース/複合シナリオ設計.md) | complex-scenario-writer |
-| 7 | 〃 | 子story起票 | UC 一覧から story Issue x N 起票 | [子story起票](./単一ユースケース/子story起票.md) | epic-conductor 復帰 |
-| 8 | 〃 | story要件確定 | story 本文 4 セクション確定 | [story要件確定](./単一ユースケース/story要件確定.md) | story-conductor 初回 |
-| 9 | 〃 | 単一シナリオ設計 | 単一 UC シナリオを story ブランチに commit | [単一シナリオ設計](./単一ユースケース/単一シナリオ設計.md) | single-scenario-writer |
-| 10 | 〃 | 子subsystem起票 | 実装分担単位で subsystem Issue x M 起票 | [子subsystem起票](./単一ユースケース/子subsystem起票.md) | story-conductor 復帰 |
-| 11 | 〃 | subsystem要件確定 | 現状調査 + システム要件（SA）確定 | [subsystem要件確定](./単一ユースケース/subsystem要件確定.md) | subsystem-conductor |
-| 12 | 〃 | UI設計 | 画面構成 / 遷移 / モック合意 + FE Wiki 更新 | [UI設計](./単一ユースケース/UI設計.md) | ui-designer・画面ありのみ |
+| 種別 | シナリオ / 機能名 | 概要 | リンク | 補足 |
+| --- | --- | --- | --- | --- |
+| 単一ユースケース | Issue分解と子起票 | intake Issue の分解 → 承認 → Sub-issue 起票 | [Issue分解と子起票](./単一ユースケース/Issue分解と子起票.md) | intake-issue-triager |
+| 単一ユースケース | epic要件確定 | epic 本文 5 セクション確定 + PoC 要否判定 | [epic要件確定](./単一ユースケース/epic要件確定.md) | epic-conductor 初回 |
+| 単一ユースケース | 実現可能性PoC検証 | 核心機構の成立検証・PoC PR はマージせず close | [実現可能性PoC検証](./単一ユースケース/実現可能性PoC検証.md) | epic-poc-runner・条件付き |
+| 単一ユースケース | PoC結果確認 | PoC 結果の確認 → epic Draft PR 作成 + 引き継ぎ | [PoC結果確認](./単一ユースケース/PoC結果確認.md) | epic-conductor 復帰・条件付き |
+| 単一ユースケース | 全体UI設計 | 画面一覧・遷移全体像・モックで画面の方向性を確定 | [全体UI設計](./単一ユースケース/全体UI設計.md) | mock-designer・画面の新規作成 / レイアウト変更を含む epic のみ |
+| 単一ユースケース | 複合シナリオ設計 | 複合 UC シナリオを epic ブランチに commit | [複合シナリオ設計](./単一ユースケース/複合シナリオ設計.md) | complex-scenario-writer |
+| 単一ユースケース | 子story起票 | UC 一覧から story Issue x N 起票 | [子story起票](./単一ユースケース/子story起票.md) | epic-conductor 復帰 |
+| 単一ユースケース | story要件確定 | story 本文 4 セクション確定 | [story要件確定](./単一ユースケース/story要件確定.md) | story-conductor 初回 |
+| 単一ユースケース | 単一シナリオ設計 | 単一 UC シナリオを story ブランチに commit | [単一シナリオ設計](./単一ユースケース/単一シナリオ設計.md) | single-scenario-writer |
+| 単一ユースケース | 子subsystem起票 | 依存順（BE → FE 等）を決めて subsystem Issue を直列起票（先頭グループ → 逐次） | [子subsystem起票](./単一ユースケース/子subsystem起票.md) | story-conductor 復帰 |
+| 単一ユースケース | subsystem要件確定 | 現状調査 + SA 確定 + PR / タスク一覧作成（承認ゲート付き） | [subsystem要件確定](./単一ユースケース/subsystem要件確定.md) | subsystem-conductor |
+| 単一ユースケース | SS設計 | 設計 Wiki（インターフェース → ER図 → 画面構成 → 結合フロー → モジュール構成）を上流順に確定・インターフェース確定時の中間報告・差し戻し時の設計修正 | [SS設計](./単一ユースケース/SS設計.md) | architect・BE / FE 共通・必要ならライブラリ PoC・確定後に tester にタスクを割り当て |
+| 単一ユースケース | ライブラリ選定 | 候補比較 → （必要なら PoC 発注）→ 採用決定 → Wiki 反映 | [ライブラリ選定](./単一ユースケース/ライブラリ選定.md) | 発注元 architect・設計の応答ループ中に発生 |
+| 単一ユースケース | ライブラリPoC検証 | 1 候補の PoC 実装 + 検証 + 結果記録 → 発注元へ完了報告 | [ライブラリPoC検証](./単一ユースケース/ライブラリPoC検証.md) | library-poc-runner・1 候補 = 1 PoC PR = 1 セッション並列 |
+| 単一ユースケース | テスト作成 | 設計 Wiki を元に Red 状態で作成・ユーザー承認なし | [テスト作成](./単一ユースケース/テスト作成.md) | tester・報告先は architect |
+| 単一ユースケース | テストレビュー | テストコードと設計 Wiki の照合レビュー → implementer への割り当て | [テストレビュー](./単一ユースケース/テストレビュー.md) | architect |
+| 単一ユースケース | 実装 | 実装タスク消化 + Green 化 + Ready 化・ユーザー承認なし | [実装](./単一ユースケース/実装.md) | implementer・報告先は architect |
+| 単一ユースケース | 実装レビュー | Green の実測確認 + diff と設計 Wiki の照合レビュー → 一式完了報告 | [実装レビュー](./単一ユースケース/実装レビュー.md) | architect |
+| 単一ユースケース | マージ | squash merge + ブランチ / worktree 削除 → 上位 conductor へ完了報告 | [マージ](./単一ユースケース/マージ.md) | subsystem / story / epic-conductor・全昇格マージ共通・epic は終端処理 |
+| 単一ユースケース | 統合テスト実装と実行 | 回帰洗い出し + E2E 実装 → レビュー後に実行 | [統合テスト実装と実行](./単一ユースケース/統合テスト実装と実行.md) | single / complex-scenario-tester・報告先は writer |
+| 単一ユースケース | 統合テストレビュー | E2E テストコードと実行対象（新規 + 回帰）をシナリオ設計書と照合レビュー → 実行指示 | [統合テストレビュー](./単一ユースケース/統合テストレビュー.md) | single / complex-scenario-writer |
+| 単一ユースケース | 統合テスト指揮 | 委任受領 → tester への割り当て・結果判定・fail トリアージ・conductor への報告 | [統合テスト指揮](./単一ユースケース/統合テスト指揮.md) | single / complex-scenario-writer |
+| 単一ユースケース | 軽微修正の直接マージ | chore の直接コミット + ユーザー確認後にマージ | [軽微修正の直接マージ](./単一ユースケース/軽微修正の直接マージ.md) | quick-implementer |
+| 単一ユースケース | リセット実行 | 巻き戻し対象の洗い出し + 削除 + クローズ | [リセット実行](./単一ユースケース/リセット実行.md) | resetter |
+| 単一ユースケース | 質疑応答 | コメントループで回答 + 依頼時は新規 Issue 起票 | [質疑応答](./単一ユースケース/質疑応答.md) | questioner |
+| 単一ユースケース | 統合テスト起動 | 統合テスト一式の writer への委任 + 失敗報告からのバグ差し戻し | [統合テスト起動](./単一ユースケース/統合テスト起動.md) | story / epic-conductor 復帰 |
+| 単一ユースケース | マージ起動 | 一式完了報告 → マージ前のユーザー最終確認ゲートを開く | [マージ起動](./単一ユースケース/マージ起動.md) | subsystem-conductor 復帰・story / epic はゲートなしでマージに直行 |
+| 単一ユースケース | インターフェース確定の中継 | architect のインターフェース確定報告を story-conductor へ中継（後続 subsystem 起票の起点） | [インターフェース確定の中継](./単一ユースケース/インターフェース確定の中継.md) | subsystem-conductor 復帰・後続 subsystem が依存する場合のみ |
+| 単一ユースケース | バグ修正着手 | バグ差し戻しの受領 → 影響範囲分析 + 修正用 PR / タスク一覧作成 → architect 委任 | [バグ修正着手](./単一ユースケース/バグ修正着手.md) | subsystem-conductor 復帰・SA 変更時のみユーザー確認 |
+| 複合ユースケース | Issueから自動マージまで | Issue 起票 → intake → epic → story → subsystem → merge のメインフロー | [Issueから自動マージまで](./複合ユースケース/Issueから自動マージまで.md) | epic フルスコープ |
+| 複合ユースケース | 軽微修正の短絡マージ | chore 判定 → quick-implementer で即マージ | [軽微修正の短絡マージ](./複合ユースケース/軽微修正の短絡マージ.md) | intake → chore の短絡 |
+| 複合ユースケース | 統合テスト失敗からのバグ修正 | E2E 失敗 → writer トリアージ → conductor が該当 subsystem へ差し戻し → 修正 → 再テスト | [統合テスト失敗からのバグ修正](./複合ユースケース/統合テスト失敗からのバグ修正.md) | 循環経路 |
+| 複合ユースケース | レビュー指摘からの修正 | レビュー指摘 → 差し戻し → 修正 → 再レビュー pass のループ | [レビュー指摘からの修正](./複合ユースケース/レビュー指摘からの修正.md) | テスト / 実装レビューの 2 経路・architect と worker の直接ループ |
+| 複合ユースケース | 統合テストレビュー指摘からの修正 | 統合テストレビュー指摘 → 差し戻し → E2E テスト修正 → 再レビュー pass のループ | [統合テストレビュー指摘からの修正](./複合ユースケース/統合テストレビュー指摘からの修正.md) | story レベル代表・epic レベルは読み替えで同型 |
+| 複合ユースケース | 設計差し戻しからの設計修正 | worker の設計差し戻し → SS設計修正 → 工程復帰のループ | [設計差し戻しからの設計修正](./複合ユースケース/設計差し戻しからの設計修正.md) | tester / implementer 起点の 2 本・architect と直接やり取り |
+| 複合ユースケース | 設計からライブラリ採用まで | SS設計 → ライブラリ選定 → PoC → 採用 → 設計続行 | [設計からライブラリ採用まで](./複合ユースケース/設計からライブラリ採用まで.md) | ライブラリ PoC の発注・報告・PoC PR ライフサイクルの一気通し |

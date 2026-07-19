@@ -4,19 +4,11 @@
       {
         "hooks": [
           {
-            "_description": "constants.env の定数を CLAUDE_ENV_FILE 経由でセッション内に展開",
+            "_description": "constants.env の定数と settings.yaml 由来の REPO_SLUG / WIKI_BASE を CLAUDE_ENV_FILE 経由でセッション内に展開",
             "type": "command",
             "command": "bash",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/session-start/load-constants.sh"
-            ]
-          },
-          {
-            "_description": "監視対象リポと Wiki を最新化する",
-            "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/session-start/auto-pull.sh"
             ]
           }
         ]

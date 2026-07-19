@@ -2,25 +2,26 @@
 
 ユーザーが起票した Issue を intake-issue-triager が作業単位に分解し、ユーザー承認を経て epic / story / subsystem / chore の Sub-issue を作成する単一ユースケース。
 
-対応モニター: `intake-issue-triager`
+対応エージェント: `intake-issue-triager`
 
 ## 正常シナリオ
 
-### 前提条件
+### セットアップ
 
-| No | セットアップ | 説明 | 補足 |
-| --- | --- | --- | --- |
-| 1 | intake Issue | ユーザー起票の Issue に `確認:intake-issue-triager` 付与済み | 本文はユーザーが書いたまま |
-| 2 | assignee | 未設定 | モニター起動条件 |
-| 3 | orchestrator | 対象リポを polling 中 | - |
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| intake Issue | ユーザー起票の Issue に `確認:intake-issue-triager` 付与済み | 本文はユーザーが書いたまま |
+| assignee | 未設定 | エージェント起動条件 |
+| モニター | 対象リポを polling 中 | - |
 
-### 図
+### フロー
 
 ```mermaid
 sequenceDiagram
   actor U as ユーザー
   participant GH as GitHub
-  participant ORC as orchestrator
+  participant ORC as モニター
 
   U->>GH: Issue 起票 + 確認:intake-issue-triager 付与
   ORC-->>GH: polling（確認ラベルあり + assignee なし を検知）
@@ -50,10 +51,11 @@ sequenceDiagram
   MON->>GH: intake Issue の自分宛コメント一括 Resolve
   MON->>GH: intake Issue の 確認:intake-issue-triager 除去
   deactivate MON
-  Note over MON: セッションは intake Issue close<br>（orchestrator 直轄）まで常駐
+  Note over MON: セッションは intake Issue close<br>（モニター直轄）まで常駐
 ```
 
-**期待動作:**
+### 期待値
+
 - 承認された案と同数の Sub-issue が親 Issue に紐づいて存在する（`layer:epic` なら `確認:epic-conductor`、chore なら `確認:quick-implementer` が付与）
 - intake Issue の本文がユーザー起票時のまま書き換わっていない
 - intake Issue に `layer:intake` + `type:*` が残り、`確認:*` は除去済み
@@ -61,9 +63,10 @@ sequenceDiagram
 
 ### 補足
 
-- ユーザーがフィードバックコメント + assignee 外しのみで返した場合は応答ループ（案修正 → 再待機）。案はコメント上で管理し本文には書かない
-- intake Issue のクローズはこの UC の責務外（全 Sub-issue closed を orchestrator が検知して close）
+- ユーザーがフィードバックコメント + assignee 外しのみで返した場合は応答ループ（案修正 → 再待機）。
+  案はコメント上で管理し本文には書かない
+- intake Issue のクローズはこの UC の責務外（全 Sub-issue closed を モニターが検知して close）
 
-## 異常シナリオ（該当なし）
+## 異常シナリオ
 
-なし。フィードバック修正は正常シナリオの応答ループとして扱う。
+なし

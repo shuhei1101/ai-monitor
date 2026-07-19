@@ -24,12 +24,12 @@ gh repo clone $(gh repo view --json nameWithOwner --jq '.nameWithOwner').wiki "$
 
 `_Sidebar.md` / `Home.md` への自動追加は **常に実行される**（`--category` 指定の有無に関わらず）:
 
-| No | 動作 |
-| --- | --- |
-| 1 | `_Sidebar.md` の該当カテゴリセクション末尾にリンク行を挿入する |
-| 2 | カテゴリが存在しない場合は `_Sidebar.md` 末尾に新規セクションを追加する |
-| 3 | カテゴリ階層は `##`（レベル2）・`###`（レベル3）の 2 段階まで |
-| 4 | `Home.md` を `_Sidebar.md` の内容から自動再生成する |
+| 動作 |
+| --- |
+| `_Sidebar.md` の該当カテゴリセクション末尾にリンク行を挿入する |
+| カテゴリが存在しない場合は `_Sidebar.md` 末尾に新規セクションを追加する |
+| カテゴリ階層は `##`（レベル2）・`###`（レベル3）の 2 段階まで |
+| `Home.md` を `_Sidebar.md` の内容から自動再生成する |
 
 `--category` を省略した場合は **「未分類」** カテゴリとして `_Sidebar.md` / `Home.md` に自動追加される。
 
@@ -78,12 +78,12 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/wiki-create.sh" \
 
 スクリプトが以下を行う:
 
-| No | 動作 |
-| --- | --- |
-| 1 | `${AI_MONITOR_WIKI_PATH}/{page-name}` に本文を書き込む（既存なら上書き拒否で停止） |
-| 2 | `_Sidebar.md` の該当カテゴリにリンクを挿入（カテゴリ未存在なら新規追加）。`--category` 省略時は「未分類」カテゴリ |
-| 3 | `Home.md` を `_Sidebar.md` の内容から自動再生成 |
-| 4 | Wiki リポで `git add` + `git commit` + `git push`（差分なしならスキップ） |
+| 動作 |
+| --- |
+| `${AI_MONITOR_WIKI_PATH}/{page-name}` に本文を書き込む（既存なら上書き拒否で停止） |
+| `_Sidebar.md` の該当カテゴリにリンクを挿入（カテゴリ未存在なら新規追加）。`--category` 省略時は「未分類」カテゴリ |
+| `Home.md` を `_Sidebar.md` の内容から自動再生成 |
+| Wiki リポで `git add` + `git commit` + `git push`（差分なしならスキップ） |
 
 ### ステップ 4: 結果報告
 

@@ -110,9 +110,9 @@ fi
 
 ## 制約
 
-| No | 禁止 |
-| --- | --- |
-| 1 | レビューはしない（`pr-review` の責務） |
-| 2 | `git push --force` は使わない |
-| 3 | assignees が設定されている PR をマージしない |
-| 4 | Draft PR をマージしない |
+| 禁止 |
+| --- |
+| レビューはしない（`pr-review` の責務） |
+| `git push --force` は使わない |
+| assignees が設定されている PR をマージしない |
+| Draft PR をマージしない |

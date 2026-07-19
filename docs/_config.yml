@@ -1,19 +1,19 @@
 # GitHub Pages 用 Jekyll 設定
 # docs/ 配下を Jekyll サイトとしてビルドする
 
-title: my-plugins
-description: プラグイン開発リポジトリの Wiki + モック
+title: ai-monitor
+description: ai-monitor の Wiki + モック
 
 # GitHub Pages のプロジェクトサイトはリポジトリ名がパスプレフィクスになる
-# 例: https://shuhei1101.github.io/my-plugins/ で配信されるので baseurl を明示
-# これにより {{ '/' | relative_url }} が "/my-plugins/" を返し、
+# 例: https://shuhei1101.github.io/ai-monitor/ で配信されるので baseurl を明示
+# これにより {{ '/' | relative_url }} が "/ai-monitor/" を返し、
 # トップ / パンくずの リンクが 404 にならなくなる
-baseurl: /my-plugins
+baseurl: /ai-monitor
 
 # MD ダウンロードボタン用に raw.githubusercontent.com のパスを組み立てる
 repository:
   owner: shuhei1101
-  name: my-plugins
+  name: ai-monitor
   branch: master
 
 # Markdown 処理（kramdown + GFM 互換）

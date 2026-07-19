@@ -1,26 +1,28 @@
 # 実現可能性PoC検証
 
-epic-poc-runner が epic の成立条件になっている核心機構を最安直構成で検証し、結論を epic Issue 本文 `## PoC 結果` に記録する単一ユースケース。ライブラリ銘柄選定はしない（subsystem の architect が担当）。
+epic-poc-runner が epic の成立条件になっている核心機構を最安直構成で検証し、結論を epic Issue 本文 `## PoC 結果` に記録する単一ユースケース。
+ライブラリ銘柄選定はしない（subsystem の architect が担当）。
 
-対応モニター: `epic-poc-runner`
+対応エージェント: `epic-poc-runner`
 
 ## 正常シナリオ
 
-### 前提条件
+### セットアップ
 
-| No | セットアップ | 説明 | 補足 |
-| --- | --- | --- | --- |
-| 1 | PoC Draft PR | 存在する（本文は `## 紐づく Issue` のみ）+ `確認:epic-poc-runner` 付与済み | - |
-| 2 | assignee | 未設定 | モニター起動条件 |
-| 3 | orchestrator | polling 中 | - |
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| PoC Draft PR | 存在する（本文は `## 紐づく Issue` のみ）+ `確認:epic-poc-runner` 付与済み | - |
+| assignee | 未設定 | エージェント起動条件 |
+| モニター | polling 中 | - |
 
-### 図
+### フロー
 
 ```mermaid
 sequenceDiagram
   actor U as ユーザー
   participant GH as GitHub
-  participant ORC as orchestrator
+  participant ORC as モニター
 
   Note over GH: PoC Draft PR 作成済み・<br>確認:epic-poc-runner 付与済み
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
@@ -47,6 +49,7 @@ sequenceDiagram
   activate MON
   MON->>GH: PoC PR の自分宛コメント一括 Resolve
   MON->>REPO: 検証コード実装 + push<br>（追加案が必要なら案ごとに追加 PoC PR 作成）
+  MON->>ORC: 追加 PoC PR の番号を<br>自セッションの監視面として台帳に登録<br>（追加案を作成した場合）
   MON->>REPO: 検証実行（サブエージェント並列）
   MON->>GH: 検証結果・最小再現コードを<br>PoC PR 本文に記録
   MON->>GH: PoC PR に結果報告コメント + 議論中 付与 +<br>assignee=ユーザー 設定
@@ -75,9 +78,11 @@ sequenceDiagram
   Note over MON: セッションは PoC PR close まで常駐
 ```
 
-**期待動作:**
+### 期待値
+
 - epic Issue 本文に `## PoC 結果`（検証構成 / 成功条件 / 結果 / PoC PR リンク）が記録されている
 - PoC PR は open のまま `確認:epic-poc-runner` だけが除去されている
+- 追加 PoC PR を作成した場合、その番号が epic-poc-runner セッションの監視面（モニターの台帳）に登録されている
 - epic Issue に `確認:epic-conductor` が付与され、完了報告コメント（@epic-conductor 宛・未解決）が投稿されている
 - PoC PR の自分宛コメントが全て Resolve 済み
 
@@ -88,13 +93,14 @@ sequenceDiagram
 
 ## 異常シナリオ（核心機構が成立しない結論）
 
-### 前提条件
+### セットアップ
 
-| No | セットアップ | 説明 | 補足 |
-| --- | --- | --- | --- |
-| 1 | 検証実行まで完了 | 検証実行の結果、成功条件を満たさない | 全案 ❌ |
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| 検証実行まで完了 | 検証実行の結果、成功条件を満たさない | 全案 ❌ |
 
-### 図
+### フロー
 
 ```mermaid
 sequenceDiagram
@@ -111,6 +117,7 @@ sequenceDiagram
   end
 ```
 
-**期待動作:**
-- 不成立の実測値と理由が PoC PR 本文 + epic Issue `## PoC 結果` に記録される
-- epic を進めるか中止するかはユーザー判断（epic-poc-runner は勝手にクローズしない）
+### 期待値
+
+- 不成立の実測値と理由が PoC PR 本文 + epic Issue `## PoC 結果` に記録されている
+- epic Issue・PoC PR とも open のまま（close されていない）
