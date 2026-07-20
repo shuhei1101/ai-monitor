@@ -1,7 +1,7 @@
 {
   "name": "ai-monitor",
   "description": "GitHub Issue/PR を tmux + Claude Code + gh CLI で自動オーケストレーションするワークフロープラグイン",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "shuhei1101"
   }
