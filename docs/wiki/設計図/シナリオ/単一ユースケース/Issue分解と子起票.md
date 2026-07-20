@@ -4,6 +4,8 @@
 
 対応エージェント: `intake-issue-triager`
 
+- 対応テストファイル: `tests/e2e/test_Issue分解と子起票.py`
+
 ## 正常シナリオ
 
 ### セットアップ

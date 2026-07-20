@@ -13,6 +13,9 @@
 | 共通 | ラベル操作 | `integrations/github/labels.py` | 関数 | [`add_label`](#ラベル付与) | ラベルを 1 つ付与 | 処理中ラベルの付与に使用 |
 | 共通 | ラベル操作 | `integrations/github/labels.py` | 関数 | [`remove_label`](#ラベル除去) | ラベルを 1 つ除去（未付与は無視） | 処理中ラベルの除去に使用 |
 | 共通 | クローズ | `integrations/github/issues.py` | 関数 | [`close_issue`](#issue-クローズ) | Issue を completed でクローズ | intake 自動クローズに使用 |
+| 共通 | 単体取得 | `integrations/github/issues.py` | 関数 | [`get_issue`](#issue-単体取得) | Issue / PR を 1 件取得して変換 | クローズ確認に使用 |
+| 共通 | 親取得 | `integrations/github/issues.py` | 関数 | [`get_parent_number`](#親-issue-番号取得) | Sub-issue リンクの親 Issue 番号を取得 | 親なしは `None` |
+| 共通 | 子取得 | `integrations/github/issues.py` | 関数 | [`list_sub_issue_numbers`](#sub-issue-番号一覧) | Sub-issue の子 Issue 番号一覧を取得 | 1 段のみ（再帰はクリーンアップ側） |
 
 ## ディレクトリ構成
 
@@ -21,7 +24,7 @@ src/ai_monitor/integrations/github/
 ├── client.py    # get_client（githubkit クライアントの生成・共有）
 ├── search.py    # list_open_targets / _parse_linked_issue_numbers
 ├── labels.py    # add_label / remove_label
-└── issues.py    # close_issue
+└── issues.py    # close_issue / get_issue / get_parent_number / list_sub_issue_numbers
 ```
 
 ## 構成図
@@ -33,6 +36,9 @@ classDiagram
   ラベル付与 ..> クライアント生成 : 利用
   ラベル除去 ..> クライアント生成 : 利用
   Issueクローズ ..> クライアント生成 : 利用
+  Issue単体取得 ..> クライアント生成 : 利用
+  親Issue番号取得 ..> クライアント生成 : 利用
+  SubIssue番号一覧 ..> クライアント生成 : 利用
 
   class クライアント生成 {
     <<function>>
@@ -58,6 +64,18 @@ classDiagram
     <<function>>
     +Issueクローズ(プロジェクト, 番号) None
   }
+  class Issue単体取得 {
+    <<function>>
+    +Issue単体取得(プロジェクト, 番号) イシュー
+  }
+  class 親Issue番号取得 {
+    <<function>>
+    +親Issue番号取得(プロジェクト, 番号) int | None
+  }
+  class SubIssue番号一覧 {
+    <<function>>
+    +SubIssue番号一覧(プロジェクト, 番号) list~int~
+  }
 
   click クライアント生成 href "#クライアント生成"
   click オープン対象一覧 href "#オープン対象一覧"
@@ -65,6 +83,9 @@ classDiagram
   click ラベル付与 href "#ラベル付与"
   click ラベル除去 href "#ラベル除去"
   click Issueクローズ href "#issue-クローズ"
+  click Issue単体取得 href "#issue-単体取得"
+  click 親Issue番号取得 href "#親-issue-番号取得"
+  click SubIssue番号一覧 href "#sub-issue-番号一覧"
 ```
 
 ## `integrations/github/client.py`
@@ -162,7 +183,7 @@ list_open_targets(project)
 1. `state=open` の Issue / PR 一覧をページネーションで全件取得する（`rest.issues.list`。PR も Issue として返る）
 2. 各要素をドメインモデルに変換して返す
    - `pull_request` キーを持つ場合、本文から `linked_issue_numbers` を抽出して[プルリクエスト](./エージェント管理.md#プルリクエスト)にする（[紐づく Issue 解析](#紐づく-issue-解析)）
-   - 持たない場合、[イシュー](./エージェント管理.md#イシュー)にする（親 / 子番号は未設定）
+   - 持たない場合、[イシュー](./エージェント管理.md#イシュー)にする（応答の `sub_issues_summary` の件数も変換する）
 
 #### 例外
 
@@ -176,6 +197,7 @@ list_open_targets(project)
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_list_open_targets_when_multi_page` | 正常 | ページ跨ぎの全件取得 | 2 ページ分の open 応答 | githubkit | `state=open` で照会され、ページを跨いだ全件が返る | - |
 | `test_list_open_targets_when_pr_mixed` | 正常 | Issue / PR の判別変換 | `pull_request` キーの有無が混在する応答 | githubkit | PR は `PullRequest`（`linked_issue_numbers` 解決済み）・それ以外は `Issue` になる | - |
+| `test_list_open_targets_when_sub_issues_summary` | 正常 | Sub-issue 件数の変換 | `sub_issues_summary`（total=2, completed=1）付きの Issue 応答 | githubkit | `Issue` の `sub_issues_total=2` / `sub_issues_completed=1` になる | - |
 
 ---
 
@@ -370,3 +392,155 @@ close_issue(project, 34)
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_close_issue` | 正常 | completed クローズ | open の Issue 番号 | githubkit | `state=closed` + `state_reason=completed` で更新 API が呼ばれる | - |
+
+---
+
+### Issue 単体取得
+> 物理名: `get_issue`<br>
+> 種別: 関数
+
+Issue / PR を 1 件取得してドメインモデルで返す（クローズ状態の確認に使う）。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト | `project` | [`MonitoredProject`](./エージェント管理.md#監視対象プロジェクト) | ✅ | - | 対象のプロジェクト | - |
+| 番号 | `number` | `int` | ✅ | - | 対象の Issue / PR 番号 | - |
+
+引数例:
+
+```python
+get_issue(project, 35)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`Issue`](./エージェント管理.md#イシュー) | 取得した対象 | PR も Issues エンドポイントで取得する（merged は `closed` になる） |
+
+戻り値例:
+
+```python
+Issue(number=35, state="closed", labels=["layer:epic"], assignees=[])
+```
+
+#### 処理
+
+1. REST で 1 件取得する（Issues エンドポイント。PR も Issue として取れる）
+2. [イシュー](./エージェント管理.md#イシュー)に変換して返す（`sub_issues_summary` の件数も変換する）
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx | HTTP ステータスと本文 | githubkit から伝播 |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_get_issue` | 正常 | closed 状態の変換 | closed の Issue 応答 | githubkit | `state="closed"` の `Issue` が返る | - |
+
+---
+
+### 親 Issue 番号取得
+> 物理名: `get_parent_number`<br>
+> 種別: 関数
+
+Sub-issue リンクの親 Issue 番号を取得する（親なしは `None`）。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト | `project` | [`MonitoredProject`](./エージェント管理.md#監視対象プロジェクト) | ✅ | - | 対象のプロジェクト | - |
+| 番号 | `number` | `int` | ✅ | - | 子 Issue の番号 | - |
+
+引数例:
+
+```python
+get_parent_number(project, 35)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `int \| None` | 親 Issue の番号 | 親リンクなしは `None` |
+
+戻り値例:
+
+```python
+30
+```
+
+#### 処理
+
+1. REST で親 Issue を取得する（`GET .../parent`）
+2. 親の番号を返す（親なしの 404 は `None` を返す）
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 404 以外の 4xx / 5xx | HTTP ステータスと本文 | githubkit から伝播 |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_get_parent_number` | 正常 | 親番号の取得 | 親 Issue 付きの応答 | githubkit | 親の番号が返る | - |
+| `test_get_parent_number_when_no_parent` | 正常 | 親なしは None | REST が 404 を返す | githubkit | `None`（例外を投げない） | 例外表「404 以外」に対応する握り分岐 |
+
+---
+
+### Sub-issue 番号一覧
+> 物理名: `list_sub_issue_numbers`<br>
+> 種別: 関数
+
+Sub-issue リンクの子 Issue 番号一覧を取得する（1 段のみ。再帰はクリーンアップ側で行う）。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト | `project` | [`MonitoredProject`](./エージェント管理.md#監視対象プロジェクト) | ✅ | - | 対象のプロジェクト | - |
+| 番号 | `number` | `int` | ✅ | - | 親 Issue の番号 | - |
+
+引数例:
+
+```python
+list_sub_issue_numbers(project, 35)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `list[int]` | 子 Issue の番号一覧 | 子なしは `[]` |
+
+戻り値例:
+
+```python
+[40, 41]
+```
+
+#### 処理
+
+1. REST で子 Issue 一覧をページネーションで全件取得する（`GET .../sub_issues`）
+2. 番号の一覧にして返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx | HTTP ステータスと本文 | githubkit から伝播 |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_list_sub_issue_numbers` | 正常 | 子番号の取得 | 子 2 件の応答 | githubkit | `[40, 41]` | - |
+| `test_list_sub_issue_numbers_when_no_children` | 正常 | 子なしは空リスト | 空の応答 | githubkit | `[]` | - |

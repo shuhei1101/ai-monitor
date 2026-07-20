@@ -34,3 +34,9 @@ MCP `transition_phase` を呼ぶ:
 - `remove_labels_`:
   - `$AI_MONITOR_LABEL_CONFIRM_INTAKE_ISSUE_TRIAGER` の値
 - `add_labels_`: なし（役割を終えるので次ラベルなし）
+
+### 作業完了報告
+
+MCP `report_completion` を呼ぶ:
+- `agent_name`: `intake-issue-triager`
+- `number`: $issue_number
