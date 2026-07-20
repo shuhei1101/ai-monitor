@@ -1,0 +1,28 @@
+[project]
+name = "ai-monitor"
+version = "0.1.0"
+description = "GitHub-driven multi-project AI orchestrator"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+dependencies = [
+    "githubkit==0.16.0",
+    "mcp>=1.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.uv]
+managed = true
+package = false
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--import-mode=importlib"]

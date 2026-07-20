@@ -72,10 +72,13 @@ API バージョン: `2022-11-28`
 | POST | [`/repos/{owner}/{repo}/issues/{issue_number}/comments`](#post-reposownerrepoissuesissue_numbercomments) | コメントの投稿 | - |
 | PATCH | [`/repos/{owner}/{repo}/issues/comments/{comment_id}`](#patch-reposownerrepoissuescommentscomment_id) | コメント本文の更新 | - |
 | POST | [`/repos/{owner}/{repo}/issues/{issue_number}/sub_issues`](#post-reposownerrepoissuesissue_numbersub_issues) | Sub-issue リンクの付与 | - |
+| GET | [`/repos/{owner}/{repo}/issues/{issue_number}/sub_issues`](#get-reposownerrepoissuesissue_numbersub_issues) | Sub-issue の子 Issue 一覧の取得 | - |
+| GET | [`/repos/{owner}/{repo}/issues/{issue_number}/parent`](#get-reposownerrepoissuesissue_numberparent) | Sub-issue の親 Issue の取得 | 親なしは 404 |
 | POST | [`/repos/{owner}/{repo}/pulls`](#post-reposownerrepopulls) | PR の作成 | Draft 対応 |
 | POST | [`/repos/{owner}/{repo}/pulls/{pull_number}/comments`](#post-reposownerrepopullspull_numbercomments) | レビューコメント（インライン）の投稿 | - |
 | PUT | [`/repos/{owner}/{repo}/pulls/{pull_number}/merge`](#put-reposownerrepopullspull_numbermerge) | PR のマージ | - |
 | DELETE | [`/repos/{owner}/{repo}/git/refs/heads/{branch}`](#delete-reposownerrepogitrefsheadsbranch) | リモートブランチの削除 | - |
+| GET | [`/search/issues`](#get-searchissues) | Issue / PR のキーワード横断検索 | 検索レートリミットは別枠 |
 | POST | [`/graphql`](#post-graphql) | GraphQL クエリ / mutation の実行 | minimize / Ready 化 等 |
 
 ## GET `/repos/{owner}/{repo}`
@@ -550,6 +553,62 @@ Issue に Sub-issue リンクを付与する（`{issue_number}` が親）。
 | `404` | 親 / 子 Issue 不存在 | - |
 | `422` | リンク不可（循環 / 上限超過 等） | - |
 
+## GET `/repos/{owner}/{repo}/issues/{issue_number}/sub_issues`
+
+Sub-issue リンクの子 Issue 一覧を取得する（`{issue_number}` が親）。
+
+### リクエスト
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{owner}` / `{repo}` / `{issue_number}` | - | ✅ | - | 親 Issue | - | パスパラメータ |
+| `per_page` | `number` | - | `30` | 1 ページの件数 | 最大 100 | query パラメータ |
+| `page` | `number` | - | `1` | ページ番号 | - | query パラメータ |
+
+リクエスト例:
+
+```text
+GET /repos/shuhei1101/ai-monitor/issues/35/sub_issues
+```
+
+### レスポンス
+
+子 Issue オブジェクトの配列（要素は `GET /repos/{owner}/{repo}/issues/{issue_number}` のレスポンスと同形）。
+
+### ステータスコード
+
+| ステータスコード | 発生条件 | 補足 |
+| --- | --- | --- |
+| `200` | 正常 | 子なしは空配列 |
+| `404` | Issue 不存在 | - |
+
+## GET `/repos/{owner}/{repo}/issues/{issue_number}/parent`
+
+Sub-issue リンクの親 Issue を取得する。
+
+### リクエスト
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{owner}` / `{repo}` / `{issue_number}` | - | ✅ | - | 子 Issue | - | パスパラメータ |
+
+リクエスト例:
+
+```text
+GET /repos/shuhei1101/ai-monitor/issues/36/parent
+```
+
+### レスポンス
+
+親の Issue オブジェクト（`GET /repos/{owner}/{repo}/issues/{issue_number}` のレスポンスと同形）。
+
+### ステータスコード
+
+| ステータスコード | 発生条件 | 補足 |
+| --- | --- | --- |
+| `200` | 正常 | - |
+| `404` | 親リンクなし / Issue 不存在 | 親なしは 404（実測確認済み） |
+
 ## POST `/repos/{owner}/{repo}/pulls`
 
 PR を作成する。
@@ -732,6 +791,42 @@ DELETE /repos/shuhei1101/ai-monitor/git/refs/heads/feat/backend/profile/edit/edi
 | --- | --- | --- |
 | `204` | 削除成功 | - |
 | `422` | ブランチ不存在 / 保護ブランチ | - |
+
+## GET `/search/issues`
+
+キーワードで Issue / PR を横断検索する（githubkit: `rest.search.issues_and_pull_requests`）。
+
+### リクエスト
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `q` | `string` | ✅ | - | 検索クエリ | OR・正規表現は不可 | query パラメータ。`repo:{owner}/{repo}` で対象リポジトリを絞る。スペース区切りは AND・`"..."` は語順込みのフレーズ一致・`in:title` / `label:` / `is:issue` / `is:pr` / `author:` / `state:` 等の修飾子可 |
+| `sort` | `string` | - | なし（関連度順） | 並び順 | `comments` / `reactions` / `reactions-+1` / `reactions--1` / `reactions-smile` / `reactions-thinking_face` / `reactions-heart` / `reactions-tada` / `interactions` / `created` / `updated` | query パラメータ |
+| `order` | `string` | - | `desc` | 昇順 / 降順 | `asc` / `desc` | `sort` 指定時のみ有効 |
+| `per_page` | `number` | - | `30` | 1 ページの件数 | 最大 100 | query パラメータ |
+| `page` | `number` | - | `1` | ページ番号 | - | query パラメータ |
+
+リクエスト例:
+
+```text
+GET /search/issues?q=repo:shuhei1101/ai-monitor "プロフィール編集" in:title&sort=created&order=desc
+```
+
+### レスポンス
+
+| フィールド | 型 | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- |
+| `total_count` | `number` | ヒット総数 | - | - |
+| `incomplete_results` | `boolean` | タイムアウトで結果が打ち切られたか | - | - |
+| `items` | `object[]` | 検索結果（`GET /repos/{owner}/{repo}/issues/{issue_number}` のレスポンスと同形） | 先頭 1000 件まで取得可 | PR は `pull_request` フィールドを持つ |
+
+### ステータスコード
+
+| ステータスコード | 発生条件 | 補足 |
+| --- | --- | --- |
+| `200` | 正常 | 0 件でも `200`（`items` が空配列） |
+| `403` | 検索レートリミット超過 | 検索 API は通常のレートリミットと別枠（認証時 30 リクエスト / 分） |
+| `422` | クエリ構文エラー | - |
 
 ## POST `/graphql`
 

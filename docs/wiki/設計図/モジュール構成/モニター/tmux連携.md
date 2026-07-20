@@ -111,8 +111,8 @@ create_session("ai-monitor-myproj-35-epic-conductor", "/home/user/repo/myproj/.c
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_session_starts_detached` | 正常 | detached 作成 | 未使用のセッション名 + 一時フォルダの cwd | なし（実 tmux を操作） | 作成後に[生存確認](#生存確認)が `True` を返す | - |
-| `test_create_session_duplicate_raises` | 異常 | 同名セッションの重複作成 | 作成済みと同名で再作成 | なし（実 tmux を操作） | `CalledProcessError` | 例外表「同名セッションが既に存在」に対応 |
+| `test_create_session` | 正常 | detached 作成 | 未使用のセッション名 + 一時フォルダの cwd | なし（実 tmux を操作） | 作成後に[生存確認](#生存確認)が `True` を返す | - |
+| `test_create_session_when_duplicate_name` | 異常 | 同名セッションの重複作成 | 作成済みと同名で再作成 | なし（実 tmux を操作） | `CalledProcessError` | 例外表「同名セッションが既に存在」に対応 |
 
 ---
 
@@ -161,8 +161,8 @@ send_keys("ai-monitor-myproj-35-epic-conductor", "/ai-monitor:epic-conductor 35"
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_send_keys_executes_text` | 正常 | 文字列の送信と実行 | 作成済みセッションへ `echo` コマンドを送信 | なし（実 tmux を操作） | `capture-pane` の出力に実行結果が現れる | - |
-| `test_send_keys_missing_session_raises` | 異常 | セッション不存在 | 存在しないセッション名 | なし（実 tmux を操作） | `CalledProcessError` | 例外表「セッション不存在」に対応 |
+| `test_send_keys` | 正常 | 文字列の送信と実行 | 作成済みセッションへ `echo` コマンドを送信 | なし（実 tmux を操作） | `capture-pane` の出力に実行結果が現れる | - |
+| `test_send_keys_when_session_missing` | 異常 | セッション不存在 | 存在しないセッション名 | なし（実 tmux を操作） | `CalledProcessError` | 例外表「セッション不存在」に対応 |
 
 ---
 
@@ -217,8 +217,8 @@ True
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_has_session_true_for_existing` | 正常 | 存在するセッション | 作成済みのセッション名 | なし（実 tmux を操作） | `True` | - |
-| `test_has_session_false_for_missing` | 正常 | 存在しないセッション | 未作成のセッション名 | なし（実 tmux を操作） | `False` | - |
+| `test_has_session` | 正常 | 存在するセッション | 作成済みのセッション名 | なし（実 tmux を操作） | `True` | - |
+| `test_has_session_when_session_missing` | 正常 | 存在しないセッション | 未作成のセッション名 | なし（実 tmux を操作） | `False` | - |
 
 ---
 
@@ -266,8 +266,8 @@ kill_session("ai-monitor-myproj-35-epic-conductor")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_kill_session_removes` | 正常 | kill の実行 | 作成済みのセッション名 | なし（実 tmux を操作） | kill 後に[生存確認](#生存確認)が `False` を返す | - |
-| `test_kill_session_missing_raises` | 異常 | セッション不存在 | 存在しないセッション名 | なし（実 tmux を操作） | `CalledProcessError` | 例外表「セッション不存在」に対応 |
+| `test_kill_session` | 正常 | kill の実行 | 作成済みのセッション名 | なし（実 tmux を操作） | kill 後に[生存確認](#生存確認)が `False` を返す | - |
+| `test_kill_session_when_session_missing` | 異常 | セッション不存在 | 存在しないセッション名 | なし（実 tmux を操作） | `CalledProcessError` | 例外表「セッション不存在」に対応 |
 
 ---
 
@@ -318,6 +318,6 @@ CompletedProcess(returncode=0, stdout="")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_run_tmux_executes_command` | 正常 | tmux の実行 | バージョン表示（`-V`）を実行 | なし（実 tmux を操作） | 正常終了の `CompletedProcess` が返る | - |
-| `test_run_tmux_check_false_returns_nonzero` | 正常 | `check=False` の非 0 許容 | 存在しないセッションへの `has-session` | なし（実 tmux を操作） | 非 0 の `CompletedProcess` が返り例外にならない | - |
-| `test_run_tmux_check_true_raises` | 異常 | `check=True` の非 0 終了 | 存在しないセッションへの `kill-session` | なし（実 tmux を操作） | `CalledProcessError` | 例外表「非 0 終了」に対応 |
+| `test_run_tmux` | 正常 | tmux の実行 | バージョン表示（`-V`）を実行 | なし（実 tmux を操作） | 正常終了の `CompletedProcess` が返る | - |
+| `test_run_tmux_when_check_false_nonzero` | 正常 | `check=False` の非 0 許容 | 存在しないセッションへの `has-session` | なし（実 tmux を操作） | 非 0 の `CompletedProcess` が返り例外にならない | - |
+| `test_run_tmux_when_nonzero` | 異常 | `check=True` の非 0 終了 | 存在しないセッションへの `kill-session` | なし（実 tmux を操作） | `CalledProcessError` | 例外表「非 0 終了」に対応 |

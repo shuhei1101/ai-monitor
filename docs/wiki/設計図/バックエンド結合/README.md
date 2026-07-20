@@ -1,7 +1,7 @@
 # バックエンド結合
 
-ai-monitor 自身のバックエンド 1 操作 = MCP ツール（`plugins/ai-monitor/mcp/server.py`）ごとの処理フロー集。
-1 ファイル = 1 ツール = 結合テスト 1 ファイル。
+ai-monitor 自身のバックエンド 1 操作（MCP ツール / 注入 CLI）ごとの処理フロー集。
+1 ファイル = 1 操作 = 結合テスト 1 ファイル。
 エージェントの GitHub 操作もモニターへの連絡も本 MCP 経由に限定する（`議論中` の除去エンドポイントは提供しない = 外せるのはユーザーのみ）。
 
 ## 参照
@@ -10,6 +10,7 @@ ai-monitor 自身のバックエンド 1 操作 = MCP ツール（`plugins/ai-mo
 | --- | --- | --- | --- |
 | `get_issue_or_pr` | [Issue・PR情報取得](./Issue・PR情報取得.md) | Issue / PR の情報を 1 コマンドで取得（フィールドフラグで絞り込み） | - |
 | `list_addressed_comments` | [宛先コメント一覧](./宛先コメント一覧.md) | 自分宛コメントをブロック配列付きで抽出（to なしのユーザーコメント含む・既定で Resolved 除外） | - |
+| `search_issues_and_prs` | [Issue・PR検索](./Issue・PR検索.md) | キーワードで Issue / PR を横断検索（関連度順・open / closed とも） | - |
 
 ## コメント
 
@@ -62,6 +63,13 @@ ai-monitor 自身のバックエンド 1 操作 = MCP ツール（`plugins/ai-mo
 | --- | --- | --- | --- |
 | `worktree_create` | [worktree作成](./worktree作成.md) | ブランチ + worktree 作成 | - |
 | `worktree_remove` | [worktree削除](./worktree削除.md) | worktree + ブランチ削除 | - |
+
+## 注入
+
+| ツール | リンク | 概要 | 補足 |
+| --- | --- | --- | --- |
+| `read_agent_docs` | [エージェントドキュメント注入](./エージェントドキュメント注入.md) | 対応表で ○ の付いた参照ドキュメント一式を標準出力に展開 | CLI（SKILL.md の動的注入から呼ぶ） |
+| `read_urls` | [URLドキュメント注入](./URLドキュメント注入.md) | 指定 URL の本文を md コードブロックで包んで標準出力に展開 | CLI（SKILL.md の動的注入 / フェーズ内の実行時取得から呼ぶ） |
 
 ## モニター
 

@@ -14,6 +14,7 @@
 | 共通 | ラベル再取得 | `mcp/server.py` | 関数 | [`_get_labels`](#ラベル再取得) | 操作後の現在ラベル一覧を返す | - |
 | 共通 | assignee 再取得 | `mcp/server.py` | 関数 | [`_get_assignees`](#assignee-再取得) | 操作後の現在 assignee 一覧を返す | - |
 | 共通 | Resolve 実行 | `mcp/server.py` | 関数 | [`_minimize_comment`](#resolve-実行) | GraphQL `minimizeComment` を実行 | `classifier=RESOLVED` |
+| 共通 | Resolved 状態取得 | `mcp/server.py` | 関数 | [`_is_minimized`](#resolved-状態取得) | コメントの `isMinimized` を GraphQL で取得 | - |
 | 共通 | コメント投稿実体 | `mcp/server.py` | 関数 | [`_create_issue_comment`](#コメント投稿実体) | REST でコメントを投稿 | PR も同エンドポイント |
 | 共通 | コメント解析 | `mcp/server.py` | 関数 | [`_parse_comment_blocks`](#コメント解析) | `---` 区切りブロックの from / to と本文をパース | - |
 | 共通 | 定型ブロック組立 | `mcp/server.py` | 関数 | [`_format_block`](#定型ブロック組立) | from / to ヘッダー + 本文を組み立てる | 書式は `規約/コメント.md` |
@@ -25,6 +26,7 @@
 | 共通 | 質問 DTO | `mcp/models.py` | データモデル | [`Question`](#質問) / [`Choice`](#選択肢) | ask_questions の質問・選択肢 | - |
 | 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`AddressedComment`](#宛先コメント) | `---` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
+| 共通 | 検索結果 DTO | `mcp/models.py` | データモデル | [`SearchResultItem`](#検索結果) | search_issues_and_prs の戻り値要素 | - |
 | 共通 | 操作結果 DTO | `mcp/models.py` | データモデル | [`CommentResult`](#コメント結果) / [`ResolveResult`](#resolve-結果) / [`LabelsResult`](#ラベル結果) / [`AssigneesResult`](#assignee-結果) / [`EmptyResult`](#空結果) / [`CreatedIssueResult`](#issue-作成結果) / [`CreatedPRResult`](#pr-作成結果) | 各ツールの戻り値 | - |
 | 共通 | worktree 結果 DTO | `mcp/models.py` | データモデル | [`WorktreeCreateResult`](#worktree-作成結果) / [`WorktreeRemoveResult`](#worktree-削除結果) | worktree 操作の戻り値 | - |
 | 共通 | スナップショット DTO | `mcp/models.py` | データモデル | [`IssueSnapshot`](#イシュースナップショット) / [`Label`](#ラベル) / [`UserRef`](#ユーザー参照) / [`IssueRef`](#イシュー参照) / [`IssueCommentEntry`](#コメントエントリ) / [`SubIssuesSummary`](#サブイシュー集計) | get_issue_or_pr の戻り値ツリー | - |
@@ -34,6 +36,7 @@
 | コメント返信 | MCP ツール | `mcp/server.py` | 関数 | [`reply_comment`](#コメント返信) | 既存コメントに `---` 区切りで追記 | - |
 | コメント一括Resolve | MCP ツール | `mcp/server.py` | 関数 | [`resolve_comments`](#コメント一括resolve) | 複数コメントを一括 Resolve | - |
 | 宛先コメント一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_addressed_comments`](#宛先コメント一覧) | 自分宛のコメントをブロック配列付きで返す | 読み取り専用 |
+| Issue・PR検索 | MCP ツール | `mcp/server.py` | 関数 | [`search_issues_and_prs`](#issuepr検索) | キーワードで Issue / PR を横断検索 | 読み取り専用 |
 | インラインコメント投稿 | MCP ツール | `mcp/server.py` | 関数 | [`create_review_comment`](#インラインコメント投稿) | PR の特定ファイル・行に紐づくレビューコメントを投稿 | - |
 | レビュースレッド一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_review_threads`](#レビュースレッド一覧) | インライン指摘のスレッドを取得 | 読み取り専用 |
 | レビュースレッド一括Resolve | MCP ツール | `mcp/server.py` | 関数 | [`resolve_review_threads`](#レビュースレッド一括resolve) | レビュースレッドを一括で解決 | - |
@@ -218,8 +221,8 @@ GitHub 系の全ツールは[クライアント生成](#クライアント生成
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_server_registers_all_tools` | 正常 | 全ツールの登録 | FastMCP サーバー生成 | なし | ツール名一覧がバックエンド結合の索引と一致 | - |
-| `test_server_declares_tool_annotations` | 正常 | ヒント宣言 | FastMCP サーバー生成 | なし | `get_issue_or_pr` / `list_addressed_comments` / `list_review_threads` が readOnlyHint・remove 系 / close / merge が destructiveHint | - |
+| `test_registered_tools` | 正常 | 全ツールの登録 | FastMCP サーバー生成 | なし | ツール名一覧がバックエンド結合の索引と一致 | - |
+| `test_tool_annotations` | 正常 | ヒント宣言 | FastMCP サーバー生成 | なし | `get_issue_or_pr` / `list_addressed_comments` / `list_review_threads` / `search_issues_and_prs` が readOnlyHint・remove 系 / close / merge が destructiveHint | - |
 
 ---
 
@@ -286,16 +289,16 @@ IssueSnapshot(number=35, title="プロフィール編集機能", state="OPEN", l
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_issue_or_pr_builds_snapshot` | 正常 | スナップショット組み立て | REST 応答をモック | githubkit | `IssueSnapshot` の各フィールドが対応 | - |
-| `test_get_issue_or_pr_skips_false_fields` | 正常 | 取得フラグ `False` の除外 | `comments=False` で呼び出し | githubkit | `comments` が `None` で返る | - |
-| `test_get_issue_or_pr_api_failure_raises` | 異常 | API エラーの伝播 | REST が 404 を返す | githubkit | `RequestFailed` がそのまま伝播 | 代表 1 ツールで共通経路を確認 |
+| `test_get_issue_or_pr` | 正常 | スナップショット組み立て | REST 応答をモック | githubkit | `IssueSnapshot` の各フィールドが対応 | - |
+| `test_get_issue_or_pr_when_flags_false` | 正常 | 取得フラグ `False` の除外 | `comments=False` で呼び出し | githubkit | `comments` が `None` で返る | - |
+| `test_get_issue_or_pr_when_api_error` | 異常 | API エラーの伝播 | REST が 404 を返す | githubkit | `RequestFailed` がそのまま伝播 | 代表 1 ツールで共通経路を確認 |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_get_issue_snapshot` | GitHub | Issue を全フィールドで取得 | 認証 / 親子 Issue の解決 / `IssueSnapshot` 構造 | 副作用: なし（読み取りのみ） |
-| `test_ext_get_pr_snapshot` | GitHub | `is_pr=True` で PR を取得 | state=`MERGED` 判定 / コメントの `isMinimized` | 副作用: なし（読み取りのみ） |
+| `test_ext_get_issue_or_pr_when_issue` | GitHub | Issue を全フィールドで取得 | 認証 / 親子 Issue の解決 / `IssueSnapshot` 構造 | 副作用: なし（読み取りのみ） |
+| `test_ext_get_issue_or_pr_when_pr` | GitHub | `is_pr=True` で PR を取得 | state=`MERGED` 判定 / コメントの `isMinimized` | 副作用: なし（読み取りのみ） |
 
 ---
 
@@ -348,13 +351,13 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_comment_posts_formatted_block` | 正常 | 定型ブロックで投稿 | sender / receiver / body | githubkit | `_format_block` の出力で投稿され `CommentResult` を返す | - |
+| `test_comment` | 正常 | 定型ブロックで投稿 | sender / receiver / body | githubkit | `_format_block` の出力で投稿され `CommentResult` を返す | - |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_comment_posts` | GitHub | 定型ブロックでコメント投稿 | `node_id` / `url` の返却 / 本文書式 | 副作用: sandbox にコメント投稿 |
+| `test_ext_comment` | GitHub | 定型ブロックでコメント投稿 | `node_id` / `url` の返却 / 本文書式 | 副作用: sandbox にコメント投稿 |
 
 ---
 
@@ -409,15 +412,15 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_ask_questions_renders_choices` | 正常 | 選択肢 + 推奨付き質問投稿 | `Question` x2 + recommended_index | githubkit | 選択肢と推奨の書式を含む本文で投稿 | - |
-| `test_ask_questions_omits_recommendation` | 正常 | 推奨なしの省略 | `recommended_index=-1` | githubkit | 推奨行を含まない本文で投稿 | - |
-| `test_ask_questions_omits_empty_intro_and_background` | 正常 | 空文字セクションの省略 | `intro` / `background` が空文字 | githubkit | 前置き・背景を含まない本文で投稿 | - |
+| `test_ask_questions` | 正常 | 選択肢 + 推奨付き質問投稿 | `Question` x2 + recommended_index | githubkit | 選択肢と推奨の書式を含む本文で投稿 | - |
+| `test_ask_questions_when_no_recommendation` | 正常 | 推奨なしの省略 | `recommended_index=-1` | githubkit | 推奨行を含まない本文で投稿 | - |
+| `test_ask_questions_when_empty_intro_and_background` | 正常 | 空文字セクションの省略 | `intro` / `background` が空文字 | githubkit | 前置き・背景を含まない本文で投稿 | - |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_ask_questions_posts` | GitHub | 選択肢 + 推奨付きの質問投稿 | 選択肢・推奨マークの書式 | 副作用: sandbox にコメント投稿 |
+| `test_ext_ask_questions` | GitHub | 選択肢 + 推奨付きの質問投稿 | 選択肢・推奨マークの書式 | 副作用: sandbox にコメント投稿 |
 
 ---
 
@@ -471,13 +474,13 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_reply_comment_appends_with_divider` | 正常 | `---` 区切りの返信追記 | 既存コメントの node_id | githubkit | 先頭 `---` + 宛先ヘッダー付きで追記 | - |
+| `test_reply_comment` | 正常 | `---` 区切りの返信追記 | 既存コメントの node_id | githubkit | 先頭 `---` + 宛先ヘッダー付きで追記 | - |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_reply_comment_appends` | GitHub | 既存コメントへ `---` 区切りで追記 | コメント更新 API / 追記後の本文 | 副作用: sandbox のコメント更新 |
+| `test_ext_reply_comment` | GitHub | 既存コメントへ `---` 区切りで追記 | コメント更新 API / 追記後の本文 | 副作用: sandbox のコメント更新 |
 
 ---
 
@@ -526,13 +529,13 @@ ResolveResult(resolved_count=2)
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_resolve_comments_minimizes_all` | 正常 | 一括 Resolve | node_id x3 | githubkit | 3 件とも minimizeComment が実行される | - |
+| `test_resolve_comments` | 正常 | 一括 Resolve | node_id x3 | githubkit | 3 件とも minimizeComment が実行される | - |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_resolve_comments_minimizes` | GitHub | minimizeComment の実行 | `classifier=RESOLVED` で `isMinimized` が true になる | 副作用: sandbox のコメントを Resolve |
+| `test_ext_resolve_comments` | GitHub | minimizeComment の実行 | `classifier=RESOLVED` で `isMinimized` が true になる | 副作用: sandbox のコメントを Resolve |
 
 ---
 
@@ -587,14 +590,76 @@ list_addressed_comments(52, is_pr=True, addressee="architect")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_list_addressed_comments_filters_addressee` | 正常 | 最終ブロックの宛先で絞り込み | 宛先違い・宛先なしのコメント混在 | githubkit | 自分宛 + to なしユーザーコメントのみ blocks 付きで返す | - |
-| `test_list_addressed_comments_includes_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` で Resolved 済みが混在 | githubkit | Resolved 済みも `is_resolved=True` で返る | 省略時は除外される |
+| `test_list_addressed_comments` | 正常 | 最終ブロックの宛先で絞り込み | 宛先違い・宛先なしのコメント混在 | githubkit | 自分宛 + to なしユーザーコメントのみ blocks 付きで返す | - |
+| `test_list_addressed_comments_when_include_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` で Resolved 済みが混在 | githubkit | Resolved 済みも `is_resolved=True` で返る | 省略時は除外される |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_list_addressed_filters` | GitHub | 宛先付きコメントの抽出 | to 行の宛先判定 / `isMinimized` の取得 | 副作用: なし（事前投稿は fixture） |
+| `test_ext_list_addressed_comments` | GitHub | 宛先付きコメントの抽出 | to 行の宛先判定 / `isMinimized` の取得 | 副作用: なし（事前投稿は fixture） |
+
+---
+
+### Issue・PR検索
+> 物理名: `search_issues_and_prs`<br>
+> 種別: 関数
+
+キーワードでリポジトリ内の Issue / PR を横断検索して一覧を返す。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 検索キーワード | `query` | `str` | ✅ | - | 検索キーワード（GitHub search 構文可） | 対象リポジトリの絞り込みは自動付与 |
+| 並び順 | `sort` | `Literal["comments", "reactions", "reactions-+1", "reactions--1", "reactions-smile", "reactions-thinking_face", "reactions-heart", "reactions-tada", "interactions", "created", "updated"] \| None` | - | `None`（関連度順） | 並び順 | - |
+| 昇順 / 降順 | `order` | `Literal["desc", "asc"]` | - | `"desc"` | 並びの向き | `sort` 指定時のみ有効 |
+| 件数 | `limit` | `int` | - | `10` | 最大取得件数（1〜100） | 検索 API の `per_page` に渡す |
+| ページ | `page` | `int` | - | `1` | ページ番号 | - |
+
+引数例:
+
+```python
+search_issues_and_prs('"プロフィール編集" in:title is:issue', sort="created", limit=10)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`list[SearchResultItem]`](#検索結果) | 検索結果の配列（並びは `sort` 指定に従う） | - |
+
+戻り値例:
+
+```python
+[SearchResultItem(number=35, is_pr=False, title="プロフィール編集機能", state="open", url="https://github.com/{owner}/{repo}/issues/35")]
+```
+
+#### 処理
+
+1. 対象リポジトリを解決し、検索クエリに `repo:{owner}/{repo}` を付与する（[リポジトリ解決](#リポジトリ解決)）
+2. 検索 API を `sort` / `order` / `per_page` / `page` 付きで呼ぶ（REST）
+3. 各要素を番号・PR 判定（`pull_request` の有無）・タイトル・状態・URL の `SearchResultItem` に変換して配列で返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx（検索レートリミット・クエリ構文エラー 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_search_issues_and_prs` | 正常 | 検索結果の変換とリポジトリ絞り込み | Issue 1 件 + PR 1 件の検索応答 | githubkit | クエリに `repo:` が付与され、`SearchResultItem` の配列（PR は `is_pr=True`）で返る | - |
+| `test_search_issues_and_prs_when_sort` | 正常 | 並び順指定の受け渡し | `sort="created"` で呼び出し | githubkit | 検索 API に `sort=created` / `order=desc` が渡る | - |
+| `test_search_issues_and_prs_when_no_hit` | 正常 | ヒットなしは空配列 | 0 件の検索応答 | githubkit | `[]` | - |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_search_issues_and_prs` | GitHub | キーワード検索の実行 | 認証 / リポジトリ絞り込み / `SearchResultItem` 構造 | 副作用: なし（読み取りのみ） |
 
 ---
 
@@ -651,16 +716,16 @@ CommentResult(node_id="PRRC_kwDO...", url="https://github.com/.../pull/52#discus
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_review_comment_posts_inline` | 正常 | インライン投稿 | path / line / sender / body | githubkit | head SHA + 定型ブロックで投稿 API が呼ばれ `CommentResult` を返す | - |
-| `test_create_review_comment_multi_line` | 正常 | 範囲指定の投稿 | `start_line=42`・`line=48` | githubkit | `start_line` 付きで投稿 API が呼ばれる | - |
-| `test_create_review_comment_out_of_diff_raises` | 異常 | diff 外の行 | REST が 422 を返す | githubkit | `RequestFailed` がそのまま伝播 | 例外表「422 等」に対応 |
+| `test_create_review_comment` | 正常 | インライン投稿 | path / line / sender / body | githubkit | head SHA + 定型ブロックで投稿 API が呼ばれ `CommentResult` を返す | - |
+| `test_create_review_comment_when_multi_line` | 正常 | 範囲指定の投稿 | `start_line=42`・`line=48` | githubkit | `start_line` 付きで投稿 API が呼ばれる | - |
+| `test_create_review_comment_when_out_of_diff` | 異常 | diff 外の行 | REST が 422 を返す | githubkit | `RequestFailed` がそのまま伝播 | 例外表「422 等」に対応 |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_review_comment_single_line` | GitHub | 単一行のインライン投稿 | `path` / `line` / `side=RIGHT` / head SHA | 副作用: sandbox の PR にレビューコメント投稿 |
-| `test_ext_review_comment_multi_line` | GitHub | 範囲（`start_line`〜`line`）の投稿 | `start_line` の実挙動 | 副作用: sandbox の PR にレビューコメント投稿 |
+| `test_ext_create_review_comment_when_single_line` | GitHub | 単一行のインライン投稿 | `path` / `line` / `side=RIGHT` / head SHA | 副作用: sandbox の PR にレビューコメント投稿 |
+| `test_ext_create_review_comment_when_multi_line` | GitHub | 範囲（`start_line`〜`line`）の投稿 | `start_line` の実挙動 | 副作用: sandbox の PR にレビューコメント投稿 |
 
 ---
 
@@ -711,9 +776,9 @@ list_review_threads(52)
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_list_review_threads_builds_threads` | 正常 | スレッドの変換 | 単一行 + 範囲コメントが混在する GraphQL 応答 | githubkit | `node_id` / `path` / `start_line` / `line` / コメント群（投稿順）が対応する | - |
-| `test_list_review_threads_excludes_resolved` | 正常 | 解決済みの除外 | 未解決 + 解決済みが混在する応答 | githubkit | 未解決スレッドだけが返る | - |
-| `test_list_review_threads_includes_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` | githubkit | 解決済みも `is_resolved=True` で返る | - |
+| `test_list_review_threads` | 正常 | スレッドの変換 | 単一行 + 範囲コメントが混在する GraphQL 応答 | githubkit | `node_id` / `path` / `start_line` / `line` / コメント群（投稿順）が対応する | - |
+| `test_list_review_threads_when_resolved_mixed` | 正常 | 解決済みの除外 | 未解決 + 解決済みが混在する応答 | githubkit | 未解決スレッドだけが返る | - |
+| `test_list_review_threads_when_include_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` | githubkit | 解決済みも `is_resolved=True` で返る | - |
 
 #### 疎通テスト
 
@@ -768,7 +833,7 @@ ResolveResult(resolved_count=2)
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_resolve_review_threads_resolves_all` | 正常 | 一括解決 | node_id x2 | githubkit | 2 件とも `resolveReviewThread` が実行され件数が返る | - |
+| `test_resolve_review_threads` | 正常 | 一括解決 | node_id x2 | githubkit | 2 件とも `resolveReviewThread` が実行され件数が返る | - |
 
 #### 疎通テスト
 
@@ -825,7 +890,7 @@ LabelsResult(current_labels=["layer:epic", "確認:tester"])
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_add_labels_returns_current_labels` | 正常 | 付与と現況返却 | ラベル 2 つ付与 | githubkit | ラベル追加 API の実行 + 付与後の `LabelsResult` | - |
+| `test_add_labels` | 正常 | 付与と現況返却 | ラベル 2 つ付与 | githubkit | ラベル追加 API の実行 + 付与後の `LabelsResult` | - |
 
 #### 疎通テスト
 
@@ -884,8 +949,8 @@ LabelsResult(current_labels=["layer:epic"])
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_remove_labels_removes_confirm_label` | 正常 | 確認ラベルの除去 | `確認:architect` を除去 | githubkit | 除去後の `LabelsResult` | - |
-| `test_remove_labels_rejects_in_discussion` | 異常 | `議論中` の除去は拒否 | labels に `議論中` を含む | githubkit | エラー（対象外ラベル）<br>githubkit は呼び出されない | 権限制約 |
+| `test_remove_labels` | 正常 | 確認ラベルの除去 | `確認:architect` を除去 | githubkit | 除去後の `LabelsResult` | - |
+| `test_remove_labels_when_in_discussion` | 異常 | `議論中` の除去は拒否 | labels に `議論中` を含む | githubkit | エラー（対象外ラベル）<br>githubkit は呼び出されない | 権限制約 |
 
 #### 疎通テスト
 
@@ -945,8 +1010,8 @@ LabelsResult(current_labels=["layer:subsystem", "確認:tester"])
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_transition_phase_swaps_labels` | 正常 | ラベル一括入れ替え | remove + add の指定 | githubkit | 除去 → 付与の順で実行され現況返却 | - |
-| `test_transition_phase_rejects_in_discussion` | 異常 | `議論中` の除去は拒否 | `remove_labels_` に `議論中` を含む | githubkit | `ValueError`<br>githubkit は呼び出されない | 例外表「`議論中` を含む」に対応 |
+| `test_transition_phase` | 正常 | ラベル一括入れ替え | remove + add の指定 | githubkit | 除去 → 付与の順で実行され現況返却 | - |
+| `test_transition_phase_when_in_discussion` | 異常 | `議論中` の除去は拒否 | `remove_labels_` に `議論中` を含む | githubkit | `ValueError`<br>githubkit は呼び出されない | 例外表「`議論中` を含む」に対応 |
 
 #### 疎通テスト
 
@@ -1003,7 +1068,7 @@ AssigneesResult(assignees=["shuhei1101"])
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_set_assignee_sets_current_login` | 正常 | 認証ユーザーの設定 | assignee 未設定の対象 | githubkit | `_get_current_login` の値で設定され `AssigneesResult` を返す | - |
+| `test_set_assignee` | 正常 | 認証ユーザーの設定 | assignee 未設定の対象 | githubkit | `_get_current_login` の値で設定され `AssigneesResult` を返す | - |
 
 #### 疎通テスト
 
@@ -1060,7 +1125,7 @@ AssigneesResult(assignees=[])
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_remove_assignee_removes_current_login` | 正常 | 認証ユーザーの除去 | 認証ユーザーが assignee 設定済み | githubkit | `_get_current_login` の値で除去され `AssigneesResult` を返す | - |
+| `test_remove_assignee` | 正常 | 認証ユーザーの除去 | 認証ユーザーが assignee 設定済み | githubkit | `_get_current_login` の値で除去され `AssigneesResult` を返す | - |
 
 #### 疎通テスト
 
@@ -1116,7 +1181,7 @@ EmptyResult()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_update_body_replaces_full_text` | 正常 | 本文の完全置換 | 新本文 | githubkit | `body` を完全置換で送信 | - |
+| `test_update_body` | 正常 | 本文の完全置換 | 新本文 | githubkit | `body` を完全置換で送信 | - |
 
 #### 疎通テスト
 
@@ -1172,7 +1237,7 @@ EmptyResult()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_update_title_replaces_title` | 正常 | タイトル更新 | 新タイトル | githubkit | `title` を更新で送信 | - |
+| `test_update_title` | 正常 | タイトル更新 | 新タイトル | githubkit | `title` を更新で送信 | - |
 
 #### 疎通テスト
 
@@ -1232,15 +1297,15 @@ EmptyResult()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_close_with_reason_and_branch_delete` | 正常 | reason / ブランチ削除付き close | `reason=not_planned`・`delete_branch=True` | githubkit | `state=closed` + `state_reason` で更新し、head ブランチも削除 | - |
-| `test_close_issue_ignores_delete_branch` | 正常 | Issue 側の分岐 | `is_pr=False`・`delete_branch=True` | githubkit | `state=closed` で更新・ブランチ削除は呼ばれない | - |
+| `test_close_when_reason_and_delete_branch` | 正常 | reason / ブランチ削除付き close | `reason=not_planned`・`delete_branch=True` | githubkit | `state=closed` + `state_reason` で更新し、head ブランチも削除 | - |
+| `test_close_when_issue_with_delete_branch` | 正常 | Issue 側の分岐 | `is_pr=False`・`delete_branch=True` | githubkit | `state=closed` で更新・ブランチ削除は呼ばれない | - |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_close_issue_not_planned` | GitHub | `reason=not_planned` での Issue クローズ | `state_reason` の反映 | 副作用: sandbox の Issue クローズ |
-| `test_ext_close_pr_delete_branch` | GitHub | `delete_branch=True` での PR クローズ | head ブランチの削除 | 副作用: sandbox の PR クローズ + ブランチ削除 |
+| `test_ext_close_when_issue_not_planned` | GitHub | `reason=not_planned` での Issue クローズ | `state_reason` の反映 | 副作用: sandbox の Issue クローズ |
+| `test_ext_close_when_pr_delete_branch` | GitHub | `delete_branch=True` での PR クローズ | head ブランチの削除 | 副作用: sandbox の PR クローズ + ブランチ削除 |
 
 ---
 
@@ -1288,7 +1353,7 @@ EmptyResult()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_reopen_issue_updates_state` | 正常 | 再オープン | closed の Issue 番号 | githubkit | `state=open` + `state_reason=reopened` で更新し `EmptyResult` | - |
+| `test_reopen_issue` | 正常 | 再オープン | closed の Issue 番号 | githubkit | `state=open` + `state_reason=reopened` で更新し `EmptyResult` | - |
 
 #### 疎通テスト
 
@@ -1347,7 +1412,7 @@ CreatedIssueResult(issue_number=36, url="https://github.com/.../issues/36", pare
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_child_issue_links_parent` | 正常 | Sub-issue リンク付き起票 | 親番号 + タイトル + ラベル | githubkit | 起票 + 親への Sub-issue リンク + `CreatedIssueResult` | - |
+| `test_create_child_issue` | 正常 | Sub-issue リンク付き起票 | 親番号 + タイトル + ラベル | githubkit | 起票 + 親への Sub-issue リンク + `CreatedIssueResult` | - |
 
 #### 疎通テスト
 
@@ -1404,7 +1469,7 @@ CreatedPRResult(pr_number=52, url="https://github.com/.../pull/52")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_draft_pr_sets_base` | 正常 | base 明示の Draft PR 作成 | head / base / title / body | githubkit | `draft=true`・`base` 指定で作成 + `CreatedPRResult` | - |
+| `test_create_draft_pr` | 正常 | base 明示の Draft PR 作成 | head / base / title / body | githubkit | `draft=true`・`base` 指定で作成 + `CreatedPRResult` | - |
 
 #### 疎通テスト
 
@@ -1460,7 +1525,7 @@ EmptyResult()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_mark_pr_ready_runs_mutation` | 正常 | Draft 解除 | pr_number | githubkit | `markPullRequestReadyForReview` mutation が実行される | - |
+| `test_mark_pr_ready` | 正常 | Draft 解除 | pr_number | githubkit | `markPullRequestReadyForReview` mutation が実行される | - |
 
 #### 疎通テスト
 
@@ -1516,14 +1581,14 @@ EmptyResult()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_merge_pr_defaults_squash_delete_branch` | 正常 | 既定戦略でのマージ | strategy 省略 | githubkit | `merge_method=squash` でマージし、head ブランチを削除 | - |
-| `test_merge_pr_with_strategy` | 正常 | 戦略指定でのマージ | `strategy="rebase"` | githubkit | `merge_method=rebase` でマージされる | - |
+| `test_merge_pr` | 正常 | 既定戦略でのマージ | strategy 省略 | githubkit | `merge_method=squash` でマージし、head ブランチを削除 | - |
+| `test_merge_pr_when_strategy_given` | 正常 | 戦略指定でのマージ | `strategy="rebase"` | githubkit | `merge_method=rebase` でマージされる | - |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_merge_pr_squash` | GitHub | squash マージ + ブランチ削除 | `merge_method=squash` / head ブランチ削除 | 副作用: sandbox にマージコミット |
+| `test_ext_merge_pr_when_squash` | GitHub | squash マージ + ブランチ削除 | `merge_method=squash` / head ブランチ削除 | 副作用: sandbox にマージコミット |
 
 ---
 
@@ -1580,11 +1645,11 @@ WorktreeCreateResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_worktree_create_creates_branch_and_worktree` | 正常 | ブランチ + worktree の作成 | 未使用のフルブランチ名 | なし | ブランチと `.claude/worktrees/` 配下の worktree が作られ、戻り値が実体と一致 | - |
-| `test_worktree_create_makes_missing_dirs` | 正常 | worktree フォルダ未作成時のパス作成 | `.claude/worktrees/` が存在しない | なし | パスが作成されてから worktree が作られる | - |
-| `test_worktree_create_resolves_remote_base` | 正常 | base ref の解決 | origin に現在ブランチが存在 | なし | `base_ref` が `origin/{current}` | 無ければ `HEAD` |
-| `test_worktree_create_falls_back_to_head` | 正常 | base ref の HEAD フォールバック | origin に現在ブランチが無い | なし | `base_ref` が `HEAD` | - |
-| `test_worktree_create_existing_branch_raises` | 異常 | 既存ブランチ名 | 既存のブランチ名を指定 | なし | `CalledProcessError` | 例外表「git が非 0 で終了」に対応 |
+| `test_worktree_create` | 正常 | ブランチ + worktree の作成 | 未使用のフルブランチ名 | なし | ブランチと `.claude/worktrees/` 配下の worktree が作られ、戻り値が実体と一致 | - |
+| `test_worktree_create_when_dirs_missing` | 正常 | worktree フォルダ未作成時のパス作成 | `.claude/worktrees/` が存在しない | なし | パスが作成されてから worktree が作られる | - |
+| `test_worktree_create_when_remote_branch_exists` | 正常 | base ref の解決 | origin に現在ブランチが存在 | なし | `base_ref` が `origin/{current}` | 無ければ `HEAD` |
+| `test_worktree_create_when_remote_branch_missing` | 正常 | base ref の HEAD フォールバック | origin に現在ブランチが無い | なし | `base_ref` が `HEAD` | - |
+| `test_worktree_create_when_branch_exists` | 異常 | 既存ブランチ名 | 既存のブランチ名を指定 | なし | `CalledProcessError` | 例外表「git が非 0 で終了」に対応 |
 
 ---
 
@@ -1640,8 +1705,8 @@ WorktreeRemoveResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_worktree_remove_force_deletes_both` | 正常 | worktree + ブランチの強制削除 | 未マージ commit を持つブランチと worktree | なし | 両方削除され、戻り値が実体と一致 | squash マージ運用の再現 |
-| `test_worktree_remove_missing_raises` | 異常 | worktree 不存在 | worktree が無いブランチ名 | なし | `CalledProcessError` | 例外表「git が非 0 で終了」に対応 |
+| `test_worktree_remove` | 正常 | worktree + ブランチの強制削除 | 未マージ commit を持つブランチと worktree | なし | 両方削除され、戻り値が実体と一致 | squash マージ運用の再現 |
+| `test_worktree_remove_when_worktree_missing` | 異常 | worktree 不存在 | worktree が無いブランチ名 | なし | `CalledProcessError` | 例外表「git が非 0 で終了」に対応 |
 
 ---
 
@@ -1696,9 +1761,9 @@ GitHub(auth="github_pat_...")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_client_reuses_instance` | 正常 | インスタンスの共有 | 2 回呼び出し | なし | 同一インスタンスが返る | - |
-| `test_get_client_missing_settings_raises` | 異常 | 設定ファイル不在 | 設定ファイルが無い環境 | なし | `FileNotFoundError` | 例外表「設定ファイルが無い」に対応 |
-| `test_get_client_missing_token_raises` | 異常 | トークン未設定 | `github_token` を消した設定 | なし | `KeyError` | 例外表「`github_token` が未設定」に対応 |
+| `test_get_client` | 正常 | インスタンスの共有 | 2 回呼び出し | なし | 同一インスタンスが返る | - |
+| `test_get_client_when_settings_missing` | 異常 | 設定ファイル不在 | 設定ファイルが無い環境 | なし | `FileNotFoundError` | 例外表「設定ファイルが無い」に対応 |
+| `test_get_client_when_token_missing` | 異常 | トークン未設定 | `github_token` を消した設定 | なし | `KeyError` | 例外表「`github_token` が未設定」に対応 |
 
 ---
 
@@ -1745,8 +1810,8 @@ _get_repo()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_repo_parses_https_url` | 正常 | https 形式の解析 | remote が `https://github.com/o/r.git` | git CLI | `("o", "r")` | - |
-| `test_get_repo_parses_ssh_url` | 正常 | ssh 形式の解析 | remote が `git@github.com:o/r.git` | git CLI | `("o", "r")` | - |
+| `test_get_repo_when_https_url` | 正常 | https 形式の解析 | remote が `https://github.com/o/r.git` | git CLI | `("o", "r")` | - |
+| `test_get_repo_when_ssh_url` | 正常 | ssh 形式の解析 | remote が `git@github.com:o/r.git` | git CLI | `("o", "r")` | - |
 
 ---
 
@@ -1792,7 +1857,7 @@ _get_current_login()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_current_login_returns_login` | 正常 | 認証ユーザーの解決 | REST 応答をモック | githubkit | ログイン名を返す | - |
+| `test_get_current_login` | 正常 | 認証ユーザーの解決 | REST 応答をモック | githubkit | ログイン名を返す | - |
 
 ---
 
@@ -1840,7 +1905,7 @@ _get_labels(35)
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_labels_returns_names` | 正常 | ラベル名一覧の取得 | REST 応答をモック | githubkit | 現在のラベル名一覧を返す | - |
+| `test_get_labels` | 正常 | ラベル名一覧の取得 | REST 応答をモック | githubkit | 現在のラベル名一覧を返す | - |
 
 ---
 
@@ -1888,7 +1953,7 @@ _get_assignees(35)
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_assignees_returns_logins` | 正常 | assignee 一覧の取得 | REST 応答をモック | githubkit | 現在のログイン名一覧を返す | - |
+| `test_get_assignees` | 正常 | assignee 一覧の取得 | REST 応答をモック | githubkit | 現在のログイン名一覧を返す | - |
 
 ---
 
@@ -1930,7 +1995,55 @@ _minimize_comment("IC_kwDO...")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_minimize_comment_runs_mutation` | 正常 | minimize の実行 | GraphQL をモック | githubkit | `classifier=RESOLVED` で mutation が実行される | - |
+| `test_minimize_comment` | 正常 | minimize の実行 | GraphQL をモック | githubkit | `classifier=RESOLVED` で mutation が実行される | - |
+
+---
+
+### Resolved 状態取得
+> 物理名: `_is_minimized`<br>
+> 種別: 関数
+
+コメントの Resolved（minimize）状態を GraphQL で取得する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| node_id | `node_id` | `str` | ✅ | - | 対象コメントの GraphQL node_id | - |
+
+引数例:
+
+```python
+_is_minimized("IC_kwDO...")
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `bool` | Resolved（minimize）済みか | - |
+
+戻り値例:
+
+```python
+False
+```
+
+#### 処理
+
+1. `node(id)` の `isMinimized` を GraphQL で取得して返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `GraphQLFailed` | GraphQL がエラーを返す（node_id 不正 等） | `errors[].message` | - |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_is_minimized` | 正常 | isMinimized の取得 | GraphQL が `isMinimized: true` を返す | githubkit | `True` を返す | - |
 
 ---
 
@@ -1980,7 +2093,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_issue_comment_returns_result` | 正常 | コメント投稿の実行 | REST 応答をモック | githubkit | node_id / url 入りの `CommentResult` を返す | - |
+| `test_create_issue_comment` | 正常 | コメント投稿の実行 | REST 応答をモック | githubkit | node_id / url 入りの `CommentResult` を返す | - |
 
 ---
 
@@ -2029,8 +2142,8 @@ _parse_comment_blocks(body)
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_parse_comment_blocks_extracts_headers` | 正常 | from / to ヘッダーと本文の抽出 | `---` 区切り 3 ブロックのコメント本文 | なし | 各ブロックの sender / receiver / body が取れる | - |
-| `test_parse_comment_blocks_plain_user_comment` | 正常 | ヘッダーなしは宛先なしユーザー投稿 | 素のコメント | なし | sender / receiver とも `None`・本文がそのまま入る | - |
+| `test_parse_comment_blocks` | 正常 | from / to ヘッダーと本文の抽出 | `---` 区切り 3 ブロックのコメント本文 | なし | 各ブロックの sender / receiver / body が取れる | - |
+| `test_parse_comment_blocks_when_plain_user_comment` | 正常 | ヘッダーなしは宛先なしユーザー投稿 | 素のコメント | なし | sender / receiver とも `None`・本文がそのまま入る | - |
 
 ---
 
@@ -2081,9 +2194,9 @@ _format_block("architect", "implementer", "L42 に null チェックを追加し
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_format_block_builds_from_to_header` | 正常 | 定型ブロックの組み立て | sender / receiver / body | なし | `> from: @sender` + `> to: @receiver` + 本文 | - |
-| `test_format_block_reply_prepends_divider` | 正常 | 返信は先頭に `---` | `is_reply=True` | なし | 先頭が `---` で始まる | - |
-| `test_format_block_omits_to_when_none` | 正常 | receiver 省略時は to 行なし | `receiver=None` | なし | from 行 + 本文のみ | - |
+| `test_format_block` | 正常 | 定型ブロックの組み立て | sender / receiver / body | なし | `> from: @sender` + `> to: @receiver` + 本文 | - |
+| `test_format_block_when_reply` | 正常 | 返信は先頭に `---` | `is_reply=True` | なし | 先頭が `---` で始まる | - |
+| `test_format_block_when_receiver_none` | 正常 | receiver 省略時は to 行なし | `receiver=None` | なし | from 行 + 本文のみ | - |
 
 ---
 
@@ -2129,8 +2242,8 @@ _ensure_at("architect")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_ensure_at_adds_prefix` | 正常 | `@` の付与 | `"architect"` | なし | `"@architect"` | - |
-| `test_ensure_at_keeps_existing_prefix` | 正常 | 既に `@` ありは冪等 | `"@architect"` | なし | `"@architect"` | - |
+| `test_ensure_at` | 正常 | `@` の付与 | `"architect"` | なし | `"@architect"` | - |
+| `test_ensure_at_when_already_prefixed` | 正常 | 既に `@` ありは冪等 | `"@architect"` | なし | `"@architect"` | - |
 
 ---
 
@@ -2185,7 +2298,7 @@ CompletedProcess(returncode=0, stdout="")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_run_git_executes_command` | 正常 | git の実行 | tmp の git リポジトリで実行 | なし | 正常終了の `CompletedProcess` が返る | - |
+| `test_run_git` | 正常 | git の実行 | tmp の git リポジトリで実行 | なし | 正常終了の `CompletedProcess` が返る | - |
 
 ---
 
@@ -2237,7 +2350,7 @@ Path("/home/user/repo/ai-monitor")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_repo_root_from_worktree` | 正常 | worktree 内からのルート解決 | tmp リポジトリの worktree 内で実行 | なし | メインリポジトリのルートを返す | - |
+| `test_repo_root_when_in_worktree` | 正常 | worktree 内からのルート解決 | tmp リポジトリの worktree 内で実行 | なし | メインリポジトリのルートを返す | - |
 
 ---
 
@@ -2286,7 +2399,7 @@ Path("/home/user/repo/ai-monitor/.claude/worktrees/feat-backend-profile-edit-edi
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_worktree_path_replaces_slashes` | 正常 | パス変換 | スラッシュ入りのブランチ名 | なし | `/` が `-` に置換された `.claude/worktrees/` 配下の絶対パス | - |
+| `test_worktree_path` | 正常 | パス変換 | スラッシュ入りのブランチ名 | なし | `/` が `-` に置換された `.claude/worktrees/` 配下の絶対パス | - |
 
 ---
 
@@ -2341,7 +2454,7 @@ _resolve_base_ref()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_resolve_base_ref_prefers_remote` | 正常 | リモート優先の解決 | origin に現在ブランチが存在する tmp リポジトリ | なし | `origin/{current}` を返す | - |
+| `test_resolve_base_ref` | 正常 | リモート優先の解決 | origin に現在ブランチが存在する tmp リポジトリ | なし | `origin/{current}` を返す | - |
 
 ---
 
@@ -2464,6 +2577,31 @@ list_review_threads が返すレビュースレッド 1 件（Pydantic `BaseMode
 | 開始行 | `start_line` | `int \| None` | 公開 | `None` | 範囲コメントの開始行 | `42` | 単一行コメントは `None` |
 | 解決済み | `is_resolved` | `bool` | 公開 | `False` | 解決済みか | `false` | `include_resolved=True` のときのみ `true` があり得る |
 | コメント | `comments` | [`list[IssueCommentEntry]`](#コメントエントリ) | 公開 | `[]` | スレッド内のコメント（投稿順） | - | - |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## 検索結果
+> 物理名: `SearchResultItem`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+search_issues_and_prs が返す検索結果 1 件（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 番号 | `number` | `int` | 公開 | - | Issue / PR 番号 | `35` | - |
+| PR フラグ | `is_pr` | `bool` | 公開 | - | PR なら `True` | `false` | 検索応答の `pull_request` の有無で判定 |
+| タイトル | `title` | `str` | 公開 | - | タイトル | `"プロフィール編集機能"` | - |
+| 状態 | `state` | `str` | 公開 | - | `"open"` / `"closed"` | `"open"` | - |
+| URL | `url` | `str` | 公開 | - | html URL | - | - |
 
 ### メソッド
 

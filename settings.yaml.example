@@ -1,0 +1,29 @@
+# ai-monitor 設定サンプル（モニター / MCP 共用）
+# 実運用は ~/.config/ai-monitor/settings.yaml にコピーして書き換える
+# 環境差分は settings.{環境}.yaml に書き、環境名は AI_MONITOR_ENV（または --env）で指定する
+
+# GitHub API（githubkit）の認証 PAT
+# fine-grained PAT に監視対象全リポジトリの Issues / Pull requests / Contents の RW を付与
+github_token: github_pat_xxxxxxxx
+
+# POST /completions の待受ポート（bind 先は 127.0.0.1 固定）
+port: 8765
+
+# GitHub ポーリングの周期（秒）
+poll_interval_sec: 15
+
+# 処理中のまま超過したセッションを kill する閾値（分）
+session_timeout_min: 30
+
+# 生存確認の周期（秒）
+heartbeat_interval_sec: 60
+
+# セッション台帳の永続化先
+state_path: data/state.yaml
+
+# 監視対象プロジェクト（複数可）
+projects:
+  - name: myapp
+    repo: owner/myapp
+    local_path: /mnt/c/Users/shuhe/repo/myapp
+    wiki_base: https://raw.githubusercontent.com/owner/myapp/master/docs/wiki
