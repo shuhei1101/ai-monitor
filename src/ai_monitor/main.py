@@ -19,44 +19,26 @@ from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.integrations.github.client import get_client
 from ai_monitor.integrations.github.search import list_open_targets
 from ai_monitor.server.app import create_app
-from ai_monitor.shared.settings import LabelSettings, Settings
+from ai_monitor.shared.settings import _AGENT_NAMES, AgentModel, LabelSettings, Settings
 from ai_monitor.shared.types import MonitorTarget
 
 logger = logging.getLogger(__name__)
 
-_AGENT_NAMES = [
-    "intake-issue-triager",
-    "epic-conductor",
-    "epic-poc-runner",
-    "mock-designer",
-    "complex-scenario-writer",
-    "complex-scenario-tester",
-    "story-conductor",
-    "single-scenario-writer",
-    "single-scenario-tester",
-    "subsystem-conductor",
-    "architect",
-    "library-poc-runner",
-    "tester",
-    "implementer",
-    "resetter",
-    "quick-implementer",
-    "questioner",
-]
 _STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "quick-implementer", "questioner"}
 
 
-def build_agents(labels: LabelSettings) -> list[Agent]:
-    """全エージェントの Agent をラベル設定の値から組み立てる。"""
+def build_agents(labels: LabelSettings, *, agent_models: dict[str, AgentModel]) -> list[Agent]:
+    """全エージェントの Agent をラベル設定と agent_models の値から組み立てる。"""
     agents = []
     for name in _AGENT_NAMES:
         field = name.replace("-", "_")
-        # 確認 / 処理中ラベルを取り出して組み立てる（独立系 5 種は standalone=True）
+        # 確認 / 処理中ラベル + モデルを取り出して組み立てる（独立系 5 種は standalone=True）
         agents.append(
             Agent(
                 name=name,
                 confirm_label=getattr(labels, f"confirm_{field}"),
                 processing_label=getattr(labels, f"processing_{field}"),
+                model=agent_models[name].model,
                 standalone=name in _STANDALONE_NAMES,
             )
         )
@@ -109,7 +91,7 @@ def main() -> int:
     settings = Settings()
     labels = LabelSettings()
     get_client(settings)
-    agents = build_agents(labels)
+    agents = build_agents(labels, agent_models=settings.agents)
     registry = SessionRegistry(Path(settings.state_path))
     app = create_app(settings, registry=registry, agents=agents)
     uvicorn.run(app, host="127.0.0.1", port=settings.port)

@@ -19,7 +19,7 @@ def test_normal(tmp_settings, fake_remote, urlopen_calls):
     req = urlopen_calls[0]
     assert req.full_url == "http://127.0.0.1:18999/completions"
     assert req.get_method() == "POST"
-    assert json.loads(req.data) == {"agent_name": "architect", "number": 52, "project": "shuhei1101/ai-monitor-e2e"}
+    assert json.loads(req.data) == {"agent_name": "architect", "number": 52, "project": "sandbox"}
     assert res == MonitorAck(ok=True)
 
 

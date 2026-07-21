@@ -27,3 +27,41 @@ projects:
     repo: owner/myapp
     local_path: /mnt/c/Users/shuhe/repo/myapp
     wiki_base: https://raw.githubusercontent.com/owner/myapp/master/docs/wiki
+
+# エージェント別モデル（全 17 エージェント分のエントリ必須・欠落 / 空値は起動エラー）
+# 推奨は「頭を使う工程は claude-opus-4-7 / 機械的な工程は sonnet」
+agents:
+  intake-issue-triager:
+    model: claude-opus-4-7      # Issue の分解・種別判定
+  epic-conductor:
+    model: claude-opus-4-7      # epic 要件・方針判断
+  epic-poc-runner:
+    model: claude-opus-4-7      # PoC 実装（技術判断）
+  mock-designer:
+    model: claude-opus-4-7      # UI 全体設計
+  complex-scenario-writer:
+    model: claude-opus-4-7      # 複合シナリオ設計
+  complex-scenario-tester:
+    model: claude-opus-4-7      # 統合テスト設計・トリアージ
+  story-conductor:
+    model: claude-opus-4-7      # story 分解・判断
+  single-scenario-writer:
+    model: claude-opus-4-7      # 単一シナリオ設計
+  single-scenario-tester:
+    model: claude-opus-4-7      # 統合テスト設計・トリアージ
+  subsystem-conductor:
+    model: claude-opus-4-7      # SA 分解・変更判断
+  architect:
+    model: claude-opus-4-7      # 設計・レビュー
+  library-poc-runner:
+    model: claude-opus-4-7      # PoC 実装（技術判断）
+  resetter:
+    model: claude-opus-4-7      # 影響範囲分析
+  questioner:
+    model: claude-opus-4-7      # 会話・判断
+  tester:
+    model: sonnet               # 設計書からのテスト作成（機械的）
+  implementer:
+    model: sonnet               # 設計書 + テストからの実装（機械的）
+  quick-implementer:
+    model: sonnet               # 軽微修正の直接実装（機械的）

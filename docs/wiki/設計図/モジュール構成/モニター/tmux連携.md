@@ -143,7 +143,8 @@ send_keys("ai-monitor-myproj-35-epic-conductor", "/ai-monitor:epic-conductor 35"
 
 #### 処理
 
-1. `tmux send-keys -t {name} {text} Enter` を実行する（[tmux 実行入口](#tmux-実行入口)）
+1. `tmux send-keys -t {name} {text}` を実行する（[tmux 実行入口](#tmux-実行入口)）
+2. 間を置いて `tmux send-keys -t {name} Enter` を実行する（テキストと同時に送ると claude の貼り付け判定で改行が入力扱いになり、送信されないため）
 
 #### 例外
 

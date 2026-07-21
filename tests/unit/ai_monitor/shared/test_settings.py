@@ -6,6 +6,20 @@ from pydantic import ValidationError
 
 import ai_monitor.shared.settings as settings_mod
 
+_ALL_AGENT_NAMES = [
+    "intake-issue-triager", "epic-conductor", "epic-poc-runner", "mock-designer",
+    "complex-scenario-writer", "complex-scenario-tester", "story-conductor",
+    "single-scenario-writer", "single-scenario-tester", "subsystem-conductor",
+    "architect", "library-poc-runner", "tester", "implementer", "resetter",
+    "quick-implementer", "questioner",
+]
+
+
+def _agents_yaml(names=_ALL_AGENT_NAMES) -> str:
+    """全 17 エージェント分の agents セクション文字列を生成する。"""
+    return "agents:\n" + "".join(f"  {name}:\n    model: sonnet\n" for name in names)
+
+
 BASE_YAML = """github_token: github_pat_test
 port: 18999
 poll_interval_sec: 5
@@ -17,7 +31,7 @@ projects:
     repo: shuhei1101/ai-monitor-e2e
     local_path: /tmp/sandbox
     wiki_base: https://example.com/wiki
-"""
+""" + _agents_yaml()
 
 
 @pytest.fixture
@@ -77,3 +91,44 @@ def test_settings_when_token_missing(tmp_config_dir):
     # 実行・検証
     with pytest.raises(ValidationError):
         settings_mod.Settings()
+
+
+def test_settings_when_agents_all_set(tmp_config_dir):
+    """全エージェント分のモデル読み込みを確認する（正常系）。"""
+    # 実行
+    settings = settings_mod.Settings()
+    # 検証
+    assert set(settings.agents.keys()) == set(_ALL_AGENT_NAMES)
+    assert all(agent.model == "sonnet" for agent in settings.agents.values())
+
+
+def test_settings_when_agents_missing_entry(tmp_config_dir):
+    """エージェントエントリ欠落のバリデーションエラーを確認する（異常系）。"""
+    # 準備: implementer だけ書かない settings.yaml
+    without_impl = [n for n in _ALL_AGENT_NAMES if n != "implementer"]
+    yaml_partial = BASE_YAML.split("agents:", 1)[0] + _agents_yaml(without_impl)
+    (tmp_config_dir / "settings.yaml").write_text(yaml_partial, encoding="utf-8")
+    # 実行・検証
+    with pytest.raises(ValidationError) as exc_info:
+        settings_mod.Settings()
+    assert "implementer" in str(exc_info.value)
+
+
+def test_settings_when_agents_empty_model(tmp_config_dir):
+    """モデル空文字のバリデーションエラーを確認する（異常系）。"""
+    # 準備: implementer の model を空文字にする
+    yaml_empty = BASE_YAML.replace(
+        "  implementer:\n    model: sonnet\n",
+        "  implementer:\n    model: ''\n",
+    )
+    (tmp_config_dir / "settings.yaml").write_text(yaml_empty, encoding="utf-8")
+    # 実行・検証
+    with pytest.raises(ValidationError):
+        settings_mod.Settings()
+
+
+def test_agent_model_when_empty():
+    """AgentModel の空文字禁止を確認する（異常系）。"""
+    # 実行・検証
+    with pytest.raises(ValidationError):
+        settings_mod.AgentModel(model="")

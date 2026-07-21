@@ -23,7 +23,7 @@ def test_normal(tmp_settings, fake_remote, urlopen_calls):
         "agent_name": "architect",
         "number": 52,
         "watch_numbers": [60, 61],
-        "project": "shuhei1101/ai-monitor-e2e",
+        "project": "sandbox",
     }
     assert res == MonitorAck(ok=True)
 

@@ -20,8 +20,9 @@ def test_normal(gh, resp):
         [
             _comment_ns("IC_1", "> from: @tester\n> to: @architect\n\n完了しました。"),
             _comment_ns("IC_2", "> from: @tester\n> to: @architect\n\nResolved 済みの報告。"),
-            _comment_ns("IC_3", "> from: @architect\n> to: @tester\n\n宛先違い。"),
+            _comment_ns("IC_3", "> from: @tester\n> to: @implementer\n\n宛先違い。"),
             _comment_ns("IC_4", "素のユーザーコメント。"),
+            _comment_ns("IC_5", "> from: @architect\n> to: @shuhei1101\n\n自身の投稿。"),
         ]
     )
     gh.graphql.side_effect = [
@@ -29,13 +30,15 @@ def test_normal(gh, resp):
         {"node": {"isMinimized": True}},
         {"node": {"isMinimized": False}},
         {"node": {"isMinimized": False}},
+        {"node": {"isMinimized": False}},
     ]
     # 実行
     res = server.list_addressed_comments(52, is_pr=True, addressee="architect")
     # 検証
-    assert [c.node_id for c in res] == ["IC_1", "IC_4"]
+    assert [c.node_id for c in res] == ["IC_1", "IC_4", "IC_5"]
     assert res[0].blocks[-1].sender == "tester"
     assert res[1].blocks[-1].sender is None
+    assert res[2].blocks[-1].sender == "architect"
 
 
 def test_error_when_api_error(gh, request_failed):

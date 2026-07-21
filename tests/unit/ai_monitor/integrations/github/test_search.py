@@ -4,6 +4,8 @@ from __future__ import annotations
 from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
 
+from githubkit.utils import UNSET
+
 import ai_monitor.integrations.github.search as search_mod
 from ai_monitor.shared.types import Issue, PullRequest
 
@@ -15,14 +17,15 @@ def _resp(data):
 
 
 def _issue_ns(number, **overrides):
+    # githubkit の応答は欠損フィールドが UNSET になるため実物に合わせる
     base = dict(
         number=number,
         state="open",
         labels=[NS(name="layer:epic")],
         assignees=[NS(login="shuhei1101")],
         body="本文",
-        pull_request=None,
-        sub_issues_summary=None,
+        pull_request=UNSET,
+        sub_issues_summary=UNSET,
     )
     base.update(overrides)
     return NS(**base)

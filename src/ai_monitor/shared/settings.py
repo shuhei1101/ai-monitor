@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
@@ -15,6 +15,32 @@ from ai_monitor.shared.types import LabelName
 
 CONFIG_DIR = Path.home() / ".config" / "ai-monitor"
 CONSTANTS_ENV = Path(__file__).resolve().parents[3] / "plugins" / "ai-monitor" / "constants.env"
+
+_AGENT_NAMES: tuple[str, ...] = (
+    "intake-issue-triager",
+    "epic-conductor",
+    "epic-poc-runner",
+    "mock-designer",
+    "complex-scenario-writer",
+    "complex-scenario-tester",
+    "story-conductor",
+    "single-scenario-writer",
+    "single-scenario-tester",
+    "subsystem-conductor",
+    "architect",
+    "library-poc-runner",
+    "tester",
+    "implementer",
+    "resetter",
+    "quick-implementer",
+    "questioner",
+)
+
+
+class AgentModel(BaseModel):
+    """エージェント別のモデル設定 1 件分。"""
+
+    model: str = Field(min_length=1)
 
 
 class MonitoredProject(BaseModel):
@@ -38,6 +64,16 @@ class Settings(BaseSettings):
     heartbeat_interval_sec: int = 60
     state_path: str = "data/state.yaml"
     projects: list[MonitoredProject] = []
+    agents: dict[str, AgentModel]
+
+    @model_validator(mode="after")
+    def _validate_agents_completeness(self):
+        """agents に全 17 エージェント分のエントリが揃っていることを検証する。"""
+        # 欠落しているエージェント名を列挙して起動を止める（フォールバックしない）
+        missing = [name for name in _AGENT_NAMES if name not in self.agents]
+        if missing:
+            raise ValueError(f"settings.agents に欠落しているエージェント: {missing}")
+        return self
 
     @classmethod
     def settings_customise_sources(

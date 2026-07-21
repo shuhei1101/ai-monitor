@@ -33,7 +33,8 @@ def to_target(item: object) -> MonitorTarget:
     labels = [getattr(label, "name", label) for label in (item.labels or [])]
     assignees = [assignee.login for assignee in (item.assignees or [])]
     # pull_request キーを持つ場合、本文から linked_issue_numbers を抽出して PR にする
-    if getattr(item, "pull_request", None) is not None:
+    # （githubkit は欠損フィールドを UNSET（偽値）にするため真偽値で判定する）
+    if getattr(item, "pull_request", None):
         return PullRequest(
             number=item.number,
             state=item.state,

@@ -191,6 +191,14 @@ def tmp_state_path(tmp_path) -> Path:
 
 
 @pytest.fixture
+def agent_models():
+    """全 17 エージェント分の AgentModel を明示した辞書を返す（テスト用に一律 sonnet）。"""
+    from ai_monitor.shared.settings import _AGENT_NAMES, AgentModel
+
+    return {name: AgentModel(model="sonnet") for name in _AGENT_NAMES}
+
+
+@pytest.fixture
 def label_settings():
     """全ラベル値を明示した LabelSettings を生成する。"""
     from ai_monitor.shared.settings import LabelSettings

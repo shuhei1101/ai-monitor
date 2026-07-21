@@ -222,10 +222,16 @@ def _resolve_base_ref() -> str:
 
 
 def _resolve_project() -> str:
-    """CWD の git remote から監視対象プロジェクト（owner/name）を解決する。"""
-    # remote URL をパースして owner/name を返す
+    """CWD の git remote から監視対象プロジェクト名を解決する。"""
+    # remote URL をパースして settings.yaml の projects から repo 一致の name を返す
     owner, repo = _get_repo()
-    return f"{owner}/{repo}"
+    slug = f"{owner}/{repo}"
+    settings = yaml.safe_load(SETTINGS_PATH.read_text(encoding="utf-8"))
+    for project in settings.get("projects", []):
+        if project.get("repo") == slug:
+            return project["name"]
+    # 未登録リポジトリは owner/name をそのまま返す
+    return slug
 
 
 def _load_port() -> int:
@@ -435,8 +441,12 @@ def list_addressed_comments(
         # 各コメント本文をブロック配列にパースする
         blocks = _parse_comment_blocks(c.body)
         last = blocks[-1]
-        # 最後のブロックの to が addressee のもの、または to なしのユーザー投稿だけに絞る
-        is_addressed = last.receiver == addressee or (last.receiver is None and last.sender is None)
+        # 最後のブロックの to が addressee のもの・to なしのユーザー投稿・from が addressee のもの（自身の投稿）だけに絞る
+        is_addressed = (
+            last.receiver == addressee
+            or (last.receiver is None and last.sender is None)
+            or last.sender == addressee
+        )
         if not is_addressed:
             continue
         # include_resolved が False なら Resolved 済みを除外する

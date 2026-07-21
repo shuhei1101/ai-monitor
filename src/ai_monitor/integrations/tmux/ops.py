@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 
 
 def create_session(name: str, cwd: str) -> None:
@@ -11,7 +12,10 @@ def create_session(name: str, cwd: str) -> None:
 
 def send_keys(name: str, text: str) -> None:
     """既存セッションへ文字列を送信して実行させる。"""
-    _run_tmux(["send-keys", "-t", name, text, "Enter"])
+    # テキストと Enter を同時に送ると貼り付け判定で改行が入力扱いになるため、間を置いて別送する
+    _run_tmux(["send-keys", "-t", name, text])
+    time.sleep(1)
+    _run_tmux(["send-keys", "-t", name, "Enter"])
 
 
 def has_session(name: str) -> bool:

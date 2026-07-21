@@ -9,7 +9,7 @@ import ai_monitor.features.cleanup.service as cleanup
 import ai_monitor.features.sessions.registry as registry_mod
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
-from ai_monitor.shared.types import Issue, PullRequest
+from ai_monitor.shared.types import Issue
 
 
 def _issue(number, labels=None, state="open", total=0, completed=0):
@@ -206,7 +206,7 @@ def test_reap_timed_out_sessions(io_mocks, registry, mon_project):
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect", "処理中:architect"])]
-    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect")]
+    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     # 実行
     cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30)
     # 検証
@@ -220,7 +220,7 @@ def test_reap_timed_out_sessions_when_waiting(io_mocks, registry, mon_project):
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect"])]
-    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect")]
+    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     # 実行
     cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30)
     # 検証
@@ -247,7 +247,7 @@ def test_reap_timed_out_sessions_when_label_error(io_mocks, registry, mon_projec
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["処理中:architect"])]
-    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect")]
+    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     io_mocks.remove_label.side_effect = request_failed(500)
     # 実行
     cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30)

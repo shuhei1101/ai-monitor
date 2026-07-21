@@ -18,6 +18,7 @@ def agent() -> Agent:
         name="intake-issue-triager",
         confirm_label="確認:intake-issue-triager",
         processing_label="処理中:intake-issue-triager",
+        model="claude-opus-4-7",
     )
 
 
@@ -67,7 +68,9 @@ def test_poll_when_new_target(agent, io_mocks, registry, mon_project):
     assert io_mocks.create_session.call_args.args[0] == session_name
     assert registry.find("sandbox", "intake-issue-triager", 35) is not None
     sent_text = io_mocks.send_keys.call_args.args[1]
-    assert sent_text.startswith('claude --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35')
+    assert sent_text.startswith(
+        'claude --model claude-opus-4-7 --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
+    )
 
 
 def test_poll_when_existing_session(agent, io_mocks, registry, mon_project):
@@ -121,7 +124,9 @@ def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
 def test_build_skill_command():
     """起動文字列の組み立てを確認する（正常系）。"""
     # 準備
-    agent = Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect")
+    agent = Agent(
+        name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet"
+    )
     # 実行
     command = service.build_skill_command(agent, 52)
     # 検証
@@ -137,7 +142,9 @@ def test_process_one(agent, io_mocks, registry, mon_project):
     # 検証
     assert io_mocks.add_label.call_args.args[2] == "処理中:intake-issue-triager"
     sent_text = io_mocks.send_keys.call_args.args[1]
-    assert sent_text.startswith('claude --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35')
+    assert sent_text.startswith(
+        'claude --model claude-opus-4-7 --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
+    )
     assert "#35" in sent_text
 
 

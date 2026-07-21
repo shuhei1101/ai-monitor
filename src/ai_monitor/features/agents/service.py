@@ -63,7 +63,7 @@ def _process_one(
     snapshot = build_context_snapshot(target, open_targets)
     if is_new:
         # 新規セッションは shell に対して claude コマンドで skill を起動する
-        text = f'claude --dangerously-skip-permissions "{build_skill_command(agent, target.number)}\n\n{snapshot}"'
+        text = f'claude --model {agent.model} --dangerously-skip-permissions "{build_skill_command(agent, target.number)}\n\n{snapshot}"'
     else:
         # 既存セッションは稼働中の claude への入力として再開の定型文を送る
         text = f"{RESUME_TEXT}\n\n{snapshot}"

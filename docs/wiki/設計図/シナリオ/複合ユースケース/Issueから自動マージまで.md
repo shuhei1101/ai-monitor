@@ -29,7 +29,8 @@ flowchart TD
   U0([ユーザー]) -->|監視対象リポで Issue 起票 +<br>確認:intake ラベル付与| UC1([Issue分解と子起票:正常シナリオ])
   UC1 -->|epic Issue + 確認:epic-conductor| UC2([epic要件確定:正常シナリオ<br>（PoC 不要・画面変更あり）])
   UC2 -->|epic Draft PR + 確認:mock-designer +<br>指示コメント| UC4B([全体UI設計:正常シナリオ])
-  UC4B -->|完了報告 → epic-conductor が epic PR に<br>確認:complex-scenario-writer 付与| UC4([複合シナリオ設計:正常シナリオ])
+  UC4B -->|親 epic に 確認:epic-conductor +<br>完了報告コメント| UC4C([モック完了確認:正常シナリオ])
+  UC4C -->|epic PR に<br>確認:complex-scenario-writer 付与| UC4([複合シナリオ設計:正常シナリオ])
   UC4 -->|親 epic に 確認:epic-conductor +<br>完了報告コメント| UC5([子story起票:正常シナリオ])
   UC5 -->|story Issue x N + 確認:story-conductor| UC6([story要件確定:正常シナリオ])
   UC6 -->|story Draft PR +<br>確認:single-scenario-writer| UC8([単一シナリオ設計:正常シナリオ])
@@ -59,6 +60,7 @@ flowchart TD
   click UC1 "../単一ユースケース/Issue分解と子起票.md#正常シナリオ"
   click UC2 "../単一ユースケース/epic要件確定.md#正常シナリオpoc-不要画面変更あり"
   click UC4B "../単一ユースケース/全体UI設計.md#正常シナリオ"
+  click UC4C "../単一ユースケース/モック完了確認.md#正常シナリオ"
   click UC4 "../単一ユースケース/複合シナリオ設計.md#正常シナリオ"
   click UC5 "../単一ユースケース/子story起票.md#正常シナリオ"
   click UC6 "../単一ユースケース/story要件確定.md#正常シナリオ"

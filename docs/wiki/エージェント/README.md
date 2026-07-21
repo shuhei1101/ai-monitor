@@ -10,3 +10,4 @@
 | --- | --- | --- |
 | [テンプレート](./テンプレート/) | フェーズ索引 + フェーズページの書式定義 | - |
 | [intake-issue-triager](./intake-issue-triager/) | intake Issue の分解とサブ Issue 起票 | - |
+| [epic-conductor](./epic-conductor/) | epic 要件確定から子 story 起票・統合テスト委任・master マージまでの指揮 | - |

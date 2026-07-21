@@ -321,7 +321,7 @@ def test_list_addressed_comments(gh):
     gh.rest.issues.list_comments.return_value = _resp(
         [
             _comment_ns("IC_1", "> from: @tester\n> to: @architect\n\nテスト作成が完了しました。", "shuhei1101"),
-            _comment_ns("IC_2", "> from: @architect\n> to: @tester\n\n修正してください。", "shuhei1101"),
+            _comment_ns("IC_2", "> from: @tester\n> to: @implementer\n\n修正してください。", "shuhei1101"),
             _comment_ns("IC_3", "この観点も追加してほしい。", "shuhei1101"),
         ]
     )
@@ -333,6 +333,20 @@ def test_list_addressed_comments(gh):
     assert res[0].blocks[-1].sender == "tester"
     assert res[0].blocks[-1].receiver == "architect"
     assert res[1].blocks[-1].sender is None
+
+
+def test_list_addressed_comments_when_own_comment(gh):
+    """自身が投稿したコメント（最後のブロックの from が addressee）の包含を確認する（正常系）。"""
+    # 準備
+    gh.rest.issues.list_comments.return_value = _resp(
+        [_comment_ns("IC_1", "> from: @architect\n> to: @shuhei1101\n\n設計 Wiki を更新しました。", "shuhei1101")]
+    )
+    gh.graphql.return_value = {"node": {"isMinimized": False}}
+    # 実行
+    res = server.list_addressed_comments(52, is_pr=True, addressee="architect")
+    # 検証
+    assert [c.node_id for c in res] == ["IC_1"]
+    assert res[0].blocks[-1].sender == "architect"
 
 
 def test_list_addressed_comments_when_include_resolved(gh):
@@ -1063,7 +1077,7 @@ def test_report_completion(tmp_settings, fake_remote, urlopen_calls):
     assert req.full_url == "http://127.0.0.1:18999/completions"
     assert req.get_method() == "POST"
     payload = json.loads(req.data)
-    assert payload == {"agent_name": "architect", "number": 52, "project": "shuhei1101/ai-monitor-e2e"}
+    assert payload == {"agent_name": "architect", "number": 52, "project": "sandbox"}
 
 
 def test_report_completion_when_unknown_session(tmp_settings, fake_remote, monkeypatch):
@@ -1099,7 +1113,7 @@ def test_add_watch_targets(tmp_settings, fake_remote, urlopen_calls):
         "agent_name": "architect",
         "number": 52,
         "watch_numbers": [60, 61],
-        "project": "shuhei1101/ai-monitor-e2e",
+        "project": "sandbox",
     }
 
 
@@ -1129,7 +1143,7 @@ def test_remove_watch_targets(tmp_settings, fake_remote, urlopen_calls):
         "agent_name": "architect",
         "number": 52,
         "watch_numbers": [60, 61],
-        "project": "shuhei1101/ai-monitor-e2e",
+        "project": "sandbox",
     }
 
 
@@ -1145,8 +1159,18 @@ def test_remove_watch_targets_when_unknown_session(tmp_settings, fake_remote, mo
         server.remove_watch_targets("architect", 52, [60])
 
 
-def test_resolve_project(fake_remote):
-    """CWD の git remote からのプロジェクト解決を確認する（正常系）。"""
+def test_resolve_project(tmp_settings, fake_remote):
+    """登録リポジトリの名前解決を確認する（正常系）。"""
+    # 実行・検証
+    assert server._resolve_project() == "sandbox"
+
+
+def test_resolve_project_when_unregistered(tmp_path, fake_remote, monkeypatch):
+    """未登録リポジトリのフォールバックを確認する（正常系）。"""
+    # 準備
+    path = tmp_path / "settings.yaml"
+    path.write_text("github_token: github_pat_test\nprojects: []\n", encoding="utf-8")
+    monkeypatch.setattr(server, "SETTINGS_PATH", path)
     # 実行・検証
     assert server._resolve_project() == "shuhei1101/ai-monitor-e2e"
 

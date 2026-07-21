@@ -551,7 +551,7 @@ ResolveResult(resolved_count=2)
 | --- | --- | --- | --- | --- | --- | --- |
 | 番号 | `number` | `int` | ✅ | - | 対象の Issue / PR 番号 | - |
 | PR フラグ | `is_pr` | `bool` | ✅ | - | PR なら `True` | - |
-| 宛先名 | `addressee` | `str` | ✅ | - | 最後のブロックの to がこの名前のコメントだけ返す | `@` は不要 |
+| 宛先名 | `addressee` | `str` | ✅ | - | 最後のブロックの to または from がこの名前のコメントだけ返す | `@` は不要 |
 | Resolved 込み | `include_resolved` | `bool` | - | `False` | Resolved 済みも含めるか | - |
 
 引数例:
@@ -576,7 +576,7 @@ list_addressed_comments(52, is_pr=True, addressee="architect")
 
 1. コメント一覧と各コメントの `isMinimized` を取得する（REST + GraphQL）
 2. 各コメント本文をブロック配列にパースする（[コメント解析](#コメント解析)）
-3. 最後のブロックの to が `addressee` のもの、または to なしのユーザー投稿だけに絞る
+3. 最後のブロックの to が `addressee` のもの・to なしのユーザー投稿・from が `addressee` のもの（自身の投稿）だけに絞る
 4. `include_resolved` が `False` なら Resolved 済みを除外し、`AddressedComment` の配列で返す
 
 #### 例外
@@ -591,13 +591,14 @@ list_addressed_comments(52, is_pr=True, addressee="architect")
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_list_addressed_comments` | 正常 | 最終ブロックの宛先で絞り込み | 宛先違い・宛先なしのコメント混在 | githubkit | 自分宛 + to なしユーザーコメントのみ blocks 付きで返す | - |
+| `test_list_addressed_comments_when_own_comment` | 正常 | 自身投稿の包含 | 最後のブロックの from が `addressee`（to はユーザー）のコメント | githubkit | 自身の投稿が返る | 完了処理の一括 Resolve 対象 |
 | `test_list_addressed_comments_when_include_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` で Resolved 済みが混在 | githubkit | Resolved 済みも `is_resolved=True` で返る | 省略時は除外される |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_list_addressed_comments` | GitHub | 宛先付きコメントの抽出 | to 行の宛先判定 / `isMinimized` の取得 | 副作用: なし（事前投稿は fixture） |
+| `test_ext_list_addressed_comments` | GitHub | 宛先付きコメントの抽出 | to / from 行の宛先判定 / `isMinimized` の取得 | 副作用: なし（事前投稿は fixture） |
 
 ---
 

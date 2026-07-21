@@ -15,7 +15,7 @@ from ai_monitor.features.sessions.types import AgentSession
 
 @pytest.fixture
 def agents() -> list[Agent]:
-    return [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect")]
+    return [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
 
 
 @pytest.fixture

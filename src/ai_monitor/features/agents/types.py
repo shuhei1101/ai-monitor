@@ -13,4 +13,5 @@ class Agent:
     name: str
     confirm_label: LabelName
     processing_label: LabelName
+    model: str
     standalone: bool = False

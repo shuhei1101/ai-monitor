@@ -14,16 +14,40 @@ from ai_monitor.shared.types import Issue
 STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "quick-implementer", "questioner"}
 
 
-def test_build_agents(label_settings):
+@pytest.fixture
+def agent_models():
+    """全 17 エージェント分の AgentModel を明示した辞書を返す。"""
+    from ai_monitor.shared.settings import AgentModel
+
+    return {name: AgentModel(model="sonnet") for name in main_mod._AGENT_NAMES}
+
+
+def test_build_agents(label_settings, agent_models):
     """全エージェント分の Agent 生成を確認する（正常系）。"""
+    # 準備: implementer だけ opus を指定して個別注入を検証する
+    from ai_monitor.shared.settings import AgentModel
+
+    agent_models["implementer"] = AgentModel(model="claude-opus-4-7")
     # 実行
-    agents = main_mod.build_agents(label_settings)
+    agents = main_mod.build_agents(label_settings, agent_models=agent_models)
     # 検証
     assert len(agents) == 17
     by_name = {a.name: a for a in agents}
     assert by_name["epic-conductor"].confirm_label == "確認:epic-conductor"
     assert by_name["epic-conductor"].processing_label == "処理中:epic-conductor"
+    assert by_name["epic-conductor"].model == "sonnet"
+    assert by_name["implementer"].model == "claude-opus-4-7"
     assert {a.name for a in agents if a.standalone} == STANDALONE_NAMES
+
+
+def test_build_agents_when_missing_entry(label_settings, agent_models):
+    """agent_models 欠落は KeyError を確認する（異常系）。"""
+    # 準備
+    del agent_models["implementer"]
+    # 実行・検証
+    with pytest.raises(KeyError) as exc_info:
+        main_mod.build_agents(label_settings, agent_models=agent_models)
+    assert "implementer" in str(exc_info.value)
 
 
 @pytest.fixture
@@ -41,14 +65,14 @@ def cycle_mocks(monkeypatch):
 
 
 @pytest.fixture
-def cycle_env(tmp_state_path, monkeypatch, mon_project, label_settings):
+def cycle_env(tmp_state_path, monkeypatch, mon_project, label_settings, agent_models):
     """run_cycle 用の設定・エージェント・台帳を組み立てる。"""
     monkeypatch.setattr(registry_mod, "save_sessions", MagicMock())
     settings = MagicMock()
     settings.projects = [mon_project]
     settings.heartbeat_interval_sec = 60
     settings.session_timeout_min = 30
-    agents = main_mod.build_agents(label_settings)
+    agents = main_mod.build_agents(label_settings, agent_models=agent_models)
     registry = registry_mod.SessionRegistry(tmp_state_path)
     return settings, agents, registry
 
