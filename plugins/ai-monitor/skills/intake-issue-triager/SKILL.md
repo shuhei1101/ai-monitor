@@ -17,15 +17,15 @@ disable-model-invocation: true
 
 ## フェーズ
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/intake-issue-triager/README.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/intake-issue-triager/README.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/intake-issue-triager/フェーズ/初期処理.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/intake-issue-triager/フェーズ/初期処理.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/intake-issue-triager/フェーズ/分解判定（応答ループ）.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/intake-issue-triager/フェーズ/分解判定（応答ループ）.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/intake-issue-triager/フェーズ/サブIssue起票（完了処理）.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/intake-issue-triager/フェーズ/サブIssue起票（完了処理）.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/intake-issue-triager/フェーズ/分解判定（初回）.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/intake-issue-triager/フェーズ/分解判定（初回）.md"`
 
 ## 参考資料
 

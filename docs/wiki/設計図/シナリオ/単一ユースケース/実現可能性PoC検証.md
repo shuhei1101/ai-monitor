@@ -48,9 +48,8 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信
   activate MON
   MON->>GH: PoC PR の自分宛コメント一括 Resolve
-  MON->>REPO: 検証コード実装 + push<br>（追加案が必要なら案ごとに追加 PoC PR 作成）
-  MON->>ORC: 追加 PoC PR の番号を<br>自セッションの監視面として台帳に登録<br>（追加案を作成した場合）
-  MON->>REPO: 検証実行（サブエージェント並列）
+  MON->>REPO: 検証コード実装 + push
+  MON->>REPO: 検証実行
   MON->>GH: 検証結果・最小再現コードを<br>PoC PR 本文に記録
   MON->>GH: PoC PR に結果報告コメント + 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
@@ -82,7 +81,6 @@ sequenceDiagram
 
 - epic Issue 本文に `## PoC 結果`（検証構成 / 成功条件 / 結果 / PoC PR リンク）が記録されている
 - PoC PR は open のまま `確認:epic-poc-runner` だけが除去されている
-- 追加 PoC PR を作成した場合、その番号が epic-poc-runner セッションの監視面（モニターの台帳）に登録されている
 - epic Issue に `確認:epic-conductor` が付与され、完了報告コメント（@epic-conductor 宛・未解決）が投稿されている
 - PoC PR の自分宛コメントが全て Resolve 済み
 

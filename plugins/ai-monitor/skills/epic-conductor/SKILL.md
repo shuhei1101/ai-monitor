@@ -17,29 +17,29 @@ epic レイヤーの指揮役。
 
 ## フェーズ
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/README.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/README.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/初期処理.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/初期処理.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/要件確定（初回）.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/要件確定（初回）.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/応答ループ.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/応答ループ.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/要件確定（完了処理）.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/要件確定（完了処理）.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/PoC結果確認.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/PoC結果確認.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/モック完了確認.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/モック完了確認.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/子story起票.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/子story起票.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/統合テスト起動.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/統合テスト起動.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/バグ差し戻し（方針確認）.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/バグ差し戻し（方針確認）.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/バグ差し戻し（実行）.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/バグ差し戻し（実行）.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${WIKI_BASE}/エージェント/epic-conductor/フェーズ/epicマージ.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/epicマージ.md"`
 
 ## 参考資料
 
