@@ -142,14 +142,14 @@ sequenceDiagram
   MON->>REPO: worktree + PoC ブランチ作成<br>（poc/epic/{ドメイン}/{テーマ}）+<br>空 commit push
   MON->>GH: PoC Draft PR 作成（base=master・<br>タイトル PoC: {検証テーマ}（epic #35;N）・<br>本文は 紐づく Issue のみ）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
-  MON->>GH: PoC PR に 確認:epic-poc-runner 付与
+  MON->>GH: PoC PR に 確認:epic-poc-runner 付与 +<br>指示コメント投稿（@epic-poc-runner 宛・<br>検証テーマの背景 + 成立条件の想定）
   deactivate MON
   Note over MON: セッションは epic Issue close まで常駐
 ```
 
 ### 期待値
 
-- PoC Draft PR（base=master・タイトル `PoC: {検証テーマ}（epic #N）`・本文は `## 紐づく Issue` のみ）が作成され、`確認:epic-poc-runner` が付与されている
+- PoC Draft PR（base=master・タイトル `PoC: {検証テーマ}（epic #N）`・本文は `## 紐づく Issue` のみ）が作成され、`確認:epic-poc-runner` と指示コメント（@epic-poc-runner 宛・未解決）が付与・投稿されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - epic Draft PR は作成されない
 

@@ -191,5 +191,12 @@ def test_normal_poc_required(monitor, gh_live, repo_ctx, epic_issue_factory, wai
     pr_labels = {label.name for label in pr.labels}
     assert "確認:epic-poc-runner" in pr_labels
 
+    # 検証: PR に @epic-poc-runner 宛の指示コメントが未 Resolve で投稿されている
+    owner, repo = repo_ctx
+    pr_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
+    directed = [c for c in pr_comments if "> to: @epic-poc-runner" in c.body]
+    assert directed, "@epic-poc-runner 宛の指示コメントが投稿されていない"
+    assert not server._is_minimized(directed[-1].node_id), "指示コメントが Resolve されてしまっている"
+
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
     assert pr.number in _watch_numbers(tmp_path / "state.yaml", epic.number)
