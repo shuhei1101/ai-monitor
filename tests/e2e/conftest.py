@@ -239,6 +239,78 @@ def epic_issue_factory(gh_live, repo_ctx, sandbox):
 
 
 @pytest.fixture
+def story_issue_factory(gh_live, repo_ctx, sandbox):
+    """親 epic 付きの story Issue を作成し、テスト後に PR・ブランチ・worktree・tmux セッションごと片付ける factory。"""
+    owner, repo = repo_ctx
+    created: list[int] = []
+
+    def _create(
+        parent_epic_number: int,
+        title: str,
+        *,
+        body: str = "",
+        labels: list[str] | None = None,
+    ) -> object:
+        # 既定は本文空 + layer:story + 確認:story-conductor で作成する
+        labels_ = labels if labels is not None else ["layer:story", "確認:story-conductor"]
+        story = gh_live.rest.issues.create(
+            owner=owner, repo=repo, title=title, body=body, labels=labels_
+        ).parsed_data
+        # 親 epic に Sub-issue リンクする
+        gh_live.rest.issues.add_sub_issue(
+            owner=owner, repo=repo, issue_number=parent_epic_number, sub_issue_id=story.id
+        )
+        created.append(story.number)
+        return story
+
+    yield _create
+    cleanup_numbers: list[int] = []
+    branches: list[str] = []
+    for story_number in reversed(created):
+        # story に紐づく open PR をクローズしてリモートブランチを削除する
+        try:
+            pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data
+        except RequestFailed:
+            pulls = []
+        for pr in pulls:
+            if f"#{story_number}" not in (pr.body or ""):
+                continue
+            cleanup_numbers.append(pr.number)
+            branches.append(pr.head.ref)
+            try:
+                gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
+            except RequestFailed:
+                pass
+            try:
+                gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
+            except RequestFailed:
+                pass
+        # story Issue を not_planned でクローズする
+        cleanup_numbers.append(story_number)
+        try:
+            gh_live.rest.issues.update(
+                owner=owner, repo=repo, issue_number=story_number, state="closed", state_reason="not_planned"
+            )
+        except RequestFailed:
+            pass
+    # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
+    local_path = sandbox["local_path"]
+    for branch in branches:
+        worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
+        subprocess.run(
+            ["git", "-C", local_path, "worktree", "remove", "--force", str(worktree_path)],
+            capture_output=True, text=True, check=False,
+        )
+        subprocess.run(["git", "-C", local_path, "branch", "-D", branch], capture_output=True, text=True, check=False)
+    subprocess.run(["git", "-C", local_path, "worktree", "prune"], capture_output=True, text=True, check=False)
+    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
+    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
+    for name in listed.stdout.splitlines():
+        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
+            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+
+
+@pytest.fixture
 def epic_pr_factory(gh_live, repo_ctx):
     """master から空 commit ブランチを生やして Draft PR を作成する factory。
 
