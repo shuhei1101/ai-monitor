@@ -33,7 +33,7 @@ sequenceDiagram
   MON-->>GH: 本文のキーワードで<br>関連 Issue / PR・シナリオ設計書を調査
   MON->>GH: intake Issue の本文を読み<br>作業単位に分解
   MON->>GH: intake Issue に layer:intake + type:* 付与
-  MON->>GH: intake Issue にサブ Issue 案コメント +<br>確認事項投稿
+  MON->>GH: intake Issue にサブ Issue 案コメントを投稿し、<br>該当する確認事項があれば追加で投稿
   MON->>GH: intake Issue に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 

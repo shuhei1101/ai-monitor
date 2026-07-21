@@ -773,14 +773,17 @@ def merge_pr(pr_number: int, strategy: Literal["squash", "merge", "rebase"] | No
 
 @mcp.tool(title="worktree作成")
 def worktree_create(branch: str) -> WorktreeCreateResult:
-    """ブランチと worktree を .claude/worktrees/ 配下に作成する。"""
+    """ブランチと worktree を .claude/worktrees/ 配下に作成し、Draft PR 用の空 commit を push する。"""
     # 分岐元（origin/{current} or HEAD）を求める
     base_ref = _resolve_base_ref()
     # 配置先の worktree パスを求める（.claude/worktrees/ が無ければパスごと作成する）
     path = _worktree_path(branch)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # base ref からブランチと worktree を作成し、WorktreeCreateResult を返す
+    # base ref からブランチと worktree を作成する
     _run_git(["worktree", "add", "-b", branch, str(path), base_ref])
+    # Draft PR は head と base が同一 commit だと 422 になるため、空 commit を作って push する
+    _run_git(["-C", str(path), "commit", "--allow-empty", "-m", "chore: Draft PR 用の空 commit"])
+    _run_git(["-C", str(path), "push", "-u", "origin", branch])
     return WorktreeCreateResult(branch=branch, worktree_path=str(path), base_ref=base_ref)
 
 

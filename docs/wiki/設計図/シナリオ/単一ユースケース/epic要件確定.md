@@ -33,7 +33,7 @@ sequenceDiagram
   participant REPO as リポジトリ
   activate MON
   MON->>GH: 親 intake から範囲抽出・<br>5 セクションの草案を epic Issue 本文に反映
-  MON->>GH: epic Issue に完了報告 + 確認事項 +<br>PoC 要否・画面変更有無の質問を投稿
+  MON->>GH: epic Issue に完了報告コメントと<br>確認事項コメント（PoC 要否・画面変更有無を必須質問として含む）を投稿
   MON->>GH: epic Issue に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 

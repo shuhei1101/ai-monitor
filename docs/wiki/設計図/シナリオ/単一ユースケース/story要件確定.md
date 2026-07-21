@@ -30,7 +30,7 @@ sequenceDiagram
   participant REPO as リポジトリ
   activate MON
   MON->>GH: 親 epic の UC を特定・<br>4 セクション + UC<br>タイプ別観点の要件草案を<br>story Issue 本文に反映
-  MON->>GH: story Issue に完了報告 + 確認事項を投稿
+  MON->>GH: story Issue に完了報告コメントを投稿し、<br>該当する確認事項があれば追加で投稿
   MON->>GH: story Issue に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 
