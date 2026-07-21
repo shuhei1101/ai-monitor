@@ -33,7 +33,7 @@ sequenceDiagram
   participant REPO as リポジトリ
   activate MON
   MON->>GH: 指示コメント + 親 epic Issue 本文を確認して<br>PoC PR 本文を仮埋め<br>（リスク仮説 / 検証構成 / 成功条件の草案）
-  MON->>GH: 不明点を PoC PR コメントで質問 +<br>議論中 付与 + assignee=ユーザー 設定
+  MON->>GH: PoC PR に完了報告コメント +<br>確認質問コメント +<br>議論中 付与 + assignee=ユーザー 設定
   deactivate MON
 
   loop 方針固めの応答ループ<br>（本文への修正依頼・質問回答がある間）
@@ -111,9 +111,13 @@ sequenceDiagram
   MON->>GH: 全案 ❌ の実測値を PoC PR 本文に記録
   MON->>GH: PoC PR に不成立の結論 +<br>代替案 or 中止の相談コメント +<br>議論中 付与 + assignee=ユーザー 設定
   alt 代替案あり
-    Note over U: 代替構成の指示 + assignee 外し<br>→ 正常シナリオの検証ステップに戻る
+    U->>GH: 代替構成の指示コメント + assignee 外し
+    MON->>GH: 応答ループで<br>PoC PR 本文の 検証構成 / 成功条件 を書き換え +<br>検証結果 を空に + assignee=ユーザー 再設定
+    Note over U: 議論中 除去 + assignee 外し<br>→ 正常シナリオの検証ステップに戻る
   else 中止
-    Note over U: 確認:resetter 付与（中止）
+    U->>GH: 中止コメント + assignee 外し
+    MON->>GH: 応答ループで<br>「確認:resetter を手動付与してください」と<br>案内返信 + assignee=ユーザー 再設定
+    Note over U: 確認:resetter を PoC PR に手動付与<br>（唯一のユーザー手動起動エージェント。<br>AI は付与しない）
   end
 ```
 
