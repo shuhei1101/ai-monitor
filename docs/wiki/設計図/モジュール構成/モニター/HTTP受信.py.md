@@ -85,9 +85,9 @@ FastAPI アプリを生成し、ルーティングと lifespan（ポーリング
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 全体設定 | `settings` | [`Settings`](./エージェント管理.md#全体設定) | ✅ | - | 周期・閾値の出所 | - |
-| セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.md#セッション台帳) | ✅ | - | 受信関数へ引き渡す台帳 | キーワード引数 |
-| エージェント一覧 | `agents` | [`list[Agent]`](./エージェント管理.md#エージェント定義) | ✅ | - | 処理中ラベルの解決・ポーリングに使う | キーワード引数 |
+| 全体設定 | `settings` | [`Settings`](./エージェント管理.py.md#全体設定) | ✅ | - | 周期・閾値の出所 | - |
+| セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.py.md#セッション台帳) | ✅ | - | 受信関数へ引き渡す台帳 | キーワード引数 |
+| エージェント一覧 | `agents` | [`list[Agent]`](./エージェント管理.py.md#エージェント定義) | ✅ | - | 処理中ラベルの解決・ポーリングに使う | キーワード引数 |
 
 引数例:
 
@@ -104,7 +104,7 @@ create_app(settings, registry=registry, agents=agents)
 #### 処理
 
 1. FastAPI アプリを生成し、`POST /completions` → [完了報告受信](#完了報告受信) / `POST /watch-targets` → [監視対象追加受信](#監視対象追加受信) / `DELETE /watch-targets` → [監視対象除去受信](#監視対象除去受信) を登録する
-2. lifespan でポーリングループをバックグラウンドスレッドとして起動する（[周期駆動](./エージェント管理.md#周期駆動)を `poll_interval_sec` 間隔で繰り返し、アプリ終了時にスレッドを停止する）
+2. lifespan でポーリングループをバックグラウンドスレッドとして起動する（[周期駆動](./エージェント管理.py.md#周期駆動)を `poll_interval_sec` 間隔で繰り返し、アプリ終了時にスレッドを停止する）
 
 #### 例外
 
@@ -179,9 +179,9 @@ create_app(settings, registry=registry, agents=agents)
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ペイロード | `payload` | [`CompletionPayload`](#完了報告ペイロード) | ✅ | - | 受信ボディ | MCP `report_completion` が送る |
-| セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.md#セッション台帳) | ✅ | - | セッションの検索・生存更新 | キーワード引数 |
-| エージェント一覧 | `agents` | [`list[Agent]`](./エージェント管理.md#エージェント定義) | ✅ | - | `agent_name` → 処理中ラベルの解決 | キーワード引数 |
-| プロジェクト一覧 | `projects` | [`list[MonitoredProject]`](./エージェント管理.md#監視対象プロジェクト) | ✅ | - | `payload.project` 名 → プロジェクト設定の解決 | キーワード引数（ラベル除去の対象リポジトリに使う） |
+| セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.py.md#セッション台帳) | ✅ | - | セッションの検索・生存更新 | キーワード引数 |
+| エージェント一覧 | `agents` | [`list[Agent]`](./エージェント管理.py.md#エージェント定義) | ✅ | - | `agent_name` → 処理中ラベルの解決 | キーワード引数 |
+| プロジェクト一覧 | `projects` | [`list[MonitoredProject]`](./エージェント管理.py.md#監視対象プロジェクト) | ✅ | - | `payload.project` 名 → プロジェクト設定の解決 | キーワード引数（ラベル除去の対象リポジトリに使う） |
 
 引数例:
 
@@ -203,9 +203,9 @@ handle_completion(CompletionPayload(project="sandbox", agent_name="architect", n
 
 #### 処理
 
-1. `project` / `agent_name` / `number` でセッションを検索し、`project` 名から監視対象プロジェクトを解決する（[検索](./エージェント管理.md#検索)。いずれも無ければ `HTTPException`（404）を投げる）
-2. 対象から `処理中:{agent_name}` を除去する（[ラベル除去](./GitHub連携.md#ラベル除去)。未付与は無視される冪等操作）
-3. セッションの生存時刻を更新し（[生存更新](./エージェント管理.md#生存更新)）、`{"ok": True}` を返す
+1. `project` / `agent_name` / `number` でセッションを検索し、`project` 名から監視対象プロジェクトを解決する（[検索](./エージェント管理.py.md#検索)。いずれも無ければ `HTTPException`（404）を投げる）
+2. 対象から `処理中:{agent_name}` を除去する（[ラベル除去](./GitHub連携.py.md#ラベル除去)。未付与は無視される冪等操作）
+3. セッションの生存時刻を更新し（[生存更新](./エージェント管理.py.md#生存更新)）、`{"ok": True}` を返す
 
 #### 例外
 
@@ -233,7 +233,7 @@ handle_completion(CompletionPayload(project="sandbox", agent_name="architect", n
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ペイロード | `payload` | [`WatchPayload`](#監視対象ペイロード) | ✅ | - | 受信ボディ | MCP `add_watch_targets` が送る |
-| セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.md#セッション台帳) | ✅ | - | 監視面の追加先 | キーワード引数 |
+| セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.py.md#セッション台帳) | ✅ | - | 監視面の追加先 | キーワード引数 |
 
 引数例:
 
@@ -249,7 +249,7 @@ handle_add_watch(WatchPayload(project="sandbox", agent_name="architect", number=
 
 #### 処理
 
-1. 監視面へ番号を追加する（[監視面追加](./エージェント管理.md#監視面追加)。`KeyError` は `HTTPException`（404）に変換する）
+1. 監視面へ番号を追加する（[監視面追加](./エージェント管理.py.md#監視面追加)。`KeyError` は `HTTPException`（404）に変換する）
 2. `{"ok": True}` を返す
 
 #### 例外
@@ -278,7 +278,7 @@ handle_add_watch(WatchPayload(project="sandbox", agent_name="architect", number=
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ペイロード | `payload` | [`WatchPayload`](#監視対象ペイロード) | ✅ | - | 受信ボディ | MCP `remove_watch_targets` が送る |
-| セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.md#セッション台帳) | ✅ | - | 監視面の除去先 | キーワード引数 |
+| セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.py.md#セッション台帳) | ✅ | - | 監視面の除去先 | キーワード引数 |
 
 引数例:
 
@@ -294,7 +294,7 @@ handle_remove_watch(WatchPayload(project="sandbox", agent_name="architect", numb
 
 #### 処理
 
-1. 監視面から番号を取り除く（[監視面除去](./エージェント管理.md#監視面除去)。`KeyError` は `HTTPException`（404）に変換する）
+1. 監視面から番号を取り除く（[監視面除去](./エージェント管理.py.md#監視面除去)。`KeyError` は `HTTPException`（404）に変換する）
 2. `{"ok": True}` を返す
 
 #### 例外

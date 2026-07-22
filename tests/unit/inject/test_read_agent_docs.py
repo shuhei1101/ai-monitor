@@ -18,7 +18,6 @@ README = """# Claudeハーネス
 | ページ | 概要 |
 | --- | --- |
 | [エージェント参照ドキュメント対応表](./共通対応表/エージェント参照ドキュメント対応表.md) | エージェント × 共通ドキュメントの星取り表 |
-| [エージェント言語規約対応表](./対応表/エージェント言語規約対応表.md) | エージェント × dev-kit 言語規約の星取り表 |
 | [プロジェクトドキュメント対応表](./対応表/プロジェクトドキュメント対応表.md) | エージェント × プロジェクト固有設計書の星取り表 |
 | [環境変数の解決](./共通ルール/環境変数の解決.md) | 環境変数を実値に解決する共通手順 |
 | [エージェント一覧](./エージェント一覧.md) | エージェントの一覧 |
@@ -48,13 +47,6 @@ MATRIX_PROJECT = """# プロジェクトドキュメント対応表
 | [設計図/シナリオ/README.md](../../設計図/シナリオ/README.md) | ○ | ○ |
 """
 
-MATRIX_LANG = """# エージェント言語規約対応表
-
-| ドキュメント | architect |
-| --- | --- |
-| [python/core/スタイル.md](https://raw.example.com/rules/python/core/スタイル.md) | ○ |
-"""
-
 DOCS_MATRIX = """# エージェント参照ドキュメント対応表
 
 | ドキュメント | intake-issue-triager | epic-conductor |
@@ -64,11 +56,11 @@ DOCS_MATRIX = """# エージェント参照ドキュメント対応表
 | [判定フローチャート/レイヤー.md](../判定フローチャート/レイヤー.md) | ○ | - |
 """
 
-LANG_MATRIX = """# エージェント言語規約対応表
+ABS_URL_MATRIX = """# プロジェクトドキュメント対応表
 
 | ドキュメント | architect |
 | --- | --- |
-| [python/core/スタイル.md](https://raw.example.com/rules/python/core/スタイル.md) | ○ |
+| [外部/ライブラリ.md](https://raw.example.com/other/ライブラリ.md) | ○ |
 """
 
 
@@ -79,7 +71,6 @@ def _readme_calls(fake_wiki):
 def _setup_matrices(fake_wiki, base):
     fake_wiki.pages[f"{base}/Claudeハーネス/README.md"] = README
     fake_wiki.pages[f"{base}/Claudeハーネス/共通対応表/エージェント参照ドキュメント対応表.md"] = MATRIX_COMMON
-    fake_wiki.pages[f"{base}/Claudeハーネス/対応表/エージェント言語規約対応表.md"] = MATRIX_LANG
     fake_wiki.pages[f"{base}/Claudeハーネス/対応表/プロジェクトドキュメント対応表.md"] = MATRIX_PROJECT
 
 
@@ -102,7 +93,6 @@ def test_list_harness_pages(fake_wiki):
             ("エージェント参照ドキュメント対応表", "Claudeハーネス/共通対応表/エージェント参照ドキュメント対応表.md"),
         ],
         "対応表": [
-            ("エージェント言語規約対応表", "Claudeハーネス/対応表/エージェント言語規約対応表.md"),
             ("プロジェクトドキュメント対応表", "Claudeハーネス/対応表/プロジェクトドキュメント対応表.md"),
         ],
         "共通ルール": [
@@ -141,11 +131,11 @@ def test_parse_matrix():
 def test_parse_matrix_when_absolute_url():
     """絶対 URL リンクの解決（正常系）。"""
     # 実行
-    matrix = read_agent_docs.parse_matrix(LANG_MATRIX, BASE)
+    matrix = read_agent_docs.parse_matrix(ABS_URL_MATRIX, BASE)
     # 検証
     assert matrix == {
         "architect": [
-            ("python/core/スタイル.md", "https://raw.example.com/rules/python/core/スタイル.md"),
+            ("外部/ライブラリ.md", "https://raw.example.com/other/ライブラリ.md"),
         ],
     }
 
@@ -190,7 +180,6 @@ def test_main_when_separate_bases(fake_wiki, monkeypatch, capsys):
     fake_wiki.pages[f"{COMMON_BASE}/判定フローチャート/レイヤー.md"] = "# レイヤー\n"
     # プロジェクト側: README + 対応表 + 対応表のドキュメント
     fake_wiki.pages[f"{BASE}/Claudeハーネス/README.md"] = README
-    fake_wiki.pages[f"{BASE}/Claudeハーネス/対応表/エージェント言語規約対応表.md"] = MATRIX_LANG
     fake_wiki.pages[f"{BASE}/Claudeハーネス/対応表/プロジェクトドキュメント対応表.md"] = MATRIX_PROJECT
     fake_wiki.pages[f"{BASE}/設計図/シナリオ/README.md"] = "# シナリオ\n"
     # 実行
@@ -248,4 +237,4 @@ def test_main_when_unknown_agent(fake_wiki, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert code == 1
     assert "intake-issue-triager" in err
-    assert "architect" in err
+    assert "epic-conductor" in err
