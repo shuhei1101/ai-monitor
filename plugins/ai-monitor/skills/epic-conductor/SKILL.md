@@ -44,3 +44,5 @@ epic レイヤーの指揮役。
 ## 参考資料
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_agent_docs.py" epic-conductor`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/build_wiki_index.py"`

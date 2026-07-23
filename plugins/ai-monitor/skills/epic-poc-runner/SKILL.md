@@ -32,3 +32,5 @@ epic の成立条件になっている核心機構を最安直構成で検証す
 ## 参考資料
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_agent_docs.py" epic-poc-runner`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/build_wiki_index.py"`

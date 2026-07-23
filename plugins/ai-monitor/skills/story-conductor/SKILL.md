@@ -46,3 +46,5 @@ story レイヤーの指揮役。
 ## 参考資料
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_agent_docs.py" story-conductor`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/build_wiki_index.py"`

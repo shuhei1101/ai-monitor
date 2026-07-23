@@ -29,3 +29,5 @@ epic 本文のユースケース一覧をもとに、UC を箱として連鎖さ
 ## 参考資料
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_agent_docs.py" complex-scenario-writer`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/build_wiki_index.py"`

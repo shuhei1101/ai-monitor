@@ -3,7 +3,7 @@
 CLI: `python plugins/ai-monitor/inject/build_wiki_index.py`
 
 SKILL.md の `## 参考資料` から動的コンテキスト注入で呼ばれ、監視対象プロジェクトの Wiki を再帰的に辿って README `## 目次` 表を統合したフラット索引を標準出力に展開する。
-索引はページの raw URL を「ページ」列にそのまま入れた 2 列表で、エージェントは索引だけで任意の Wiki ページを直接読める（追加の CLI や MCP 呼び出しは不要）。
+出力は `**Wiki索引:**` ラベル + ページの raw URL を「ページ」列にそのまま入れた 2 列表で、エージェントは索引だけで任意の Wiki ページを直接読める（追加の CLI や MCP 呼び出しは不要）。
 
 - 対応テストファイル: `tests/integration/inject/test_build_wiki_index.py`
 
@@ -23,7 +23,7 @@ python plugins/ai-monitor/inject/build_wiki_index.py
 
 | フィールド | 型 | 説明 | 制限 | 補足 |
 | --- | --- | --- | --- | --- |
-| 標準出力 | str | プロジェクト Wiki を統合したフラット索引を md テーブル 1 枚として出力 | - | 表の各行が Wiki ページ 1 件に対応 |
+| 標準出力 | str | `**Wiki索引:**` ラベル + 空行 + プロジェクト Wiki を統合したフラット索引を md テーブル 1 枚として出力 | - | 表の各行が Wiki ページ 1 件に対応 |
 
 出力される表の列:
 
@@ -35,6 +35,8 @@ python plugins/ai-monitor/inject/build_wiki_index.py
 レスポンス例:
 
 ``````text
+**Wiki索引:**
+
 | ページ | 概要 |
 | --- | --- |
 | https://raw.githubusercontent.com/{owner}/{project}/master/docs/wiki/設計図/シナリオ/README.md | 全シナリオの索引 |
@@ -93,12 +95,12 @@ sequenceDiagram
     IF->>IF: 再帰的にエントリを蓄積
   end
   IF->>IF: 各エントリの相対パスを<br>raw URL に変換
-  IF-->>C: ページ / 概要 の 2 列テーブルを標準出力<br>終了コード 0
+  IF-->>C: **Wiki索引:** ラベル + ページ / 概要 の 2 列テーブルを標準出力<br>終了コード 0
 ```
 
 ### 期待値
 
-- 標準出力に「\| ページ \| 概要 \|」の md テーブル 1 枚が出る
+- 標準出力に `**Wiki索引:**` ラベル + 空行 + 「\| ページ \| 概要 \|」の md テーブル 1 枚が出る
 - 「ページ」列の値は `{WIKI_BASE}/{相対パス}` の連結で、そのまま `curl` / `WebFetch` で読める raw URL
 - 行数がプロジェクト Wiki の README 目次に登録された全 md ファイル数と一致する
 - 終了コードが `0`
@@ -192,7 +194,7 @@ sequenceDiagram
 
 ### 期待値
 
-- 標準出力に「\| ページ \| 概要 \|」のテーブルが出る
+- 標準出力に `**Wiki索引:**` ラベル + 空行 + 「\| ページ \| 概要 \|」のテーブルが出る
 - スキップ対象フォルダ配下のエントリは含まれない
 - 他のフォルダのエントリは通常通り含まれる
 - 終了コードが `0`（エラー扱いにしない）

@@ -30,3 +30,5 @@ disable-model-invocation: true
 ## 参考資料
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_agent_docs.py" intake-issue-triager`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/build_wiki_index.py"`
