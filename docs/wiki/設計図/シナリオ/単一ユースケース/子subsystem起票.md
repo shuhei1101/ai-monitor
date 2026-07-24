@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # 子subsystem起票
 
 story-conductor（復帰呼び出し）が single-scenario-writer の完了報告を確認し、単一シナリオ確定を受けて次フェーズ（子 subsystem 起票）に進むと判断する単一ユースケース。

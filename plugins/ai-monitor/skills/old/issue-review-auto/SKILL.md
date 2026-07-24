@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:issue-review-auto
 description: 確認:issue-reviewer（AI_MONITOR_LABEL_CONFIRM_ISSUE_REVIEW）ラベルの Issue を並列で AI レビューし、コメント投稿する
 disable-model-invocation: false

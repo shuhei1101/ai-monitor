@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # assignee除去
 
 MCP ツール: `remove_assignee`

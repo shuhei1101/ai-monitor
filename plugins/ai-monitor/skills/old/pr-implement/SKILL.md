@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:pr-implement
 description: "wip Draft PR を 1 件実装する: worktree 復帰 → fetch/reset → 実装 → テスト実行 → コミット → push → gh pr ready。pr-implementer エージェントから呼ばれる。"
 ---

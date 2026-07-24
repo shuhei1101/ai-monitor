@@ -1,3 +1,10 @@
+---
+version:
+  - number: 1.0.0
+    date: 2026-07-24
+    changes: 初版
+---
+
 # ai-monitor テンプレート: PR 本文 / エピックPoC
 
 epic の実現可能性 PoC 用 Draft PR（`poc/epic/{ドメイン}/{テーマ}`、base=master・マージせず close）の本文書式。

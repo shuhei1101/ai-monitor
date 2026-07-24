@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:mock-designer
 description: epic 全体の UI 設計（画面一覧・遷移・モック）を確定するエージェント
 argument-hint: "[pr-number]"

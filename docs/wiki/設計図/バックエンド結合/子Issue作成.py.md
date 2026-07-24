@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # 子Issue作成
 
 MCP ツール: `create_child_issue`

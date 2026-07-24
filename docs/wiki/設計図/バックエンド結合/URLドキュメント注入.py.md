@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # URLドキュメント注入
 
 CLI: `python plugins/ai-monitor/inject/read_urls.py <url>...`

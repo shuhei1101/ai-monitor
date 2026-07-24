@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # Issueから自動マージまで
 
 ai-monitor のメインフロー: 監視対象プロジェクトに新規機能相当の Issue が起票されてから、intake → epic → story → subsystem を経て master にマージされるまでの複合ユースケース。

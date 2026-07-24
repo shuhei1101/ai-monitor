@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:epic-conductor
 description: epic レイヤーの指揮役
 argument-hint: "[issue-number]"

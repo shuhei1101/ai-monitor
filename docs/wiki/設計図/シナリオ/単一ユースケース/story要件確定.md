@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # story要件確定
 
 story-conductor が story Issue の本文（前提条件 / 概要 / 背景 / ユースケース要件）を確定する単一ユースケース。

@@ -1,0 +1,51 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+
+  # Loki exporter requires the resource / instrumentation scope be
+  # promoted to log attributes so they survive the push.
+  resource:
+    attributes:
+      - action: insert
+        key: loki.resource.labels
+        value: service.name,service.namespace,host.name
+  attributes:
+    actions:
+      - action: insert
+        key: loki.attribute.labels
+        value: level,severity
+
+exporters:
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+  debug:
+    verbosity: basic
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [resource, attributes, batch]
+      exporters: [loki, debug]
+    # Traces / metrics are not forwarded to Loki in this PoC.
+    # They are received then dropped so senders do not error out.
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

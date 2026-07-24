@@ -1,3 +1,10 @@
+---
+version:
+  - number: 1.0.0
+    date: 2026-07-24
+    changes: 初版
+---
+
 # ai-monitor 規約: 外部API
 
 利用する外部 API 1 つにつき 1 ページの Wiki を作成し、**そのプロジェクトで実際に使うエンドポイントだけ** を公式ドキュメントから抽出して整理する。
@@ -42,12 +49,12 @@ OpenAI が提供する LLM / 埋め込み / 音声 API。
 ```markdown
 ## 現在のバージョン情報
 
-| 項目 | 内容 |
-| --- | --- |
-| API バージョン | `2024-10-21`（または `v1`） |
-| ベース URL | `https://api.openai.com/v1` |
-| 公式 URL | https://openai.com/api/ |
-| 公式ドキュメント | https://platform.openai.com/docs/api-reference |
+| 項目 | 内容 | 補足 |
+| --- | --- | --- |
+| API バージョン | `2024-10-21`（または `v1`） | 2026-07-24 時点最新 |
+| ベース URL | `https://api.openai.com/v1` | - |
+| 公式 URL | https://openai.com/api/ | - |
+| 公式ドキュメント | https://platform.openai.com/docs/api-reference | - |
 ```
 
 ### 補足
@@ -55,7 +62,8 @@ OpenAI が提供する LLM / 埋め込み / 音声 API。
 - API バージョンは header 指定型（`OpenAI-Beta` など）か URL 埋め込み型（`/v1/...`）かを書く
 - ベース URL を明示することで、各エンドポイントサブセクションは相対パスだけで書ける
 - 公式 URL は API のトップページ、公式ドキュメントは API リファレンスの URL
-- 採用時点のバージョンを固定で記録し、アップグレード時にこことエンドポイント記述を見直す
+- 採用時点のバージョンを固定で記録し、補足列に **確認日 `YYYY-MM-DD 時点最新`** を書く。
+  アップグレード時にバージョン値・補足日付・エンドポイント記述を同時に見直す
 
 ## `## 認証セットアップ`
 

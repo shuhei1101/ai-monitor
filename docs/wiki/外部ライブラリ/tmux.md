@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # tmux
 
 ターミナルマルチプレクサ（CLI）。
@@ -6,12 +10,12 @@
 
 ## 現在のバージョン情報
 
-| 項目 | 内容 |
-| --- | --- |
-| バージョン | `3.4` |
-| ライセンス | ISC |
-| 公式 URL | https://github.com/tmux/tmux |
-| 公式ドキュメント | https://github.com/tmux/tmux/wiki |
+| 項目 | 内容 | 補足 |
+| --- | --- | --- |
+| バージョン | `3.4` | 2026-07-24 時点最新 |
+| ライセンス | ISC | - |
+| 公式 URL | https://github.com/tmux/tmux | - |
+| 公式ドキュメント | https://github.com/tmux/tmux/wiki | - |
 
 ## インストール手順
 

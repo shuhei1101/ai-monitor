@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # FastAPI
 
 Python の Web API フレームワーク。
@@ -6,12 +10,12 @@ Python の Web API フレームワーク。
 
 ## 現在のバージョン情報
 
-| 項目 | 内容 |
-| --- | --- |
-| バージョン | fastapi `0.139.2` / uvicorn `0.51.0` |
-| ライセンス | MIT |
-| 公式 URL | https://github.com/fastapi/fastapi |
-| 公式ドキュメント | https://fastapi.tiangolo.com/ |
+| 項目 | 内容 | 補足 |
+| --- | --- | --- |
+| バージョン | fastapi `0.139.2` / uvicorn `0.51.0` | 2026-07-24 時点最新 |
+| ライセンス | MIT | - |
+| 公式 URL | https://github.com/fastapi/fastapi | - |
+| 公式ドキュメント | https://fastapi.tiangolo.com/ | - |
 
 ## インストール手順
 
@@ -21,7 +25,7 @@ uv add fastapi uvicorn
 
 - テストは `fastapi.testclient.TestClient`（同梱）で実サーバーなしに実行する
 
-## メソッド一覧
+## API 一覧
 
 | 種別 | 名前 | 用途 | 補足 |
 | --- | --- | --- | --- |

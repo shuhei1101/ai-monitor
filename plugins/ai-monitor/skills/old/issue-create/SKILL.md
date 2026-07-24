@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:issue-create
 description: GitHub Issue を 1 件起票する。確認:issue-reviewer ラベルを強制付与し、AI レビューフローに確実に乗せる。code-scanner や手動呼び出しの両方から使える。
 ---

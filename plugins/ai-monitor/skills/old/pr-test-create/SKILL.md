@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:pr-test-create
 description: "PR のテスト計画を立案し、テストコードを作成する。dev-kit のテスト仕様書を第一参照し、プロジェクト既存テストを補助参照して方式を決定する。pr-test-creator エージェントから呼ばれる。"
 ---

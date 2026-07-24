@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # worktree削除
 
 MCP ツール: `worktree_remove`

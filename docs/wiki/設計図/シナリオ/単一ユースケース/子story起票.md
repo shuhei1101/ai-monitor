@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # 子story起票
 
 epic-conductor（復帰呼び出し）が complex-scenario-writer の完了報告を確認し、複合シナリオ確定を受けて次フェーズ（子 story 起票）に進むと判断する単一ユースケース。

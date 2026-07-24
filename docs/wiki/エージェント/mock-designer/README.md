@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # mock-designer
 
 ## フェーズ一覧

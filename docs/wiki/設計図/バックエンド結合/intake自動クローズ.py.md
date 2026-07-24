@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # intake自動クローズ
 
 トリガー: polling 周期（open 対象一覧の取得結果で判定）

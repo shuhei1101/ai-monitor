@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:pr-review-auto
 description: 確認:pr-reviewer（AI_MONITOR_LABEL_CONFIRM_PR_REVIEW）ラベル付き PR を 1 件ずつ直列でレビューし、承認後はユーザーへの確認案内コメントを投稿する（確認:pr-merger はユーザーが手動付与）
 disable-model-invocation: false

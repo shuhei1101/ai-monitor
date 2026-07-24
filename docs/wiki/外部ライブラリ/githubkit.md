@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # githubkit
 
 GitHub API の型付き Python クライアント。
@@ -5,12 +9,12 @@ OpenAPI 定義から生成された REST 呼び出しと GraphQL 実行を 1 ク
 
 ## 現在のバージョン情報
 
-| 項目 | 内容 |
-| --- | --- |
-| バージョン | `v0.16.0` |
-| ライセンス | MIT |
-| 公式 URL | https://github.com/yanyongyu/githubkit |
-| 公式ドキュメント | https://github.com/yanyongyu/githubkit#readme |
+| 項目 | 内容 | 補足 |
+| --- | --- | --- |
+| バージョン | `v0.16.0` | 2026-07-24 時点最新 |
+| ライセンス | MIT | - |
+| 公式 URL | https://github.com/yanyongyu/githubkit | - |
+| 公式ドキュメント | https://github.com/yanyongyu/githubkit#readme | - |
 
 ## インストール手順
 
@@ -20,7 +24,7 @@ uv add githubkit==0.16.0
 
 - 認証はトークン文字列（PAT）をコンストラクタに渡す（fine-grained PAT に対象リポジトリの Issues / Pull requests / Contents の RW を付与）
 
-## メソッド一覧
+## API 一覧
 
 バージョン: `v0.16.0`
 

@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # PR_Ready化
 
 MCP ツール: `mark_pr_ready`

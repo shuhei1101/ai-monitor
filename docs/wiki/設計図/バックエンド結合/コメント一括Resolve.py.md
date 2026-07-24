@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # コメント一括Resolve
 
 MCP ツール: `resolve_comments`

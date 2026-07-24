@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:single-scenario-writer
 description: story のユースケース要件から単一ユースケースシナリオを設計するエージェント
 argument-hint: "[pr-number]"

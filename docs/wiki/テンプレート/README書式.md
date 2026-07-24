@@ -1,3 +1,10 @@
+---
+version:
+  - number: 1.0.0
+    date: 2026-07-24
+    changes: 初版
+---
+
 # ai-monitor テンプレート: README
 
 `docs/wiki/` 配下の各 `README.md`（ナビゲーション用ページ）の書式定義。

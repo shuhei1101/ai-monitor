@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:pr-implement-auto
 description: 確認:pr-implementer（AI_MONITOR_LABEL_CONFIRM_PR_IMPLEMENT）ラベル付き PR を N 件並列で実装し、Ready 化 → そのまま pr-review-auto に連鎖
 disable-model-invocation: false

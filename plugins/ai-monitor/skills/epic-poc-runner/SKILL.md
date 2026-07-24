@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:epic-poc-runner
 description: epic の実現可能性 PoC 検証エージェント
 argument-hint: "[pr-number]"

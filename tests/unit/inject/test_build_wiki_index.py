@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import sys
-import urllib.error
 
 import pytest
 
@@ -202,19 +201,41 @@ def test_walk_wiki_when_format_violation(monkeypatch, fake_wiki):
 
 
 def test_walk_wiki_when_fetch_failed(monkeypatch, fake_wiki):
-    """途中の README 取得失敗（異常系）。"""
+    """取得失敗フォルダのサイレントスキップ（正常系）。"""
     # 準備: サブディレクトリ README が 404
     monkeypatch.setenv("WIKI_BASE", BASE)
     fake_wiki.pages[f"{BASE}/README.md"] = (
         "## 目次\n\n"
         "| ページ | 概要 |\n"
         "| --- | --- |\n"
+        "| [公開](./公開/) | 公開索引 |\n"
         "| [欠落](./欠落/) | 欠落索引 |\n"
     )
+    fake_wiki.pages[f"{BASE}/公開/README.md"] = (
+        "## 目次\n\n"
+        "| ページ | 概要 |\n"
+        "| --- | --- |\n"
+        "| [記事](./記事.md) | 公開記事 |\n"
+    )
     # `{BASE}/欠落/README.md` は未登録 → fake_wiki は URLError を投げる
-    # 実行・検証
-    with pytest.raises(urllib.error.URLError):
-        build_wiki_index.walk_wiki()
+    # 実行
+    entries = build_wiki_index.walk_wiki()
+    # 検証: 欠落配下は結果から抜けるが、親目次の欠落/README 行と公開系は含まれる
+    assert entries == [
+        WikiPage(raw_url=f"{BASE}/公開/README.md", summary="公開索引"),
+        WikiPage(raw_url=f"{BASE}/公開/記事.md", summary="公開記事"),
+        WikiPage(raw_url=f"{BASE}/欠落/README.md", summary="欠落索引"),
+    ]
+
+
+def test_walk_wiki_when_root_missing(monkeypatch, fake_wiki):
+    """ルート README 取得失敗（正常系）。"""
+    # 準備: ルート README を仕込まない → fake_wiki は URLError を投げる
+    monkeypatch.setenv("WIKI_BASE", BASE)
+    # 実行
+    entries = build_wiki_index.walk_wiki()
+    # 検証: 空配列（URLError は伝播しない）
+    assert entries == []
 
 
 # =========================
@@ -260,22 +281,19 @@ def test_main_when_wiki_base_missing(monkeypatch, fake_wiki, capsys):
     assert fake_wiki.calls == []
 
 
-def test_main_when_fetch_failed(monkeypatch, fake_wiki, capsys):
-    """途中の README 取得失敗（異常系）。"""
-    # 準備: サブディレクトリ README が未登録（404 相当）
+def test_main_when_root_missing(monkeypatch, fake_wiki, capsys):
+    """ルート README 取得失敗時の空索引出力（正常系）。"""
+    # 準備: ルート README を仕込まない
     monkeypatch.setenv("WIKI_BASE", BASE)
     monkeypatch.setattr(sys, "argv", ["build_wiki_index.py"])
-    fake_wiki.pages[f"{BASE}/README.md"] = (
-        "## 目次\n\n"
-        "| ページ | 概要 |\n"
-        "| --- | --- |\n"
-        "| [欠落](./欠落/) | 欠落索引 |\n"
-    )
     # 実行
     code = build_wiki_index.main()
-    # 検証
-    assert code == 1
-    err = capsys.readouterr().err
-    assert f"{BASE}/欠落/README.md" in err
-    # 部分結果を stdout に出さない
-    assert capsys.readouterr().out == ""
+    # 検証: ラベル + ヘッダー行のみの空テーブル
+    assert code == 0
+    out = capsys.readouterr().out
+    assert out == (
+        "**Wiki索引:**\n"
+        "\n"
+        "| ページ | 概要 |\n"
+        "| --- | --- |\n"
+    )

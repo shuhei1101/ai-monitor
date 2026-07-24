@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:wiki-create
 description: GitHub Wiki に新規ページを 1 件作成して push する。「Wiki に書いて」「Wiki ページ作って」と言われたら起動。
 ---

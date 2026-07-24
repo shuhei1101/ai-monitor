@@ -1,0 +1,12 @@
+# SigNoz 公式リポジトリの clone を除外（本 PoC は公式 compose をそのまま利用する）
+signoz/
+
+# ClickHouse / Zookeeper / Alertmanager 等のデータボリューム
+clickhouse-data/
+zookeeper-data/
+alertmanager-data/
+signoz-data/
+data/
+
+# ログ
+*.log

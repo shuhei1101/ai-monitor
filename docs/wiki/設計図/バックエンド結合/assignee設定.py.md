@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # assignee設定
 
 MCP ツール: `set_assignee`

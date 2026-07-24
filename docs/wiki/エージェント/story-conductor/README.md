@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # story-conductor
 
 ## フェーズ一覧

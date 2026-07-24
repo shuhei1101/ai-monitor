@@ -1,3 +1,10 @@
+---
+version:
+  - number: 1.0.0
+    date: 2026-07-24
+    changes: 初版
+---
+
 # ai-monitor 規約: 外部API一覧
 
 採用済み外部 API のインデックス。

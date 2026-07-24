@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # レビュースレッド一括Resolve
 
 MCP ツール: `resolve_review_threads`

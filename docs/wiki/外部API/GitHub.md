@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # GitHub API
 
 GitHub が提供するリポジトリ / Issue / PR 操作の API。
@@ -5,12 +9,12 @@ REST API と GraphQL API の 2 系統があり、ほとんどの操作は REST �
 
 ## 現在のバージョン情報
 
-| 項目 | 内容 |
-| --- | --- |
-| API バージョン | `2022-11-28`（`X-GitHub-Api-Version` ヘッダで指定） |
-| ベース URL | `https://api.github.com` |
-| 公式 URL | https://docs.github.com/ja/rest |
-| 公式ドキュメント | REST: https://docs.github.com/ja/rest / GraphQL: https://docs.github.com/ja/graphql |
+| 項目 | 内容 | 補足 |
+| --- | --- | --- |
+| API バージョン | `2022-11-28`（`X-GitHub-Api-Version` ヘッダで指定） | 2026-07-24 時点最新 |
+| ベース URL | `https://api.github.com` | - |
+| 公式 URL | https://docs.github.com/ja/rest | - |
+| 公式ドキュメント | REST: https://docs.github.com/ja/rest / GraphQL: https://docs.github.com/ja/graphql | - |
 
 ## 認証セットアップ
 

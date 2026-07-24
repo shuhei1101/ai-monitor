@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:pr-review
 description: 1 件の PR をレビューし、合格かつ assignees がなければユーザーへの確認コメントを投稿する（確認:pr-merger ラベルはユーザーが手動付与）
 ---

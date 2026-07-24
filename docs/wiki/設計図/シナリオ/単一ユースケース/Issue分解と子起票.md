@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # Issue分解と子起票
 
 ユーザーが起票した Issue を intake-issue-triager が作業単位に分解し、ユーザー承認を経て epic / story / subsystem / chore の Sub-issue を作成する単一ユースケース。

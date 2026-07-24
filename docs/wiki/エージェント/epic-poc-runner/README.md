@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # epic-poc-runner
 
 ## フェーズ一覧

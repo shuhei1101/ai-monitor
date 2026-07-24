@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # PRマージ
 
 MCP ツール: `merge_pr`

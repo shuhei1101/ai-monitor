@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # ai-monitor 判定フローチャート
 
 ## 目次

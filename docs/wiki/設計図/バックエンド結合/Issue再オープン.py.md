@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # Issue再オープン
 
 MCP ツール: `reopen_issue`

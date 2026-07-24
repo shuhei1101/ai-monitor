@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # Claudeハーネス
 
 Claude Code ハーネス（スキル / フック / エージェント運用）の管理ドキュメント。

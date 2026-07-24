@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # DraftPR作成
 
 MCP ツール: `create_draft_pr`

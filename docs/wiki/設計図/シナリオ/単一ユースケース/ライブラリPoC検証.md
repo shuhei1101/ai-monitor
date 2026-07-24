@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # ライブラリPoC検証
 
 library-poc-runner が担当候補 1 つの PoC を検証する単一ユースケース。

@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # PoC結果確認
 
 epic-conductor（復帰呼び出し）が epic-poc-runner の検証結果を確認し、問題なければ epic Draft PR を作成して次フェーズに引き継ぐ単一ユースケース。

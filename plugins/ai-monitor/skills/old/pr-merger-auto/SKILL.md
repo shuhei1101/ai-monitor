@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:pr-merger-auto
 description: 確認:pr-merger ラベル付き PR を 1 件ずつ直列でマージする（Draft・Ready 問わずラベルのみで判断）
 disable-model-invocation: false

@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:code-scan-auto
 description: コードベースを観点ごとにスキャンし、見つかった問題を gh issue create で起票する
 disable-model-invocation: false

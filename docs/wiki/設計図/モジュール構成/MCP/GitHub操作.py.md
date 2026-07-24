@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # モジュール構成: MCP / GitHub操作
 
 `GitHub操作` ドメイン（MCP 側）に属する構成要素詳細。

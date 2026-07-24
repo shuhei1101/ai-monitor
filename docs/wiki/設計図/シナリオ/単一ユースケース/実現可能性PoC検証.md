@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # 実現可能性PoC検証
 
 epic-poc-runner が epic の成立条件になっている核心機構を最安直構成で検証し、結論を epic Issue 本文 `## PoC 結果` に記録する単一ユースケース。

@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # Issue・PR検索
 
 MCP ツール: `search_issues_and_prs`

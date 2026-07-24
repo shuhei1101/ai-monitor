@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # epic一括解放
 
 トリガー: polling 周期（前周期の open 対象一覧との差分で `layer:epic` の消失を検知）

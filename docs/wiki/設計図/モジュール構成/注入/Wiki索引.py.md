@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # モジュール構成: 注入 / Wiki索引
 
 `Wiki索引` ドメイン（注入側）に属する構成要素詳細。
@@ -177,7 +181,7 @@ walk_wiki()
 #### 処理
 
 1. 環境変数 `WIKI_BASE` を読む（末尾スラッシュがあれば落とす）
-2. `{WIKI_BASE}/{folder_path}/README.md` を取得する（`folder_path` が空ならルート直下・[URL 取得](./URLドキュメント.py.md#url-取得)）
+2. `{WIKI_BASE}/{folder_path}/README.md` を取得する（`folder_path` が空ならルート直下・[URL 取得](./URLドキュメント.py.md#url-取得)）。`URLError` を捕捉した場合はそのフォルダ配下を空として返す（Wiki 整備途中の状態を吸収）
 3. [目次表解析](#目次表解析) に本文と `folder_path` を渡して [`WikiPage`](#wiki-ページ) 配列を得る（`ValueError` を捕捉した場合はそのフォルダ配下を空として返す = 意図的な非公開運用）
 4. 空の戻り値配列を用意し、得た [`WikiPage`](#wiki-ページ) 配列を先頭から順に**本関数がループ**して分類しながら戻り値配列に追加する
    1. まず [`WikiPage`](#wiki-ページ) をそのまま戻り値配列に追加する
@@ -188,7 +192,6 @@ walk_wiki()
 
 | 例外名 | 発生条件 | メッセージ | 補足 |
 | --- | --- | --- | --- |
-| `URLError` | README の取得失敗 | urllib のエラー内容 | [`fetch_url`](./URLドキュメント.py.md#url-取得) から伝播（ネットワーク断・404 は明示的に失敗させる） |
 | `KeyError` | 環境変数 `WIKI_BASE` が未設定 | `WIKI_BASE` | 呼び出し側（[`main`](#メイン)）で事前に未設定チェックを行う前提 |
 
 #### 単体テスト
@@ -197,7 +200,8 @@ walk_wiki()
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_walk_wiki` | 正常 | 再帰的な平坦化 | ルート → サブディレクトリ 2 階層の README を持つ Wiki | monkeypatch.setenv + urllib | 深さ優先・親 → 子順の [`WikiPage`](#wiki-ページ) 配列（サブディレクトリの README は `raw_url` が `/README.md` で終わる） | - |
 | `test_walk_wiki_when_format_violation` | 正常 | 書式違反フォルダのサイレントスキップ | サブディレクトリ README に `## 目次` が無い | monkeypatch.setenv + urllib | そのフォルダ配下だけが結果から抜け、他のフォルダは通常通り含まれる | 意図的な非公開運用 |
-| `test_walk_wiki_when_fetch_failed` | 異常 | 途中の README 取得失敗 | サブディレクトリ README が 404 | monkeypatch.setenv + urllib | `URLError` が伝播 | - |
+| `test_walk_wiki_when_fetch_failed` | 正常 | 取得失敗フォルダのサイレントスキップ | サブディレクトリ README が 404 | monkeypatch.setenv + urllib | そのフォルダ配下だけが結果から抜け、他のフォルダは通常通り含まれる（`URLError` は伝播しない）| Wiki 整備途中の吸収 |
+| `test_walk_wiki_when_root_missing` | 正常 | ルート README 取得失敗 | ルート README が 404 | monkeypatch.setenv + urllib | 空配列を返す（`URLError` は伝播しない）| Wiki 整備途中の吸収 |
 
 ---
 
@@ -221,7 +225,7 @@ main()
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `int` | 終了コード | `0` = 正常 / `1` = 環境変数未設定・取得失敗 |
+| `int` | 終了コード | `0` = 正常 / `1` = 環境変数未設定 |
 
 戻り値例:
 
@@ -232,12 +236,12 @@ main()
 #### 処理
 
 1. 環境変数 `WIKI_BASE` を読む（未設定なら stderr にメッセージを出して `1` を返す）
-2. [Wiki 再帰探索](#wiki-再帰探索) を呼んで [`WikiPage`](#wiki-ページ) 配列を得る（`URLError` は stderr に対象 URL + 原因を出して `1` を返す。書式違反は [`walk_wiki`](#wiki-再帰探索) で吸収済み）
+2. [Wiki 再帰探索](#wiki-再帰探索) を呼んで [`WikiPage`](#wiki-ページ) 配列を得る（書式違反 / 取得失敗はいずれも [`walk_wiki`](#wiki-再帰探索) で吸収済み）
 3. `**Wiki索引:**` のラベル行 + 空行 + `| ページ | 概要 |` のヘッダー + 区切り行 + 各 [`WikiPage`](#wiki-ページ) の `| {raw_url} | {summary} |` を 1 枚の md テーブルとして標準出力に出して `0` を返す
 
 #### 例外
 
-なし（内部の `URLError` は捕捉して stderr + 戻り値 `1` に変換する）
+なし
 
 #### 単体テスト
 
@@ -245,7 +249,7 @@ main()
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_main` | 正常 | 全エントリの表形式出力 | ルート + サブディレクトリの README を持つ Wiki を `WIKI_BASE` に設定して実行 | monkeypatch.setenv + urllib | 標準出力に `**Wiki索引:**` ラベル + 空行 + 「\| ページ \| 概要 \|」の md テーブル 1 枚が出て戻り値 `0` | - |
 | `test_main_when_wiki_base_missing` | 異常 | `WIKI_BASE` 未設定 | 環境変数を消して実行 | monkeypatch.delenv | stderr にメッセージ + 戻り値 `1`・HTTP は呼ばれない | - |
-| `test_main_when_fetch_failed` | 異常 | 途中の README 取得失敗 | サブディレクトリ README が 404 | monkeypatch.setenv + urllib | stderr に対象 URL + 原因 + 戻り値 `1`・標準出力に部分結果なし | - |
+| `test_main_when_root_missing` | 正常 | ルート README 取得失敗 | ルート README が 404 | monkeypatch.setenv + urllib | 標準出力に `**Wiki索引:**` ラベル + 空行 + ヘッダー行のみの空テーブルが出て戻り値 `0` | Wiki 整備途中の吸収 |
 
 ## Wiki ページ
 > 物理名: `WikiPage`<br>

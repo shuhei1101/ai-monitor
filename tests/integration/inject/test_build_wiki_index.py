@@ -98,22 +98,19 @@ def test_error_when_wiki_base_missing(fake_wiki, monkeypatch, capsys):
     assert fake_wiki.calls == []
 
 
-def test_error_when_fetch_failed(fake_wiki, monkeypatch, capsys):
-    """途中の README 取得失敗でエラー終了（異常系）。"""
-    # 準備: サブディレクトリ README が未登録（404 相当）
+def test_normal_when_root_missing(fake_wiki, monkeypatch, capsys):
+    """ルート README 取得失敗時の空索引出力（正常系）。"""
+    # 準備: ルート README を仕込まない
     monkeypatch.setenv("WIKI_BASE", BASE)
     monkeypatch.setattr(sys, "argv", ["build_wiki_index.py"])
-    fake_wiki.pages[f"{BASE}/README.md"] = (
-        "## 目次\n\n"
-        "| ページ | 概要 |\n"
-        "| --- | --- |\n"
-        "| [欠落](./欠落/) | 欠落索引 |\n"
-    )
     # 実行
     code = build_wiki_index.main()
-    # 検証
-    assert code == 1
-    err = capsys.readouterr().err
-    assert f"{BASE}/欠落/README.md" in err
-    # 部分結果を stdout に出さない
-    assert capsys.readouterr().out == ""
+    # 検証: ラベル + ヘッダー行のみの空テーブル
+    assert code == 0
+    out = capsys.readouterr().out
+    assert out == (
+        "**Wiki索引:**\n"
+        "\n"
+        "| ページ | 概要 |\n"
+        "| --- | --- |\n"
+    )

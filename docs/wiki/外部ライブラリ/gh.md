@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # gh（GitHub CLI）
 
 GitHub 公式のコマンドラインツール。
@@ -5,12 +9,12 @@ Issue / PR の操作・REST / GraphQL API の呼び出しをターミナルコ�
 
 ## 現在のバージョン情報
 
-| 項目 | 内容 |
-| --- | --- |
-| バージョン | `v2.95.0` |
-| ライセンス | MIT |
-| 公式 URL | https://cli.github.com/ |
-| 公式ドキュメント | https://cli.github.com/manual/ |
+| 項目 | 内容 | 補足 |
+| --- | --- | --- |
+| バージョン | `v2.95.0` | 2026-07-24 時点最新 |
+| ライセンス | MIT | - |
+| 公式 URL | https://cli.github.com/ | - |
+| 公式ドキュメント | https://cli.github.com/manual/ | - |
 
 ## インストール手順
 
@@ -25,7 +29,7 @@ gh auth login
 - 実行にはリポジトリ内のカレントディレクトリが前提（対象リポジトリを CWD から解決する）
 - 認証状態は `gh auth status` で確認できる
 
-## メソッド一覧
+## API 一覧
 
 バージョン: `v2.95.0`
 

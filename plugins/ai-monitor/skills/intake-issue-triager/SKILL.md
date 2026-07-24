@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:intake-issue-triager
 description: 起点レイヤーの振り分け役
 argument-hint: "[issue-number]"

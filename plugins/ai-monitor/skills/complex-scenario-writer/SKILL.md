@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:complex-scenario-writer
 description: epic の複合ユースケースシナリオを設計するエージェント
 argument-hint: "[pr-number]"

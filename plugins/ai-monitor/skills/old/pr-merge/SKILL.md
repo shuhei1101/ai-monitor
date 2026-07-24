@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:pr-merge
 description: 確認:pr-merger ラベル付き PR を 1 件 base へマージし、worktree 削除・push まで実行する
 ---

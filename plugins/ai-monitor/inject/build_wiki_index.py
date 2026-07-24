@@ -78,7 +78,11 @@ def walk_wiki(folder_path: str = "") -> list[WikiPage]:
     wiki_base = os.environ["WIKI_BASE"].rstrip("/")
     # {WIKI_BASE}/{folder_path}/README.md を取得（folder_path 空ならルート直下）
     readme_url = f"{wiki_base}/{folder_path}/README.md" if folder_path else f"{wiki_base}/README.md"
-    body = fetch_url(readme_url)
+    # 取得失敗はそのフォルダ配下を空として返す（Wiki 整備途中の吸収）
+    try:
+        body = fetch_url(readme_url)
+    except urllib.error.URLError:
+        return []
 
     # 目次表を WikiPage 配列に展開（書式違反はそのフォルダ配下を空として返す = 意図的な非公開運用）
     try:
@@ -108,12 +112,8 @@ def main() -> int:
         print("環境変数 WIKI_BASE が未設定です", file=sys.stderr)
         return 1
 
-    # walk_wiki で全エントリを得る（URLError は stderr + 1）
-    try:
-        pages = walk_wiki()
-    except urllib.error.URLError as exc:
-        print(f"取得失敗: {exc}", file=sys.stderr)
-        return 1
+    # walk_wiki で全エントリを得る（書式違反 / 取得失敗は walk_wiki 側で吸収済み）
+    pages = walk_wiki()
 
     # ラベル行 + 空行 + md テーブルとして標準出力に出す
     print("**Wiki索引:**")

@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # worktree作成
 
 MCP ツール: `worktree_create`

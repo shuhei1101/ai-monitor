@@ -1,3 +1,7 @@
+---
+template_version: 1.0.0
+---
+
 # Issue・PR情報取得
 
 MCP ツール: `get_issue_or_pr`

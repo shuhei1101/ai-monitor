@@ -1,4 +1,5 @@
 ---
+template_version: 1.0.0
 name: ai-monitor:story-conductor
 description: story レイヤーの指揮役
 argument-hint: "[issue-number]"
