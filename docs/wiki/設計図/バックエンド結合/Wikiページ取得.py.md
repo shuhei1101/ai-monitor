@@ -37,9 +37,12 @@ MCP ツール: `read_wiki_pages`
 
 | フィールド | 型 | 説明 | 制限 | 補足 |
 | --- | --- | --- | --- | --- |
-| `pages` | object[] | 取得したページの配列 | - | 並びは `urls` の指定順 |
+| `pages` | object[] | 取得できたページの配列 | - | 並びは `urls` の指定順 |
 | `pages[].url` | str | 実際に取得した URL | - | blob URL を渡した場合は変換後の raw URL |
 | `pages[].body` | str | ページ本文 | - | 先頭の YAML front matter は除去済み |
+| `failures` | object[] | 取得できなかったページの配列 | - | 全件成功なら空配列 |
+| `failures[].url` | str | 取得に失敗した URL | - | 正規化後の URL |
+| `failures[].reason` | str | 失敗の理由 | - | HTTP ステータスや接続エラーの内容 |
 
 レスポンス例:
 
@@ -50,6 +53,12 @@ MCP ツール: `read_wiki_pages`
       "url": "https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/シナリオ.md",
       "body": "# ai-monitor テンプレート: シナリオ\n\nシナリオは ..."
     }
+  ],
+  "failures": [
+    {
+      "url": "https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/設計図/README.md",
+      "reason": "HTTP Error 404: Not Found"
+    }
   ]
 }
 ```
@@ -57,6 +66,7 @@ MCP ツール: `read_wiki_pages`
 **補足:**
 
 - 同じ URL を複数回渡した場合はその回数分の要素を返す（重複除去はしない）
+- 1 件も取得できなかった場合も `pages` が空配列・`failures` に全件でツールエラーにはしない（呼び出し側が読めた分だけで判断できるようにする）
 
 ## 制約
 
@@ -65,7 +75,7 @@ MCP ツール: `read_wiki_pages`
 | タイムアウト | 制限なし | - |
 | 対象プロジェクト | 参照しない | 取得先は引数の URL だけで決まる |
 | 認可 | なし（認証情報を付けない） | 対象は公開 URL のみ |
-| フォールバック | なし（1 件でも取得に失敗したらツールエラー） | 注入欠落に気づけるようにする |
+| フォールバック | なし（取得できなかった URL は `failures` に載せる） | 取得できたページは返し、欠落は呼び出し側が結果から判断する |
 
 ## フロー一覧
 
@@ -74,7 +84,7 @@ MCP ツール: `read_wiki_pages`
 | 正常 | 正常系 | 複数 URL の取得 → 本文配列で返却 | - |
 | 正常 | 正常系（blob URL） | GitHub blob URL を raw URL に変換して取得 | - |
 | 正常 | 正常系（front matter あり） | 本文先頭の YAML front matter を除去して返却 | - |
-| 異常 | 異常系（取得失敗） | 存在しない URL でツールエラー | - |
+| 正常 | 正常系（一部が取得失敗） | 取得できたページを返し、失敗した URL を `failures` に載せる | - |
 
 ## 正常系
 
@@ -157,13 +167,13 @@ sequenceDiagram
 
 - `pages[0].body` に YAML front matter が含まれない
 
-## 異常系（取得失敗）
+## 正常系（一部が取得失敗）
 
 ### セットアップ
 
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
-| Mock | HTTP（404 エラーを返す） | 異常を決定的に誘発 |
+| Mock | HTTP（1 件目は本文を返し、2 件目は 404 を返す） | 部分失敗を決定的に誘発 |
 
 ### フロー
 
@@ -173,11 +183,17 @@ sequenceDiagram
   participant IF as MCP ツール read_wiki_pages
   participant W as 取得先 URL
 
-  C->>IF: urls（1 件）
-  IF-->>W: 取得（404）
-  IF-->>C: MCP ツールエラーとして返却
+  C->>IF: urls（2 件）
+  IF-->>W: 1 件目を取得
+  IF-->>W: 2 件目を取得（404）
+  IF-->>C: pages（1 件）+ failures（1 件）
 ```
 
 ### 期待値
 
-- MCP ツールエラー（取得に失敗した URL を含む）が返る
+- `pages` に取得できた 1 件だけが入る
+- `failures` に取得できなかった URL と理由が入る
+
+## 異常系
+
+なし

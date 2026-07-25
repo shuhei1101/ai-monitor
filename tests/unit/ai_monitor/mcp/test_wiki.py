@@ -1,14 +1,9 @@
 """`src/ai_monitor/mcp/wiki.py` の単体テスト。"""
 from __future__ import annotations
 
-import pytest
-
 import ai_monitor.mcp.wiki as wiki
 
 RAW_BASE = "https://raw.githubusercontent.com/o/r/master/docs/wiki"
-
-
-# ---- Wikiページ取得 ----
 
 
 def test_read_wiki_pages(fake_wiki):
@@ -24,6 +19,7 @@ def test_read_wiki_pages(fake_wiki):
         f"{RAW_BASE}/テンプレート/シナリオ.md",
     ]
     assert result.pages[0].body == "# 規約: コメント\n"
+    assert result.failures == []
 
 
 def test_read_wiki_pages_when_blob_url(fake_wiki):
@@ -47,8 +43,25 @@ def test_read_wiki_pages_when_frontmatter(fake_wiki):
     assert result.pages[0].body == "# 見出し\n"
 
 
-def test_read_wiki_pages_when_fetch_fails(fake_wiki):
-    """取得失敗を確認する（異常系）。"""
-    # 実行・検証
-    with pytest.raises(wiki.WikiFetchError, match="存在しないページ.md"):
-        wiki.read_wiki_pages([f"{RAW_BASE}/存在しないページ.md"])
+def test_read_wiki_pages_when_partial_failure(fake_wiki):
+    """一部の取得失敗を確認する（正常系）。"""
+    # 準備
+    fake_wiki.pages[f"{RAW_BASE}/規約/コメント.md"] = "# 規約: コメント\n"
+    # 実行
+    result = wiki.read_wiki_pages([f"{RAW_BASE}/規約/コメント.md", f"{RAW_BASE}/設計図/README.md"])
+    # 検証
+    assert [page.url for page in result.pages] == [f"{RAW_BASE}/規約/コメント.md"]
+    assert [failure.url for failure in result.failures] == [f"{RAW_BASE}/設計図/README.md"]
+    assert result.failures[0].reason
+
+
+def test_read_wiki_pages_when_all_failed(fake_wiki):
+    """全件の取得失敗を確認する（正常系）。"""
+    # 実行
+    result = wiki.read_wiki_pages([f"{RAW_BASE}/なし1.md", f"{RAW_BASE}/なし2.md"])
+    # 検証
+    assert result.pages == []
+    assert [failure.url for failure in result.failures] == [
+        f"{RAW_BASE}/なし1.md",
+        f"{RAW_BASE}/なし2.md",
+    ]

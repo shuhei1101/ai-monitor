@@ -201,7 +201,15 @@ class WikiPage(BaseModel):
     body: str
 
 
+class WikiPageFailure(BaseModel):
+    """取得できなかった Wiki ページ 1 件。"""
+
+    url: str
+    reason: str
+
+
 class WikiPagesResult(BaseModel):
     """read_wiki_pages が返す取得結果。"""
 
     pages: list[WikiPage]
+    failures: list[WikiPageFailure] = []
