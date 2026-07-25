@@ -5,7 +5,7 @@ import logging
 
 from opentelemetry._logs import get_logger_provider
 
-from observability import otel
+from ai_monitor.observability import otel
 
 MESSAGE = "ポーリングを開始します: project=sandbox"
 

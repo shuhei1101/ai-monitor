@@ -5,7 +5,8 @@ template_version: 1.1.0
 # モジュール構成: 観測 / OTel初期化
 
 `OTel初期化` ドメイン（観測側）に属する構成要素詳細。
-常駐プロセス（[モニター](../モニター/エージェント管理.py.md#エージェント組み立て) / [MCP サーバー](../MCP/GitHub操作.py.md)）の composition root から起動時に 1 回だけ呼ばれ、[OpenTelemetry Python SDK](../../../外部ライブラリ/opentelemetry.md) の Log / Trace / Metric 各 Provider を OTel Collector（OTLP gRPC 4317）向けに配線する。
+常駐プロセス（[モニター](../モニター/エージェント管理.py.md#エージェント組み立て)）の composition root から起動時に 1 回だけ呼ばれ、[OpenTelemetry Python SDK](../../../外部ライブラリ/opentelemetry.md) の Log / Trace / Metric 各 Provider を OTel Collector（OTLP gRPC 4317）向けに配線する。
+[MCP サーバー](../MCP/GitHub操作.py.md)はモニターと同一プロセスに同居するため、この 1 回の配線が両方をまかなう。
 
 Python 標準 `logging` に [`LoggingHandler`](../../../外部ライブラリ/opentelemetry.md#logginghandler) を addHandler するので、既存の `logger.info(...)` などがそのまま Collector 経由で Loki に流れる。
 Trace / Metric は SDK 側 pipeline のみ用意し、Collector 側の debug exporter で破棄する（Compose 構成は observability リポジトリが持つ）。
@@ -29,21 +30,13 @@ Trace / Metric は SDK 側 pipeline のみ用意し、Collector 側の debug exp
 ## ディレクトリ構成
 
 ```
-plugins/ai-monitor/observability/
+src/ai_monitor/observability/
 ├── __init__.py       # configure / shutdown を公開
 ├── otel.py           # configure / shutdown / _build_resource / _configure_logs / _configure_traces / _configure_metrics
 └── settings.py       # ObservabilitySettings
 ```
 
-本モジュールはプラグイン配下に置く。
-MCP サーバーはプラグインとして配布されたフォルダから隔離環境で起動されるため `src/` を参照できず、2 プロセスの双方から参照できる位置がプラグイン配下になる。
-
-| 呼び出し元 | 実行時の位置 | 参照方法 |
-| --- | --- | --- |
-| [モニター](../モニター/エージェント管理.py.md#エージェント組み立て) | ai-monitor のクローン | リポジトリルートからの相対パスで `plugins/ai-monitor` を `sys.path` に追加する（`constants.env` の参照と同じ向き） |
-| [MCP サーバー](../MCP/GitHub操作.py.md) | プラグインのインストール先 | `mcp/server.py` から見た親ディレクトリを `sys.path` に追加する |
-
-2 つの composition root から `configure(service_name=...)` を呼び、`service.name` だけプロセスごとに変える。
+呼び出し元はモニターの composition root だけで、`configure("monitor")` を 1 回呼ぶ。
 
 ## 構成図
 
@@ -132,7 +125,6 @@ classDiagram
 > コンテナ: `observability/settings.py`
 
 OTLP 送信先・環境名を環境変数から型安全に読む Pydantic Settings（`pydantic_settings.BaseSettings`・`env_prefix="AI_MONITOR_OTEL_"`）。
-Claude Code は全サブプロセスから `OTEL_` で始まる環境変数を削除するため、MCP サーバーへ値を届けるにはプレフィックスを `OTEL_` 以外にする必要がある。
 [`configure`](#初期化) の内部で 1 回だけインスタンス化される。
 
 ### プロパティ
@@ -163,7 +155,7 @@ OpenTelemetry SDK の Provider（Logs / Traces / Metrics）を配線する初期
 > 物理名: `configure`<br>
 > 種別: 関数
 
-常駐プロセスの composition root（[エージェント組み立て](../モニター/エージェント管理.py.md#エージェント組み立て) 直前 / MCP サーバーの `mcp.run()` 直前）で 1 回だけ呼ぶ。
+常駐プロセスの composition root（[エージェント組み立て](../モニター/エージェント管理.py.md#エージェント組み立て) の直前）で 1 回だけ呼ぶ。
 [`ObservabilitySettings`](#観測設定) を読み、[共通属性組み立て](#共通属性組み立て) → [Log 配線](#log-配線) → [Trace 配線](#trace-配線) → [Metric 配線](#metric-配線) を順に実行し、[シャットダウン](#シャットダウン) を `atexit` に登録する。
 
 #### 引数
@@ -449,11 +441,10 @@ _configure_metrics(resource, ObservabilitySettings())
 
 ### 補足
 
-- 依存パッケージはプロセスごとに別の場所で宣言する。
-  モニターは `pyproject.toml`、MCP サーバーは `plugins/ai-monitor/.mcp.json` の `--with`（`opentelemetry-sdk` / `opentelemetry-exporter-otlp-proto-grpc` / `opentelemetry-instrumentation-logging` / `pydantic-settings`）。
+- 依存パッケージは `pyproject.toml` で宣言する（`opentelemetry-sdk` / `opentelemetry-exporter-otlp-proto-grpc` / `opentelemetry-instrumentation-logging` / `pydantic-settings`）。
 - モニターの composition root（[`main`](../モニター/エージェント管理.py.md#エージェント組み立て) の直前）で `configure("monitor")` を呼ぶ。
-  MCP サーバー（`plugins/ai-monitor/mcp/server.py`）は `mcp.run()` の直前で `configure("github-mcp")` を呼ぶ。
-  `service.name` はそれぞれ違えるが、`service.namespace="ai-monitor"` が共通なので Grafana Loki 側で `{service_namespace="ai-monitor"}` で横断検索できる。
+  MCP サーバーは同一プロセスで動くため、この 1 回が両方をまかなう。
+  `service.namespace="ai-monitor"` は Grafana Loki 側の `{service_namespace="ai-monitor"}` 横断検索に使う。
 - Log は Collector の Loki exporter を通って Loki に届く。
   `service.name` / `service.namespace` / `deployment.environment` を Loki の Stream Selector で使いたいので、Collector 側の `resource` processor で `loki.resource.labels` に列挙する（Collector 側のラベル昇格設定は observability リポジトリが持つ）。
 - Trace / Metric は Collector の debug exporter に流して破棄する。

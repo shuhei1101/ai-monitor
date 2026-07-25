@@ -15,15 +15,12 @@ import pytest
 from opentelemetry.sdk.metrics.export import MetricExporter
 
 PLUGIN_DIR = Path(__file__).resolve().parents[1] / "plugins" / "ai-monitor"
-sys.path.insert(0, str(PLUGIN_DIR))
-MCP_DIR = PLUGIN_DIR / "mcp"
-sys.path.insert(0, str(MCP_DIR))
 INJECT_DIR = PLUGIN_DIR / "inject"
 sys.path.insert(0, str(INJECT_DIR))
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-import server  # noqa: E402
+import ai_monitor.mcp.server as server  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -92,16 +89,6 @@ def tmp_settings(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(server, "SETTINGS_PATH", path)
     return path
-
-
-@pytest.fixture
-def fake_remote(monkeypatch):
-    """git remote の解決を sandbox リポジトリの URL に差し替える。"""
-
-    def run(args, **kwargs):
-        return NS(args=args, returncode=0, stdout="https://github.com/shuhei1101/ai-monitor-e2e.git\n", stderr="")
-
-    monkeypatch.setattr(server.subprocess, "run", run)
 
 
 class _FakeWikiResponse:
@@ -250,6 +237,7 @@ def mon_settings(mon_project):
         heartbeat_interval_sec=60,
         session_timeout_min=30,
         port=8765,
+        telemetry=None,
     )
 
 
@@ -259,6 +247,67 @@ def mon_registry(tmp_state_path):
     from ai_monitor.features.sessions.registry import SessionRegistry
 
     return SessionRegistry(tmp_state_path)
+
+
+@pytest.fixture
+def mcp_ctx_factory():
+    """`X-Project` ヘッダを持つ MCP リクエストコンテキストのモックを作る factory。"""
+
+    def _create(project: str | None = "sandbox"):
+        headers = {} if project is None else {"X-Project": project}
+        return NS(request_context=NS(request=NS(headers=headers)))
+
+    return _create
+
+
+@pytest.fixture
+def mcp_agents():
+    """MCP ツールが処理中ラベルの解決に使うエージェント定義を返す。"""
+    from ai_monitor.features.agents.types import Agent
+
+    return [
+        Agent(
+            name="architect",
+            confirm_label="確認:architect",
+            processing_label="処理中:architect",
+            model="sonnet",
+        )
+    ]
+
+
+@pytest.fixture
+def api(mon_settings, mon_registry, mcp_agents, mcp_ctx_factory):
+    """設定・台帳・エージェント一覧・コンテキストを束ねた MCP ツール呼び出し口を返す。"""
+    deps = dict(
+        ctx=mcp_ctx_factory(), settings=mon_settings, registry=mon_registry, agents=mcp_agents
+    )
+
+    class _Tools:
+        def __getattr__(self, name):
+            return server._bind(getattr(server, name), **deps)
+
+    return _Tools()
+
+
+@pytest.fixture
+def session_factory(mon_registry):
+    """台帳へテスト用のエージェントセッションを登録する factory。"""
+    from ai_monitor.features.sessions.types import AgentSession
+
+    def _create(
+        agent_name: str, number: int, *, project: str = "sandbox", watch_numbers: list[int] | None = None
+    ) -> AgentSession:
+        session = AgentSession(
+            session_name=f"ai-monitor-{project}-{number}-{agent_name}",
+            project=project,
+            agent_name=agent_name,
+            primary_number=number,
+            watch_numbers=list(watch_numbers or []),
+        )
+        mon_registry.register(session)
+        return session
+
+    return _create
 
 
 @pytest.fixture
@@ -357,7 +406,7 @@ def otel_stub(monkeypatch):
     from opentelemetry.metrics import _internal as metrics_internal
     from opentelemetry.util._once import Once
 
-    from observability import otel
+    from ai_monitor.observability import otel
 
     # 環境変数の値がテストに漏れ込まないように既定値へ戻す
     for name in ("AI_MONITOR_OTEL_OTLP_ENDPOINT", "AI_MONITOR_OTEL_OTLP_INSECURE", "AI_MONITOR_OTEL_DEPLOYMENT_ENVIRONMENT", "AI_MONITOR_OTEL_SERVICE_NAMESPACE"):

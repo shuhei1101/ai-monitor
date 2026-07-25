@@ -1,42 +1,46 @@
 """「作業完了報告」の結合テスト。"""
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
-
 import pytest
 
-import server
-from models import MonitorAck
+import ai_monitor.mcp.server as server
+from ai_monitor.mcp.models import MonitorAck
 
 
-def test_normal(tmp_settings, fake_remote, urlopen_calls):
-    """MCP 委譲 → HTTP POST → 受理の一連を確認する（正常系）。"""
+def test_normal(gh_mon, api, mon_registry, session_factory):
+    """プロジェクト解決 → セッション検索 → ラベル除去 → 生存更新の一連を確認する（正常系）。"""
+    # 準備
+    session_factory("architect", 52)
+    before = mon_registry.find("sandbox", "architect", 52).last_seen_at
     # 実行
-    res = server.report_completion("architect", 52)
+    res = api.report_completion("architect", 52)
     # 検証
-    req = urlopen_calls[0]
-    assert req.full_url == "http://127.0.0.1:18999/completions"
-    assert req.get_method() == "POST"
-    assert json.loads(req.data) == {"agent_name": "architect", "number": 52, "project": "sandbox"}
+    kwargs = gh_mon.rest.issues.remove_label.call_args.kwargs
+    assert (kwargs["owner"], kwargs["repo"], kwargs["issue_number"]) == ("shuhei1101", "ai-monitor-e2e", 52)
+    assert kwargs["name"] == "処理中:architect"
+    assert mon_registry.find("sandbox", "architect", 52).last_seen_at != before
     assert res == MonitorAck(ok=True)
 
 
-def test_error_when_unknown_session(tmp_settings, fake_remote, monkeypatch):
-    """台帳に該当セッションがない場合の 404 エラーを確認する（異常系・セッション不明・404）。"""
+def test_error_when_unknown_session(gh_mon, api):
+    """台帳に該当セッションがない場合のエラーを確認する（異常系・セッション不明）。"""
+    # 実行・検証
+    with pytest.raises(server.SessionNotFoundError):
+        api.report_completion("architect", 52)
+    gh_mon.rest.issues.remove_label.assert_not_called()
+
+
+def test_error_when_unknown_project(gh_mon, mon_settings, mon_registry, mcp_agents, mcp_ctx_factory):
+    """ヘッダのプロジェクト名が設定に無い場合のエラーを確認する（異常系・プロジェクト不明）。"""
     # 準備
-    def fake(req, timeout=None):
-        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", None, None)
-
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    report_completion = server._bind(
+        server.report_completion,
+        ctx=mcp_ctx_factory("unknown"),
+        settings=mon_settings,
+        registry=mon_registry,
+        agents=mcp_agents,
+    )
     # 実行・検証
-    with pytest.raises(urllib.error.HTTPError):
-        server.report_completion("architect", 52)
-
-
-def test_error_when_monitor_down(tmp_settings, fake_remote):
-    """モニター未起動（接続拒否）のエラーを確認する（異常系・モニター未起動）。"""
-    # 実行・検証
-    with pytest.raises(urllib.error.URLError):
-        server.report_completion("architect", 52)
+    with pytest.raises(server.ProjectNotFoundError):
+        report_completion("architect", 52)
+    gh_mon.rest.issues.remove_label.assert_not_called()

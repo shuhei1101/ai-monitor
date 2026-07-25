@@ -18,7 +18,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-from observability.settings import ObservabilitySettings
+from ai_monitor.observability.settings import ObservabilitySettings
 
 # 停止時に flush する対象。configure を呼ぶまでは未生成
 _logger_provider: LoggerProvider | None = None

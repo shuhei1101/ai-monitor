@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from githubkit.exception import RequestFailed
 
-import server
+import ai_monitor.mcp.server as server
 
 INTAKE_TITLE = "Python pathlib での一時ファイル生成 PoC"
 INTAKE_BODY = "epic の成立に必要な一時ファイル生成機構を検証する。"

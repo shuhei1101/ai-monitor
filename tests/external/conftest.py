@@ -10,7 +10,7 @@ import pytest
 import yaml
 from githubkit.exception import RequestFailed
 
-import server
+import ai_monitor.mcp.server as server
 
 
 def pytest_addoption(parser):
@@ -61,9 +61,29 @@ def gh_live():
 
 
 @pytest.fixture
-def repo_ctx() -> tuple[str, str]:
+def repo_ctx(sandbox) -> tuple[str, str]:
     """sandbox の (owner, repo) を返す。"""
-    return server._get_repo()
+    owner, repo = sandbox["repo"].split("/", 1)
+    return (owner, repo)
+
+
+@pytest.fixture
+def api(sandbox):
+    """sandbox を対象に設定とコンテキストを束ねた MCP ツール呼び出し口を返す。"""
+    from types import SimpleNamespace
+
+    from ai_monitor.shared.settings import MonitoredProject
+
+    settings = SimpleNamespace(projects=[MonitoredProject(**sandbox)])
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(request=SimpleNamespace(headers={"X-Project": sandbox["name"]}))
+    )
+
+    class _Tools:
+        def __getattr__(self, name):
+            return server._bind(getattr(server, name), ctx=ctx, settings=settings)
+
+    return _Tools()
 
 
 @pytest.fixture

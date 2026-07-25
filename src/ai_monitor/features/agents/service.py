@@ -46,13 +46,15 @@ def build_skill_command(agent: Agent, number: int) -> str:
     return f"/ai-monitor:{agent.name} {number}"
 
 
-def build_telemetry_env(
+def build_launch_env(
     telemetry: TelemetrySettings | None, project: MonitoredProject, agent: Agent, number: int
 ) -> str:
     """claude 起動コマンドに前置する環境変数の並びを組み立てて返す。"""
-    # 設定を持たない環境では何も前置しない
+    # MCP がヘッダ経由で読む対象プロジェクトの識別子
+    project_env = f"AI_MONITOR_PROJECT={project.name}"
+    # telemetry の設定を持たない環境ではプロジェクト名だけを前置する
     if telemetry is None:
-        return ""
+        return project_env + " "
     # どの対象のどのエージェントが出した telemetry かを後から引くための識別子
     resource_attributes = ",".join(
         (
@@ -62,6 +64,7 @@ def build_telemetry_env(
         )
     )
     variables = (
+        project_env,
         "CLAUDE_CODE_ENABLE_TELEMETRY=1",
         # トレースと OTEL_LOG_TOOL_CONTENT は beta ゲートの内側にある
         "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1",
@@ -115,8 +118,8 @@ def _process_one(
     snapshot = build_context_snapshot(target, open_targets)
     if is_new:
         # 新規セッションは shell に対して claude コマンドで skill を起動する
-        telemetry_env = build_telemetry_env(telemetry, project, agent, target.number)
-        text = f'{telemetry_env}claude --model {agent.model} --dangerously-skip-permissions "{build_skill_command(agent, target.number)}\n\n{snapshot}"'
+        launch_env = build_launch_env(telemetry, project, agent, target.number)
+        text = f'{launch_env}claude --model {agent.model} --dangerously-skip-permissions "{build_skill_command(agent, target.number)}\n\n{snapshot}"'
     else:
         # 既存セッションは稼働中の claude への入力として再開の定型文を送る
         text = f"{RESUME_TEXT}\n\n{snapshot}"

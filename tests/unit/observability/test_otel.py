@@ -11,8 +11,8 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import MetricReader
 from opentelemetry.sdk.trace import TracerProvider
 
-from observability import otel
-from observability.settings import ObservabilitySettings
+from ai_monitor.observability import otel
+from ai_monitor.observability.settings import ObservabilitySettings
 
 
 class _FakeProcessor:

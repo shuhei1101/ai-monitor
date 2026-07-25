@@ -1,26 +1,26 @@
-"""ai-monitor の GitHub 操作 + モニター連絡 MCP サーバー（stdio）。"""
+"""ai-monitor の GitHub 操作 + モニター連絡 MCP サーバー（Streamable HTTP）。"""
 from __future__ import annotations
 
 import functools
 import inspect
-import json
 import logging
 import re
 import subprocess
-import sys
 import time
-import urllib.request
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from githubkit import GitHub
 from githubkit.exception import RequestFailed
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
-from models import (
+from ai_monitor.features.agents.types import Agent
+from ai_monitor.features.sessions.registry import SessionRegistry
+from ai_monitor.integrations.github.labels import remove_label
+from ai_monitor.mcp.models import (
     AddressedComment,
     AssigneesResult,
     CommentBlock,
@@ -43,15 +43,14 @@ from models import (
     WorktreeCreateResult,
     WorktreeRemoveResult,
 )
-
-# 観測モジュールはプラグインルート直下にあるため親ディレクトリを解決して読み込む
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from observability import configure  # noqa: E402
+from ai_monitor.shared.settings import MonitoredProject, Settings
 
 logger = logging.getLogger(__name__)
 
 SETTINGS_PATH = Path.home() / ".config" / "ai-monitor" / "settings.yaml"
+
+# 呼び出し元が対象プロジェクトを名乗るリクエストヘッダ
+PROJECT_HEADER = "X-Project"
 
 # ユーザー専用ラベル（エージェントからの除去を拒否する）
 IN_DISCUSSION_LABEL = "議論中"
@@ -86,10 +85,16 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
 _client = None
 
-mcp = FastMCP("ai-monitor-tools")
-
 _READ_ONLY = ToolAnnotations(readOnlyHint=True)
 _DESTRUCTIVE = ToolAnnotations(destructiveHint=True)
+
+
+class ProjectNotFoundError(Exception):
+    """対象の監視対象プロジェクトを解決できない。"""
+
+
+class SessionNotFoundError(Exception):
+    """セッション台帳に対象セッションが無い。"""
 
 
 # ---- 内部ヘルパー ----
@@ -137,15 +142,37 @@ def _get_client() -> GitHub:
     return _client
 
 
-def _get_repo() -> tuple[str, str]:
-    """git の remote URL から (owner, repo) を解決する。"""
-    # git remote get-url origin で remote URL を取得する
-    url = _run_git(["remote", "get-url", "origin"]).stdout.strip()
-    # https / ssh の各形式をパースして (owner, repo) を返す
-    matched = re.search(r"github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?/?$", url)
-    if matched is None:
-        raise ValueError(f"remote URL を解析できません: {url}")
-    return (matched.group(1), matched.group(2))
+def _resolve_project(ctx: Context, *, projects: list[MonitoredProject]) -> MonitoredProject:
+    """リクエストヘッダ X-Project から対象の監視対象プロジェクトを解決する。"""
+    # リクエストコンテキストから X-Project ヘッダを取り出す
+    name = ctx.request_context.request.headers.get(PROJECT_HEADER)
+    if not name:
+        logger.warning("プロジェクト名の指定が無い呼び出しを拒否しました: header=%s", PROJECT_HEADER)
+        raise ProjectNotFoundError(f"{PROJECT_HEADER} ヘッダが指定されていません")
+    # projects から名前が一致する設定を探す
+    for project in projects:
+        if project.name == name:
+            return project
+    logger.warning("未登録のプロジェクト名を拒否しました: project=%s", name)
+    raise ProjectNotFoundError(
+        f"設定に無いプロジェクト名です: {name}（設定済み: {[p.name for p in projects]}）"
+    )
+
+
+def _bind(tool: Callable[..., Any], **deps: Any) -> Callable[..., Any]:
+    """ツール関数に依存を束ね、公開シグネチャからその引数を隠す。"""
+    signature = inspect.signature(tool, eval_str=True)
+    # そのツールが受け取る依存だけを束ねる
+    bound = {name: value for name, value in deps.items() if name in signature.parameters}
+
+    @functools.wraps(tool)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        return tool(*args, **kwargs, **bound)
+
+    # MCP はシグネチャから引数スキーマを作るため、束ねた引数を取り除く
+    visible = [p for p in signature.parameters.values() if p.name not in bound]
+    wrapper.__signature__ = signature.replace(parameters=visible)  # type: ignore[attr-defined]
+    return wrapper
 
 
 def _get_current_login() -> str:
@@ -154,17 +181,15 @@ def _get_current_login() -> str:
     return _get_client().rest.users.get_authenticated().parsed_data.login
 
 
-def _get_labels(number: int) -> list[str]:
+def _get_labels(number: int, *, owner: str, repo: str) -> list[str]:
     """操作後の現在ラベル名一覧を返す。"""
-    owner, repo = _get_repo()
     # 対象を取得し、ラベル名の一覧を返す
     data = _get_client().rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
     return [label.name for label in data.labels]
 
 
-def _get_assignees(number: int) -> list[str]:
+def _get_assignees(number: int, *, owner: str, repo: str) -> list[str]:
     """操作後の現在 assignee 一覧を返す。"""
-    owner, repo = _get_repo()
     # 対象を取得し、assignee のログイン名一覧を返す
     data = _get_client().rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
     return [user.login for user in data.assignees]
@@ -176,9 +201,8 @@ def _minimize_comment(node_id: str) -> None:
     _get_client().graphql(_MINIMIZE_MUTATION, {"id": node_id})
 
 
-def _create_issue_comment(number: int, body: str) -> CommentResult:
+def _create_issue_comment(number: int, body: str, *, owner: str, repo: str) -> CommentResult:
     """REST でコメントを投稿し node_id / url を返す。"""
-    owner, repo = _get_repo()
     # コメントを投稿する
     resp = _get_client().rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=number, body=body
@@ -264,25 +288,6 @@ def _resolve_base_ref() -> str:
     return f"origin/{current}"
 
 
-def _resolve_project() -> str:
-    """CWD の git remote から監視対象プロジェクト名を解決する。"""
-    # remote URL をパースして settings.yaml の projects から repo 一致の name を返す
-    owner, repo = _get_repo()
-    slug = f"{owner}/{repo}"
-    settings = yaml.safe_load(SETTINGS_PATH.read_text(encoding="utf-8"))
-    for project in settings.get("projects", []):
-        if project.get("repo") == slug:
-            return project["name"]
-    # 未登録リポジトリは owner/name をそのまま返す
-    return slug
-
-
-def _load_port() -> int:
-    """設定ファイルからモニターの待受ポートを読む。"""
-    settings = yaml.safe_load(SETTINGS_PATH.read_text(encoding="utf-8"))
-    return settings.get("port", 8765)
-
-
 def _is_minimized(node_id: str) -> bool:
     """コメントの Resolved（minimize）状態を取得する。"""
     data = _get_client().graphql(_IS_MINIMIZED_QUERY, {"id": node_id})
@@ -292,7 +297,6 @@ def _is_minimized(node_id: str) -> bool:
 # ---- GitHub 操作ツール ----
 
 
-@mcp.tool(title="Issue・PR情報取得", annotations=_READ_ONLY)
 @_log_tool_call
 def get_issue_or_pr(
     number: int,
@@ -312,10 +316,13 @@ def get_issue_or_pr(
     parent: bool = True,
     sub_issues: bool = True,
     sub_issues_summary: bool = True,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> IssueSnapshot:
     """Issue / PR の情報を取得してスナップショットに変換する。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
 
     # REST で Issue / PR の基本情報を取得する（PR は is_pr でエンドポイントを切り替え）
     if is_pr:
@@ -401,17 +408,25 @@ def get_issue_or_pr(
     )
 
 
-@mcp.tool(title="コメント投稿")
 @_log_tool_call
-def comment(number: int, is_pr: bool, sender: str, body: str, receiver: str | None = None) -> CommentResult:
+def comment(
+    number: int,
+    is_pr: bool,
+    sender: str,
+    body: str,
+    receiver: str | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
+) -> CommentResult:
     """定型ブロックでコメントを投稿する。"""
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # from / to ヘッダー + 本文を組み立てる
     text = _format_block(sender, receiver, body)
     # 投稿して CommentResult を返す
-    return _create_issue_comment(number, text)
+    return _create_issue_comment(number, text, owner=owner, repo=repo)
 
 
-@mcp.tool(title="質問投稿")
 @_log_tool_call
 def ask_questions(
     number: int,
@@ -420,8 +435,12 @@ def ask_questions(
     intro: str,
     questions: list[Question],
     receiver: str | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> CommentResult:
     """選択肢 + 推奨付きの質問コメントを投稿する。"""
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # intro と各質問から質問本文を組み立てる（空文字のセクション・推奨なしの推奨行は省略）
     sections: list[str] = []
     if intro:
@@ -443,15 +462,22 @@ def ask_questions(
     # ヘッダーを付ける
     text = _format_block(sender, receiver, "\n\n".join(sections))
     # 投稿して CommentResult を返す
-    return _create_issue_comment(number, text)
+    return _create_issue_comment(number, text, owner=owner, repo=repo)
 
 
-@mcp.tool(title="コメント返信")
 @_log_tool_call
-def reply_comment(comment_node_id: str, sender: str, body: str, receiver: str | None = None) -> CommentResult:
+def reply_comment(
+    comment_node_id: str,
+    sender: str,
+    body: str,
+    receiver: str | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
+) -> CommentResult:
     """既存コメントに `---` 区切りで定型ブロックを追記する。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # 既存コメントの現在本文を取得する
     node = client.graphql(_COMMENT_BODY_QUERY, {"id": comment_node_id})["node"]
     # --- 区切りの追記ブロックを組み立てる
@@ -463,7 +489,6 @@ def reply_comment(comment_node_id: str, sender: str, body: str, receiver: str | 
     return CommentResult(node_id=resp.node_id, url=resp.html_url)
 
 
-@mcp.tool(title="コメント一括Resolve")
 @_log_tool_call
 def resolve_comments(node_ids: list[str]) -> ResolveResult:
     """複数コメントの Resolve をまとめて実行する。"""
@@ -474,14 +499,19 @@ def resolve_comments(node_ids: list[str]) -> ResolveResult:
     return ResolveResult(resolved_count=len(node_ids))
 
 
-@mcp.tool(title="宛先コメント一覧", annotations=_READ_ONLY)
 @_log_tool_call
 def list_addressed_comments(
-    number: int, is_pr: bool, addressee: str, include_resolved: bool = False
+    number: int,
+    is_pr: bool,
+    addressee: str,
+    include_resolved: bool = False,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> list[AddressedComment]:
     """自分宛のコメントだけをブロック配列付きで返す。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # コメント一覧と各コメントの isMinimized を取得する
     raw_comments = client.rest.issues.list_comments(owner=owner, repo=repo, issue_number=number).parsed_data
     results: list[AddressedComment] = []
@@ -513,7 +543,6 @@ def list_addressed_comments(
     return results
 
 
-@mcp.tool(title="Issue・PR検索", annotations=_READ_ONLY)
 @_log_tool_call
 def search_issues_and_prs(
     query: str,
@@ -534,12 +563,15 @@ def search_issues_and_prs(
     order: Literal["desc", "asc"] = "desc",
     limit: int = 10,
     page: int = 1,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> list[SearchResultItem]:
     """キーワードでリポジトリ内の Issue / PR を横断検索して一覧を返す。"""
     client = _get_client()
     # 対象リポジトリを解決し、検索クエリに repo: を付与する
-    owner, repo = _get_repo()
-    kwargs: dict = {"q": f"repo:{owner}/{repo} {query}", "per_page": limit, "page": page}
+    slug = _resolve_project(ctx, projects=settings.projects).repo
+    kwargs: dict = {"q": f"repo:{slug} {query}", "per_page": limit, "page": page}
     # 検索 API を sort / order / per_page / page 付きで呼ぶ
     if sort is not None:
         kwargs["sort"] = sort
@@ -558,7 +590,6 @@ def search_issues_and_prs(
     ]
 
 
-@mcp.tool(title="インラインコメント投稿")
 @_log_tool_call
 def create_review_comment(
     pr_number: int,
@@ -569,10 +600,13 @@ def create_review_comment(
     side: Literal["RIGHT", "LEFT"] = "RIGHT",
     start_line: int | None = None,
     receiver: str | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> CommentResult:
     """PR の特定ファイル・行に紐づくレビューコメントを投稿する。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # from / to ヘッダー + 本文を組み立てる
     text = _format_block(sender, receiver, body)
     # PR の head commit SHA を取得する
@@ -587,12 +621,13 @@ def create_review_comment(
     return CommentResult(node_id=resp.node_id, url=resp.html_url)
 
 
-@mcp.tool(title="レビュースレッド一覧", annotations=_READ_ONLY)
 @_log_tool_call
-def list_review_threads(pr_number: int, include_resolved: bool = False) -> list[ReviewThread]:
+def list_review_threads(
+    pr_number: int, include_resolved: bool = False, *, ctx: Context, settings: Settings
+) -> list[ReviewThread]:
     """PR のレビュースレッド一覧を取得する。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # GraphQL で PR のレビュースレッド一覧を取得する
     data = client.graphql(_REVIEW_THREADS_QUERY, {"owner": owner, "repo": repo, "number": pr_number})
     nodes = data["repository"]["pullRequest"]["reviewThreads"]["nodes"]
@@ -625,7 +660,6 @@ def list_review_threads(pr_number: int, include_resolved: bool = False) -> list[
     return threads
 
 
-@mcp.tool(title="レビュースレッド一括Resolve")
 @_log_tool_call
 def resolve_review_threads(thread_node_ids: list[str]) -> ResolveResult:
     """レビュースレッドを一括で解決する。"""
@@ -637,25 +671,27 @@ def resolve_review_threads(thread_node_ids: list[str]) -> ResolveResult:
     return ResolveResult(resolved_count=len(thread_node_ids))
 
 
-@mcp.tool(title="ラベル追加")
 @_log_tool_call
-def add_labels(number: int, is_pr: bool, labels: list[str]) -> LabelsResult:
+def add_labels(
+    number: int, is_pr: bool, labels: list[str], *, ctx: Context, settings: Settings
+) -> LabelsResult:
     """ラベルを追加して付与後の一覧を返す。"""
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # REST でラベルを追加する
     _get_client().rest.issues.add_labels(owner=owner, repo=repo, issue_number=number, labels=labels)
     # 現在一覧を取り直して LabelsResult で返す
-    return LabelsResult(current_labels=_get_labels(number))
+    return LabelsResult(current_labels=_get_labels(number, owner=owner, repo=repo))
 
 
-@mcp.tool(title="ラベル除去", annotations=_DESTRUCTIVE)
 @_log_tool_call
-def remove_labels(number: int, is_pr: bool, labels: list[str]) -> LabelsResult:
+def remove_labels(
+    number: int, is_pr: bool, labels: list[str], *, ctx: Context, settings: Settings
+) -> LabelsResult:
     """ラベルを除去して除去後の一覧を返す（議論中は対象外）。"""
     # labels に議論中が含まれていれば ValueError を投げる（API は呼ばない）
     if IN_DISCUSSION_LABEL in labels:
         raise ValueError(f"{IN_DISCUSSION_LABEL} ラベルは除去対象外です（外せるのはユーザーのみ）")
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     client = _get_client()
     # REST でラベルを 1 件ずつ除去する（付与されていないラベルは無視）
     for name in labels:
@@ -665,22 +701,24 @@ def remove_labels(number: int, is_pr: bool, labels: list[str]) -> LabelsResult:
             if e.response.status_code != 404:
                 raise
     # 現在一覧を取り直して LabelsResult で返す
-    return LabelsResult(current_labels=_get_labels(number))
+    return LabelsResult(current_labels=_get_labels(number, owner=owner, repo=repo))
 
 
-@mcp.tool(title="フェーズ遷移")
 @_log_tool_call
 def transition_phase(
     number: int,
     is_pr: bool,
     remove_labels_: list[str] | None = None,
     add_labels_: list[str] | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> LabelsResult:
     """ラベルの除去 + 追加を 1 呼び出しで実行する。"""
     # remove_labels_ に議論中が含まれていれば ValueError を投げる（API は呼ばない）
     if remove_labels_ and IN_DISCUSSION_LABEL in remove_labels_:
         raise ValueError(f"{IN_DISCUSSION_LABEL} ラベルは除去対象外です（外せるのはユーザーのみ）")
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     client = _get_client()
     # remove_labels_ の除去 → add_labels_ の追加の順で実行する
     for name in remove_labels_ or []:
@@ -692,66 +730,64 @@ def transition_phase(
     if add_labels_:
         client.rest.issues.add_labels(owner=owner, repo=repo, issue_number=number, labels=list(add_labels_))
     # 現在一覧を取り直して LabelsResult で返す
-    return LabelsResult(current_labels=_get_labels(number))
+    return LabelsResult(current_labels=_get_labels(number, owner=owner, repo=repo))
 
 
-@mcp.tool(title="assignee設定")
 @_log_tool_call
-def set_assignee(number: int, is_pr: bool) -> AssigneesResult:
+def set_assignee(number: int, is_pr: bool, *, ctx: Context, settings: Settings) -> AssigneesResult:
     """認証ユーザーを assignee に設定して現況を返す。"""
     # 認証ユーザーのログイン名を求める
     login = _get_current_login()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # REST で assignee に追加する
     _get_client().rest.issues.add_assignees(owner=owner, repo=repo, issue_number=number, assignees=[login])
     # 現在一覧を取り直して AssigneesResult で返す
-    return AssigneesResult(assignees=_get_assignees(number))
+    return AssigneesResult(assignees=_get_assignees(number, owner=owner, repo=repo))
 
 
-@mcp.tool(title="assignee除去", annotations=_DESTRUCTIVE)
 @_log_tool_call
-def remove_assignee(number: int, is_pr: bool) -> AssigneesResult:
+def remove_assignee(number: int, is_pr: bool, *, ctx: Context, settings: Settings) -> AssigneesResult:
     """認証ユーザーの assignee を除去して現況を返す。"""
     # 認証ユーザーのログイン名を求める
     login = _get_current_login()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # REST で assignee から除去する
     _get_client().rest.issues.remove_assignees(owner=owner, repo=repo, issue_number=number, assignees=[login])
     # 現在一覧を取り直して AssigneesResult で返す
-    return AssigneesResult(assignees=_get_assignees(number))
+    return AssigneesResult(assignees=_get_assignees(number, owner=owner, repo=repo))
 
 
-@mcp.tool(title="本文更新")
 @_log_tool_call
-def update_body(number: int, is_pr: bool, body: str) -> EmptyResult:
+def update_body(number: int, is_pr: bool, body: str, *, ctx: Context, settings: Settings) -> EmptyResult:
     """本文を完全置換で更新する。"""
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # REST の更新で body を完全置換し、EmptyResult を返す
     _get_client().rest.issues.update(owner=owner, repo=repo, issue_number=number, body=body)
     return EmptyResult()
 
 
-@mcp.tool(title="タイトル更新")
 @_log_tool_call
-def update_title(number: int, is_pr: bool, title: str) -> EmptyResult:
+def update_title(number: int, is_pr: bool, title: str, *, ctx: Context, settings: Settings) -> EmptyResult:
     """タイトルを更新する。"""
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # REST の更新で title を更新し、EmptyResult を返す
     _get_client().rest.issues.update(owner=owner, repo=repo, issue_number=number, title=title)
     return EmptyResult()
 
 
-@mcp.tool(title="クローズ", annotations=_DESTRUCTIVE)
 @_log_tool_call
 def close(
     number: int,
     is_pr: bool,
     reason: Literal["completed", "not_planned", "duplicate"] | None = None,
     delete_branch: bool = False,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> EmptyResult:
     """Issue / PR をクローズする。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # 対象の種類に応じてクローズの更新を実行する
     kwargs: dict = {"state": "closed"}
     if reason is not None:
@@ -764,11 +800,10 @@ def close(
     return EmptyResult()
 
 
-@mcp.tool(title="Issue再オープン")
 @_log_tool_call
-def reopen_issue(number: int) -> EmptyResult:
+def reopen_issue(number: int, *, ctx: Context, settings: Settings) -> EmptyResult:
     """クローズ済み Issue を再オープンする。"""
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # REST の更新で state=open + state_reason=reopened にし、EmptyResult を返す
     _get_client().rest.issues.update(
         owner=owner, repo=repo, issue_number=number, state="open", state_reason="reopened"
@@ -776,14 +811,19 @@ def reopen_issue(number: int) -> EmptyResult:
     return EmptyResult()
 
 
-@mcp.tool(title="子Issue作成")
 @_log_tool_call
 def create_child_issue(
-    parent_issue_number: int, title: str, body: str, labels: list[str] | None = None
+    parent_issue_number: int,
+    title: str,
+    body: str,
+    labels: list[str] | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> CreatedIssueResult:
     """Sub-issue リンク付きで子 Issue を作成する。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # REST でタイトル / 本文 / ラベル付きの Issue を作成する
     created = client.rest.issues.create(
         owner=owner, repo=repo, title=title, body=body, labels=labels or []
@@ -798,11 +838,12 @@ def create_child_issue(
     )
 
 
-@mcp.tool(title="DraftPR作成")
 @_log_tool_call
-def create_draft_pr(head_branch: str, base_branch: str, title: str, body: str) -> CreatedPRResult:
+def create_draft_pr(
+    head_branch: str, base_branch: str, title: str, body: str, *, ctx: Context, settings: Settings
+) -> CreatedPRResult:
     """base 明示で Draft PR を作成する。"""
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # REST で draft=true・base 明示の PR を作成し、CreatedPRResult を返す
     created = _get_client().rest.pulls.create(
         owner=owner, repo=repo, title=title, body=body, head=head_branch, base=base_branch, draft=True
@@ -810,12 +851,11 @@ def create_draft_pr(head_branch: str, base_branch: str, title: str, body: str) -
     return CreatedPRResult(pr_number=created.number, url=created.html_url)
 
 
-@mcp.tool(title="PR_Ready化")
 @_log_tool_call
-def mark_pr_ready(pr_number: int) -> EmptyResult:
+def mark_pr_ready(pr_number: int, *, ctx: Context, settings: Settings) -> EmptyResult:
     """Draft を解除して Ready 状態にする。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # PR の GraphQL node_id を取得する
     node_id = client.rest.pulls.get(owner=owner, repo=repo, pull_number=pr_number).parsed_data.node_id
     # markPullRequestReadyForReview mutation を実行し、EmptyResult を返す
@@ -823,12 +863,17 @@ def mark_pr_ready(pr_number: int) -> EmptyResult:
     return EmptyResult()
 
 
-@mcp.tool(title="PRマージ", annotations=_DESTRUCTIVE)
 @_log_tool_call
-def merge_pr(pr_number: int, strategy: Literal["squash", "merge", "rebase"] | None = None) -> EmptyResult:
+def merge_pr(
+    pr_number: int,
+    strategy: Literal["squash", "merge", "rebase"] | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
+) -> EmptyResult:
     """既定 squash + ブランチ削除で PR をマージする。"""
     client = _get_client()
-    owner, repo = _get_repo()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # strategy（省略時 squash）で REST マージを実行する
     client.rest.pulls.merge(owner=owner, repo=repo, pull_number=pr_number, merge_method=strategy or "squash")
     # head のリモートブランチを削除し、EmptyResult を返す
@@ -837,7 +882,6 @@ def merge_pr(pr_number: int, strategy: Literal["squash", "merge", "rebase"] | No
     return EmptyResult()
 
 
-@mcp.tool(title="worktree作成")
 @_log_tool_call
 def worktree_create(branch: str) -> WorktreeCreateResult:
     """ブランチと worktree を .claude/worktrees/ 配下に作成し、Draft PR 用の空 commit を push する。"""
@@ -854,7 +898,6 @@ def worktree_create(branch: str) -> WorktreeCreateResult:
     return WorktreeCreateResult(branch=branch, worktree_path=str(path), base_ref=base_ref)
 
 
-@mcp.tool(title="worktree削除", annotations=_DESTRUCTIVE)
 @_log_tool_call
 def worktree_remove(branch: str) -> WorktreeRemoveResult:
     """worktree とローカルブランチを削除する。"""
@@ -870,66 +913,155 @@ def worktree_remove(branch: str) -> WorktreeRemoveResult:
 # ---- モニター連絡ツール ----
 
 
-@mcp.tool(title="作業完了報告")
 @_log_tool_call
-def report_completion(agent_name: str, number: int) -> MonitorAck:
-    """自ターン終了をモニターの HTTP API へ通知する。"""
-    # CWD から project を求める
-    project = _resolve_project()
-    # agent_name / number / project を JSON にして POST /completions へ送信する
-    payload = {"agent_name": agent_name, "number": number, "project": project}
-    req = urllib.request.Request(
-        f"http://127.0.0.1:{_load_port()}/completions",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+def report_completion(
+    agent_name: str,
+    number: int,
+    *,
+    ctx: Context,
+    settings: Settings,
+    registry: SessionRegistry,
+    agents: list[Agent],
+) -> MonitorAck:
+    """自ターンの終了を通知して処理中ラベルを外し、セッションの生存時刻を更新する。"""
+    # 対象プロジェクトを解決する
+    project = _resolve_project(ctx, projects=settings.projects)
+    # project / agent_name / number でセッションを検索する
+    session = registry.find(project.name, agent_name, number)
+    if session is None:
+        logger.warning(
+            "台帳に無いセッションからの完了報告を拒否しました: project=%s agent_name=%s number=%s",
+            project.name,
+            agent_name,
+            number,
+        )
+        raise SessionNotFoundError(f"台帳にセッションがありません: {project.name}/{agent_name}/{number}")
+    # 対象から処理中ラベルを除去する（未付与は無視される冪等操作）
+    processing_label = next((a.processing_label for a in agents if a.name == agent_name), None)
+    if processing_label is not None:
+        remove_label(project, number, processing_label)
+    # セッションの生存時刻を更新して受理結果を返す
+    registry.touch(session.session_name)
+    logger.info(
+        "作業完了報告を受信しました: project=%s agent_name=%s number=%s",
+        project.name,
+        agent_name,
+        number,
     )
-    # 200 応答を MonitorAck に変換して返す
-    with urllib.request.urlopen(req, timeout=5):
-        pass
     return MonitorAck(ok=True)
 
 
-@mcp.tool(title="監視対象追加")
 @_log_tool_call
-def add_watch_targets(agent_name: str, number: int, watch_numbers: list[int]) -> MonitorAck:
-    """作成した派生 PR を自セッションの監視面として台帳に登録する。"""
-    # CWD から project を求める
-    project = _resolve_project()
-    # agent_name / number / watch_numbers / project を JSON にして POST /watch-targets へ送信する
-    payload = {"agent_name": agent_name, "number": number, "watch_numbers": watch_numbers, "project": project}
-    req = urllib.request.Request(
-        f"http://127.0.0.1:{_load_port()}/watch-targets",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+def add_watch_targets(
+    agent_name: str,
+    number: int,
+    watch_numbers: list[int],
+    *,
+    ctx: Context,
+    settings: Settings,
+    registry: SessionRegistry,
+) -> MonitorAck:
+    """作成した派生 PR の番号を自セッションの監視面として台帳に登録する。"""
+    # 対象プロジェクトを解決する
+    project = _resolve_project(ctx, projects=settings.projects)
+    # 監視面へ番号を追加して受理結果を返す
+    try:
+        registry.add_watch(project.name, agent_name, number, watch_numbers)
+    except KeyError as exc:
+        logger.warning(
+            "台帳に無いセッションへの監視面追加を拒否しました: project=%s agent_name=%s number=%s",
+            project.name,
+            agent_name,
+            number,
+        )
+        raise SessionNotFoundError(
+            f"台帳にセッションがありません: {project.name}/{agent_name}/{number}"
+        ) from exc
+    logger.info(
+        "監視面へ番号を追加しました: project=%s agent_name=%s number=%s watch_numbers=%s",
+        project.name,
+        agent_name,
+        number,
+        watch_numbers,
     )
-    # 200 応答を MonitorAck に変換して返す
-    with urllib.request.urlopen(req, timeout=5):
-        pass
     return MonitorAck(ok=True)
 
 
-@mcp.tool(title="監視対象除去", annotations=_DESTRUCTIVE)
 @_log_tool_call
-def remove_watch_targets(agent_name: str, number: int, watch_numbers: list[int]) -> MonitorAck:
+def remove_watch_targets(
+    agent_name: str,
+    number: int,
+    watch_numbers: list[int],
+    *,
+    ctx: Context,
+    settings: Settings,
+    registry: SessionRegistry,
+) -> MonitorAck:
     """自セッションの監視面から番号を取り除く。"""
-    # CWD から project を求める
-    project = _resolve_project()
-    # agent_name / number / watch_numbers / project を JSON にして DELETE /watch-targets へ送信する
-    payload = {"agent_name": agent_name, "number": number, "watch_numbers": watch_numbers, "project": project}
-    req = urllib.request.Request(
-        f"http://127.0.0.1:{_load_port()}/watch-targets",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-        method="DELETE",
+    # 対象プロジェクトを解決する
+    project = _resolve_project(ctx, projects=settings.projects)
+    # 監視面から番号を取り除いて受理結果を返す
+    try:
+        registry.remove_watch(project.name, agent_name, number, watch_numbers)
+    except KeyError as exc:
+        logger.warning(
+            "台帳に無いセッションへの監視面除去を拒否しました: project=%s agent_name=%s number=%s",
+            project.name,
+            agent_name,
+            number,
+        )
+        raise SessionNotFoundError(
+            f"台帳にセッションがありません: {project.name}/{agent_name}/{number}"
+        ) from exc
+    logger.info(
+        "監視面から番号を除去しました: project=%s agent_name=%s number=%s watch_numbers=%s",
+        project.name,
+        agent_name,
+        number,
+        watch_numbers,
     )
-    # 200 応答を MonitorAck に変換して返す
-    with urllib.request.urlopen(req, timeout=5):
-        pass
     return MonitorAck(ok=True)
 
 
-if __name__ == "__main__":
-    configure("github-mcp")
-    mcp.run()
+def build_mcp_app(settings: Settings, *, registry: SessionRegistry, agents: list[Agent]) -> Any:
+    """全ツールを登録した Streamable HTTP の ASGI アプリを返す。"""
+    # MCP サーバーのインスタンスを作る
+    mcp = FastMCP("ai-monitor-tools")
+    # 全ツールに設定・台帳・エージェント一覧を束ねて登録する（束ねた引数は公開シグネチャから隠す）
+    for tool, title, tool_annotations in (
+        (get_issue_or_pr, "Issue・PR情報取得", _READ_ONLY),
+        (comment, "コメント投稿", None),
+        (ask_questions, "質問投稿", None),
+        (reply_comment, "コメント返信", None),
+        (resolve_comments, "コメント一括Resolve", None),
+        (list_addressed_comments, "宛先コメント一覧", _READ_ONLY),
+        (search_issues_and_prs, "Issue・PR検索", _READ_ONLY),
+        (create_review_comment, "インラインコメント投稿", None),
+        (list_review_threads, "レビュースレッド一覧", _READ_ONLY),
+        (resolve_review_threads, "レビュースレッド一括Resolve", None),
+        (add_labels, "ラベル追加", None),
+        (remove_labels, "ラベル除去", _DESTRUCTIVE),
+        (transition_phase, "フェーズ遷移", None),
+        (set_assignee, "assignee設定", None),
+        (remove_assignee, "assignee除去", _DESTRUCTIVE),
+        (update_body, "本文更新", None),
+        (update_title, "タイトル更新", None),
+        (close, "クローズ", _DESTRUCTIVE),
+        (reopen_issue, "Issue再オープン", None),
+        (create_child_issue, "子Issue作成", None),
+        (create_draft_pr, "DraftPR作成", None),
+        (mark_pr_ready, "PR_Ready化", None),
+        (merge_pr, "PRマージ", _DESTRUCTIVE),
+        (worktree_create, "worktree作成", None),
+        (worktree_remove, "worktree削除", _DESTRUCTIVE),
+        (report_completion, "作業完了報告", None),
+        (add_watch_targets, "監視対象追加", None),
+        (remove_watch_targets, "監視対象除去", _DESTRUCTIVE),
+    ):
+        mcp.add_tool(
+            _bind(tool, settings=settings, registry=registry, agents=agents),
+            title=title,
+            annotations=tool_annotations,
+        )
+    # Streamable HTTP の ASGI アプリを生成して返す
+    return mcp.streamable_http_app()

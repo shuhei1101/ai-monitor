@@ -51,7 +51,8 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
     assert gh_mon.rest.issues.add_labels.call_args.kwargs["labels"] == ["処理中:intake-issue-triager"]
     send = next(c for c in tmux_calls.calls if c[0] == "send-keys")
     assert send[3].startswith(
-        'claude --model sonnet --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
+        'AI_MONITOR_PROJECT=sandbox claude --model sonnet'
+        ' --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
     )
     assert "#35" in send[3]
 

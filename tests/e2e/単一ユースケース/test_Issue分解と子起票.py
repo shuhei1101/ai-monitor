@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from githubkit.exception import RequestFailed
 
-import server
+import ai_monitor.mcp.server as server
 
 INTAKE_TITLE = "通知機能の追加 + README の typo 修正"
 INTAKE_BODY = """タスクの期限が近づいたらメールで通知する機能を追加したいです。

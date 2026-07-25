@@ -6,8 +6,7 @@ from types import SimpleNamespace as NS
 import pytest
 from githubkit.exception import RequestFailed
 
-import server
-from models import Choice, Question
+from ai_monitor.mcp.models import Choice, Question
 
 
 def _questions() -> list[Question]:
@@ -22,12 +21,12 @@ def _questions() -> list[Question]:
     ]
 
 
-def test_normal(gh, resp):
+def test_normal(gh, resp, api):
     """質問リストの本文組み立て → 定型ブロック化 → REST 投稿の一連を確認する（正常系）。"""
     # 準備
     gh.rest.issues.create_comment.return_value = resp(NS(node_id="IC_2", html_url="http://c/2"))
     # 実行
-    res = server.ask_questions(
+    res = api.ask_questions(
         35, is_pr=False, sender="epic-conductor", intro="要件の確認です。", questions=_questions()
     )
     # 検証
@@ -39,10 +38,10 @@ def test_normal(gh, resp):
     assert res.node_id == "IC_2"
 
 
-def test_error_when_api_error(gh, request_failed):
+def test_error_when_api_error(gh, request_failed, api):
     """API エラーの伝播を確認する（異常系）。"""
     # 準備
     gh.rest.issues.create_comment.side_effect = request_failed()
     # 実行・検証
     with pytest.raises(RequestFailed):
-        server.ask_questions(35, is_pr=False, sender="epic-conductor", intro="", questions=_questions())
+        api.ask_questions(35, is_pr=False, sender="epic-conductor", intro="", questions=_questions())

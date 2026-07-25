@@ -1,19 +1,18 @@
-"""`plugins/ai-monitor/mcp/server.py` の単体テスト。"""
+"""`src/ai_monitor/mcp/server.py` の単体テスト。"""
 from __future__ import annotations
 
-import json
+import asyncio
 import subprocess
-import urllib.error
-import urllib.request
 from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
 
 import pytest
 from githubkit.exception import RequestFailed
+from mcp import types as mcp_types
 
-import server
-from models import (
+import ai_monitor.mcp.server as server
+from ai_monitor.mcp.models import (
     AssigneesResult,
     Choice,
     CommentResult,
@@ -92,61 +91,37 @@ def _issue_ns(**overrides):
     return NS(**base)
 
 
-def _fake_git_run(stdout):
-    def run(args, **kwargs):
-        return NS(args=args, returncode=0, stdout=stdout, stderr="")
-
-    return run
-
-
-class _FakeHTTPResponse:
-    def __init__(self):
-        self.status = 200
-
-    def read(self):
-        return b'{"ok": true}'
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-
-@pytest.fixture
-def urlopen_calls(monkeypatch):
-    calls = []
-
-    def fake(req, timeout=None):
-        calls.append(req)
-        return _FakeHTTPResponse()
-
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
-    return calls
-
-
-@pytest.fixture
-def fake_remote(monkeypatch):
-    monkeypatch.setattr(
-        server.subprocess, "run", _fake_git_run("https://github.com/shuhei1101/ai-monitor-e2e.git\n")
-    )
+def _list_tools(app):
+    """マウント用 ASGI アプリから登録済みツール一覧を取り出す。"""
+    for route in app.routes:
+        manager = getattr(getattr(route, "app", None), "session_manager", None)
+        if manager is None:
+            continue
+        handler = manager.app.request_handlers[mcp_types.ListToolsRequest]
+        result = asyncio.run(handler(mcp_types.ListToolsRequest(method="tools/list")))
+        return result.root.tools
+    raise AssertionError("MCP の ASGI アプリがマウントされていない")
 
 
 # ---- ツール定義群 ----
 
 
-def test_registered_tools():
+def test_registered_tools(mon_settings, mon_registry, mcp_agents):
     """全ツールの登録を確認する（正常系）。"""
+    # 準備
+    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents)
     # 実行
-    names = {t.name for t in server.mcp._tool_manager.list_tools()}
+    names = {t.name for t in _list_tools(app)}
     # 検証
     assert names == EXPECTED_TOOLS
 
 
-def test_tool_annotations():
+def test_tool_annotations(mon_settings, mon_registry, mcp_agents):
     """読み取り専用 / 破壊的操作のヒント宣言を確認する（正常系）。"""
+    # 準備
+    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents)
     # 実行
-    tools = {t.name: t for t in server.mcp._tool_manager.list_tools()}
+    tools = {t.name: t for t in _list_tools(app)}
     # 検証
     for name in ("get_issue_or_pr", "list_addressed_comments", "list_review_threads", "search_issues_and_prs"):
         assert tools[name].annotations.readOnlyHint is True
@@ -157,12 +132,12 @@ def test_tool_annotations():
 # ---- Issue・PR情報取得 ----
 
 
-def test_get_issue_or_pr(gh):
+def test_get_issue_or_pr(gh, api):
     """スナップショットの組み立てを確認する（正常系）。"""
     # 準備
     gh.rest.issues.get.return_value = _resp(_issue_ns())
     # 実行
-    snap = server.get_issue_or_pr(
+    snap = api.get_issue_or_pr(
         35, is_pr=False, comments=False, parent=False, sub_issues=False, sub_issues_summary=False
     )
     # 検証
@@ -175,12 +150,12 @@ def test_get_issue_or_pr(gh):
     assert snap.author.login == "shuhei1101"
 
 
-def test_get_issue_or_pr_when_flags_false(gh):
+def test_get_issue_or_pr_when_flags_false(gh, api):
     """取得フラグ False のフィールド除外を確認する（正常系）。"""
     # 準備
     gh.rest.issues.get.return_value = _resp(_issue_ns())
     # 実行
-    snap = server.get_issue_or_pr(
+    snap = api.get_issue_or_pr(
         35, is_pr=False, comments=False, parent=False, sub_issues=False, sub_issues_summary=False
     )
     # 検証
@@ -188,24 +163,24 @@ def test_get_issue_or_pr_when_flags_false(gh):
     gh.rest.issues.list_comments.assert_not_called()
 
 
-def test_get_issue_or_pr_when_api_error(gh):
+def test_get_issue_or_pr_when_api_error(gh, api):
     """API エラーの伝播を確認する（異常系）。"""
     # 準備
     gh.rest.issues.get.side_effect = _request_failed()
     # 実行・検証
     with pytest.raises(RequestFailed):
-        server.get_issue_or_pr(35, is_pr=False)
+        api.get_issue_or_pr(35, is_pr=False)
 
 
 # ---- コメント投稿 ----
 
 
-def test_comment(gh):
+def test_comment(gh, api):
     """定型ブロックでの投稿を確認する（正常系）。"""
     # 準備
     gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
     # 実行
-    res = server.comment(35, is_pr=False, sender="architect", body="設計 Wiki を更新しました。")
+    res = api.comment(35, is_pr=False, sender="architect", body="設計 Wiki を更新しました。")
     # 検証
     posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
     assert posted.startswith("> from: @architect")
@@ -216,7 +191,7 @@ def test_comment(gh):
 # ---- 質問投稿 ----
 
 
-def test_ask_questions(gh):
+def test_ask_questions(gh, api):
     """選択肢 + 推奨付きの質問投稿を確認する（正常系）。"""
     # 準備
     gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_2", html_url="u"))
@@ -235,7 +210,7 @@ def test_ask_questions(gh):
         ),
     ]
     # 実行
-    server.ask_questions(35, is_pr=False, sender="epic-conductor", intro="要件の確認です。", questions=questions)
+    api.ask_questions(35, is_pr=False, sender="epic-conductor", intro="要件の確認です。", questions=questions)
     # 検証
     posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
     assert "要件の確認です。" in posted
@@ -244,7 +219,7 @@ def test_ask_questions(gh):
     assert "推奨" in posted and "十分なため" in posted
 
 
-def test_ask_questions_when_no_recommendation(gh):
+def test_ask_questions_when_no_recommendation(gh, api):
     """推奨なし指定時の推奨行の省略を確認する（正常系）。"""
     # 準備
     gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_2", html_url="u"))
@@ -252,13 +227,13 @@ def test_ask_questions_when_no_recommendation(gh):
         Question(question="Q1", background="", choices=[Choice(label="A1", reason="r")], recommended_index=-1)
     ]
     # 実行
-    server.ask_questions(35, is_pr=False, sender="epic-conductor", intro="前置き", questions=questions)
+    api.ask_questions(35, is_pr=False, sender="epic-conductor", intro="前置き", questions=questions)
     # 検証
     posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
     assert "推奨" not in posted
 
 
-def test_ask_questions_when_empty_intro_and_background(gh):
+def test_ask_questions_when_empty_intro_and_background(gh, api):
     """空文字セクション（前置き・背景）の省略を確認する（正常系）。"""
     # 準備
     gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_2", html_url="u"))
@@ -266,7 +241,7 @@ def test_ask_questions_when_empty_intro_and_background(gh):
         Question(question="Q1", background="", choices=[Choice(label="A1", reason="r")], recommended_index=-1)
     ]
     # 実行
-    server.ask_questions(35, is_pr=False, sender="epic-conductor", intro="", questions=questions)
+    api.ask_questions(35, is_pr=False, sender="epic-conductor", intro="", questions=questions)
     # 検証
     posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
     assert "Q1" in posted
@@ -276,13 +251,13 @@ def test_ask_questions_when_empty_intro_and_background(gh):
 # ---- コメント返信 ----
 
 
-def test_reply_comment(gh):
+def test_reply_comment(gh, api):
     """`---` 区切りでの返信追記を確認する（正常系）。"""
     # 準備
     gh.graphql.return_value = {"node": {"body": "元コメント", "databaseId": 111}}
     gh.rest.issues.update_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
     # 実行
-    res = server.reply_comment("IC_1", sender="tester", body="修正しました。")
+    res = api.reply_comment("IC_1", sender="tester", body="修正しました。")
     # 検証
     kwargs = gh.rest.issues.update_comment.call_args.kwargs
     assert kwargs["comment_id"] == 111
@@ -295,10 +270,10 @@ def test_reply_comment(gh):
 # ---- コメント一括Resolve ----
 
 
-def test_resolve_comments(gh):
+def test_resolve_comments(gh, api):
     """複数コメントの一括 Resolve を確認する（正常系）。"""
     # 実行
-    res = server.resolve_comments(["IC_1", "IC_2", "IC_3"])
+    res = api.resolve_comments(["IC_1", "IC_2", "IC_3"])
     # 検証
     assert res == ResolveResult(resolved_count=3)
     assert gh.graphql.call_count == 3
@@ -315,7 +290,7 @@ def _comment_ns(node_id, body, login):
     return NS(node_id=node_id, body=body, user=NS(login=login), html_url=f"http://c/{node_id}")
 
 
-def test_list_addressed_comments(gh):
+def test_list_addressed_comments(gh, api):
     """最終ブロックの宛先での絞り込みを確認する（正常系）。"""
     # 準備
     gh.rest.issues.list_comments.return_value = _resp(
@@ -327,7 +302,7 @@ def test_list_addressed_comments(gh):
     )
     gh.graphql.return_value = {"node": {"isMinimized": False}}
     # 実行
-    res = server.list_addressed_comments(52, is_pr=True, addressee="architect")
+    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
     # 検証
     assert [c.node_id for c in res] == ["IC_1", "IC_3"]
     assert res[0].blocks[-1].sender == "tester"
@@ -335,7 +310,7 @@ def test_list_addressed_comments(gh):
     assert res[1].blocks[-1].sender is None
 
 
-def test_list_addressed_comments_when_own_comment(gh):
+def test_list_addressed_comments_when_own_comment(gh, api):
     """自身が投稿したコメント（最後のブロックの from が addressee）の包含を確認する（正常系）。"""
     # 準備
     gh.rest.issues.list_comments.return_value = _resp(
@@ -343,13 +318,13 @@ def test_list_addressed_comments_when_own_comment(gh):
     )
     gh.graphql.return_value = {"node": {"isMinimized": False}}
     # 実行
-    res = server.list_addressed_comments(52, is_pr=True, addressee="architect")
+    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
     # 検証
     assert [c.node_id for c in res] == ["IC_1"]
     assert res[0].blocks[-1].sender == "architect"
 
 
-def test_list_addressed_comments_when_include_resolved(gh):
+def test_list_addressed_comments_when_include_resolved(gh, api):
     """Resolved 込みの取得と省略時の除外を確認する（正常系）。"""
     # 準備
     comments = [
@@ -359,14 +334,14 @@ def test_list_addressed_comments_when_include_resolved(gh):
     gh.rest.issues.list_comments.return_value = _resp(comments)
     gh.graphql.side_effect = [{"node": {"isMinimized": True}}, {"node": {"isMinimized": False}}]
     # 実行
-    res = server.list_addressed_comments(52, is_pr=True, addressee="architect", include_resolved=True)
+    res = api.list_addressed_comments(52, is_pr=True, addressee="architect", include_resolved=True)
     # 検証
     assert [c.node_id for c in res] == ["IC_1", "IC_2"]
     assert res[0].is_resolved is True
     # 準備
     gh.graphql.side_effect = [{"node": {"isMinimized": True}}, {"node": {"isMinimized": False}}]
     # 実行
-    res = server.list_addressed_comments(52, is_pr=True, addressee="architect")
+    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
     # 検証
     assert [c.node_id for c in res] == ["IC_2"]
 
@@ -386,7 +361,7 @@ def _search_item_ns(**overrides):
     return NS(**base)
 
 
-def test_search_issues_and_prs(gh, fake_remote):
+def test_search_issues_and_prs(gh, api):
     """検索結果の変換とリポジトリ絞り込みを確認する（正常系）。"""
     # 準備
     gh.rest.search.issues_and_pull_requests.return_value = _resp(
@@ -406,7 +381,7 @@ def test_search_issues_and_prs(gh, fake_remote):
         )
     )
     # 実行
-    results = server.search_issues_and_prs("プロフィール編集")
+    results = api.search_issues_and_prs("プロフィール編集")
     # 検証
     kwargs = gh.rest.search.issues_and_pull_requests.call_args.kwargs
     assert kwargs["q"] == "repo:shuhei1101/ai-monitor-e2e プロフィール編集"
@@ -416,28 +391,28 @@ def test_search_issues_and_prs(gh, fake_remote):
     ]
 
 
-def test_search_issues_and_prs_when_sort(gh, fake_remote):
+def test_search_issues_and_prs_when_sort(gh, api):
     """並び順指定の受け渡しを確認する（正常系）。"""
     # 準備
     gh.rest.search.issues_and_pull_requests.return_value = _resp(
         NS(total_count=0, incomplete_results=False, items=[])
     )
     # 実行
-    server.search_issues_and_prs("プロフィール編集", sort="created")
+    api.search_issues_and_prs("プロフィール編集", sort="created")
     # 検証
     kwargs = gh.rest.search.issues_and_pull_requests.call_args.kwargs
     assert kwargs["sort"] == "created"
     assert kwargs["order"] == "desc"
 
 
-def test_search_issues_and_prs_when_no_hit(gh, fake_remote):
+def test_search_issues_and_prs_when_no_hit(gh, api):
     """ヒットなしは空配列を確認する（正常系）。"""
     # 準備
     gh.rest.search.issues_and_pull_requests.return_value = _resp(
         NS(total_count=0, incomplete_results=False, items=[])
     )
     # 実行
-    results = server.search_issues_and_prs("どこにも無いキーワード")
+    results = api.search_issues_and_prs("どこにも無いキーワード")
     # 検証
     assert results == []
 
@@ -445,13 +420,13 @@ def test_search_issues_and_prs_when_no_hit(gh, fake_remote):
 # ---- インラインコメント投稿 ----
 
 
-def test_create_review_comment(gh):
+def test_create_review_comment(gh, api):
     """単一行のインライン投稿を確認する（正常系）。"""
     # 準備
     gh.rest.pulls.get.return_value = _resp(NS(head=NS(sha="SHA1", ref="feat/x"), node_id="PR_1"))
     gh.rest.pulls.create_review_comment.return_value = _resp(NS(node_id="PRRC_1", html_url="http://r/1"))
     # 実行
-    res = server.create_review_comment(
+    res = api.create_review_comment(
         52,
         path="src/ai_monitor/features/agents/service.py",
         line=42,
@@ -470,27 +445,27 @@ def test_create_review_comment(gh):
     assert res == CommentResult(node_id="PRRC_1", url="http://r/1")
 
 
-def test_create_review_comment_when_multi_line(gh):
+def test_create_review_comment_when_multi_line(gh, api):
     """範囲指定（start_line）の投稿を確認する（正常系）。"""
     # 準備
     gh.rest.pulls.get.return_value = _resp(NS(head=NS(sha="SHA1", ref="feat/x"), node_id="PR_1"))
     gh.rest.pulls.create_review_comment.return_value = _resp(NS(node_id="PRRC_1", html_url="u"))
     # 実行
-    server.create_review_comment(52, path="src/a.py", line=48, start_line=42, sender="architect", body="指摘")
+    api.create_review_comment(52, path="src/a.py", line=48, start_line=42, sender="architect", body="指摘")
     # 検証
     kwargs = gh.rest.pulls.create_review_comment.call_args.kwargs
     assert kwargs["start_line"] == 42
     assert kwargs["line"] == 48
 
 
-def test_create_review_comment_when_out_of_diff(gh):
+def test_create_review_comment_when_out_of_diff(gh, api):
     """diff 外の行指定によるエラーの伝播を確認する（異常系）。"""
     # 準備
     gh.rest.pulls.get.return_value = _resp(NS(head=NS(sha="SHA1", ref="feat/x"), node_id="PR_1"))
     gh.rest.pulls.create_review_comment.side_effect = _request_failed()
     # 実行・検証
     with pytest.raises(RequestFailed):
-        server.create_review_comment(52, path="src/a.py", line=999, sender="architect", body="指摘")
+        api.create_review_comment(52, path="src/a.py", line=999, sender="architect", body="指摘")
 
 
 # ---- レビュースレッド一覧 ----
@@ -521,14 +496,14 @@ def _thread_node(node_id, resolved=False, start_line=None, line=48):
     }
 
 
-def test_list_review_threads(gh):
+def test_list_review_threads(gh, api):
     """スレッドの変換（単一行 + 範囲の混在）を確認する（正常系）。"""
     # 準備
     gh.graphql.return_value = _threads_payload(
         [_thread_node("PRRT_1", line=42), _thread_node("PRRT_2", start_line=42, line=48)]
     )
     # 実行
-    res = server.list_review_threads(52)
+    res = api.list_review_threads(52)
     # 検証
     assert [t.node_id for t in res] == ["PRRT_1", "PRRT_2"]
     assert res[0].start_line is None and res[0].line == 42
@@ -537,22 +512,22 @@ def test_list_review_threads(gh):
     assert res[0].comments[0].body == "指摘"
 
 
-def test_list_review_threads_when_resolved_mixed(gh):
+def test_list_review_threads_when_resolved_mixed(gh, api):
     """解決済みスレッドの除外を確認する（正常系）。"""
     # 準備
     gh.graphql.return_value = _threads_payload([_thread_node("PRRT_1"), _thread_node("PRRT_2", resolved=True)])
     # 実行
-    res = server.list_review_threads(52)
+    res = api.list_review_threads(52)
     # 検証
     assert [t.node_id for t in res] == ["PRRT_1"]
 
 
-def test_list_review_threads_when_include_resolved(gh):
+def test_list_review_threads_when_include_resolved(gh, api):
     """Resolved 込みの取得を確認する（正常系）。"""
     # 準備
     gh.graphql.return_value = _threads_payload([_thread_node("PRRT_1"), _thread_node("PRRT_2", resolved=True)])
     # 実行
-    res = server.list_review_threads(52, include_resolved=True)
+    res = api.list_review_threads(52, include_resolved=True)
     # 検証
     assert [t.node_id for t in res] == ["PRRT_1", "PRRT_2"]
     assert res[1].is_resolved is True
@@ -561,10 +536,10 @@ def test_list_review_threads_when_include_resolved(gh):
 # ---- レビュースレッド一括Resolve ----
 
 
-def test_resolve_review_threads(gh):
+def test_resolve_review_threads(gh, api):
     """スレッドの一括解決を確認する（正常系）。"""
     # 実行
-    res = server.resolve_review_threads(["PRRT_1", "PRRT_2"])
+    res = api.resolve_review_threads(["PRRT_1", "PRRT_2"])
     # 検証
     assert res == ResolveResult(resolved_count=2)
     assert gh.graphql.call_count == 2
@@ -577,53 +552,53 @@ def test_resolve_review_threads(gh):
 # ---- ラベル追加 / 除去 / フェーズ遷移 ----
 
 
-def test_add_labels(gh):
+def test_add_labels(gh, api):
     """ラベルの付与と現況返却を確認する（正常系）。"""
     # 準備
     gh.rest.issues.get.return_value = _resp(NS(labels=[NS(name="layer:epic"), NS(name="確認:tester")]))
     # 実行
-    res = server.add_labels(35, is_pr=False, labels=["確認:tester"])
+    res = api.add_labels(35, is_pr=False, labels=["確認:tester"])
     # 検証
     assert gh.rest.issues.add_labels.call_args.kwargs["labels"] == ["確認:tester"]
     assert res == LabelsResult(current_labels=["layer:epic", "確認:tester"])
 
 
-def test_remove_labels(gh):
+def test_remove_labels(gh, api):
     """確認ラベルの除去と現況返却を確認する（正常系）。"""
     # 準備
     gh.rest.issues.get.return_value = _resp(NS(labels=[NS(name="layer:epic")]))
     # 実行
-    res = server.remove_labels(35, is_pr=False, labels=["確認:architect"])
+    res = api.remove_labels(35, is_pr=False, labels=["確認:architect"])
     # 検証
     assert gh.rest.issues.remove_label.call_args.kwargs["name"] == "確認:architect"
     assert res == LabelsResult(current_labels=["layer:epic"])
 
 
-def test_remove_labels_when_in_discussion(gh):
+def test_remove_labels_when_in_discussion(gh, api):
     """`議論中` の除去拒否を確認する（異常系）。"""
     # 実行・検証
     with pytest.raises(ValueError):
-        server.remove_labels(35, is_pr=False, labels=["議論中"])
+        api.remove_labels(35, is_pr=False, labels=["議論中"])
     gh.rest.issues.remove_label.assert_not_called()
 
 
-def test_transition_phase(gh):
+def test_transition_phase(gh, api):
     """除去 → 追加の順のラベル一括入れ替えを確認する（正常系）。"""
     # 準備
     gh.rest.issues.get.return_value = _resp(NS(labels=[NS(name="layer:subsystem"), NS(name="確認:tester")]))
     # 実行
-    res = server.transition_phase(52, is_pr=True, remove_labels_=["確認:architect"], add_labels_=["確認:tester"])
+    res = api.transition_phase(52, is_pr=True, remove_labels_=["確認:architect"], add_labels_=["確認:tester"])
     # 検証
     names = [c[0] for c in gh.rest.issues.method_calls if c[0] in ("remove_label", "add_labels")]
     assert names == ["remove_label", "add_labels"]
     assert res == LabelsResult(current_labels=["layer:subsystem", "確認:tester"])
 
 
-def test_transition_phase_when_in_discussion(gh):
+def test_transition_phase_when_in_discussion(gh, api):
     """`議論中` を含む除去指定の拒否を確認する（異常系）。"""
     # 実行・検証
     with pytest.raises(ValueError):
-        server.transition_phase(52, is_pr=True, remove_labels_=["議論中"], add_labels_=["確認:tester"])
+        api.transition_phase(52, is_pr=True, remove_labels_=["議論中"], add_labels_=["確認:tester"])
     gh.rest.issues.remove_label.assert_not_called()
     gh.rest.issues.add_labels.assert_not_called()
 
@@ -631,25 +606,25 @@ def test_transition_phase_when_in_discussion(gh):
 # ---- assignee 設定 / 除去 ----
 
 
-def test_set_assignee(gh):
+def test_set_assignee(gh, api):
     """認証ユーザーの assignee 設定を確認する（正常系）。"""
     # 準備
     gh.rest.users.get_authenticated.return_value = _resp(NS(login="shuhei1101"))
     gh.rest.issues.get.return_value = _resp(NS(assignees=[NS(login="shuhei1101")]))
     # 実行
-    res = server.set_assignee(35, is_pr=False)
+    res = api.set_assignee(35, is_pr=False)
     # 検証
     assert gh.rest.issues.add_assignees.call_args.kwargs["assignees"] == ["shuhei1101"]
     assert res == AssigneesResult(assignees=["shuhei1101"])
 
 
-def test_remove_assignee(gh):
+def test_remove_assignee(gh, api):
     """認証ユーザーの assignee 除去を確認する（正常系）。"""
     # 準備
     gh.rest.users.get_authenticated.return_value = _resp(NS(login="shuhei1101"))
     gh.rest.issues.get.return_value = _resp(NS(assignees=[]))
     # 実行
-    res = server.remove_assignee(35, is_pr=False)
+    res = api.remove_assignee(35, is_pr=False)
     # 検証
     assert gh.rest.issues.remove_assignees.call_args.kwargs["assignees"] == ["shuhei1101"]
     assert res == AssigneesResult(assignees=[])
@@ -658,30 +633,30 @@ def test_remove_assignee(gh):
 # ---- 本文 / タイトル更新・クローズ・再オープン ----
 
 
-def test_update_body(gh):
+def test_update_body(gh, api):
     """本文の完全置換を確認する（正常系）。"""
     # 実行
-    res = server.update_body(35, is_pr=False, body="## 前提条件\n\nなし")
+    res = api.update_body(35, is_pr=False, body="## 前提条件\n\nなし")
     # 検証
     assert gh.rest.issues.update.call_args.kwargs["body"] == "## 前提条件\n\nなし"
     assert res == EmptyResult()
 
 
-def test_update_title(gh):
+def test_update_title(gh, api):
     """タイトルの更新を確認する（正常系）。"""
     # 実行
-    res = server.update_title(35, is_pr=False, title="プロフィール編集機能")
+    res = api.update_title(35, is_pr=False, title="プロフィール編集機能")
     # 検証
     assert gh.rest.issues.update.call_args.kwargs["title"] == "プロフィール編集機能"
     assert res == EmptyResult()
 
 
-def test_close_when_reason_and_delete_branch(gh):
+def test_close_when_reason_and_delete_branch(gh, api):
     """reason / ブランチ削除付きの PR クローズを確認する（正常系）。"""
     # 準備
     gh.rest.pulls.get.return_value = _resp(NS(head=NS(ref="feat/x", sha="SHA1")))
     # 実行
-    server.close(60, is_pr=True, reason="not_planned", delete_branch=True)
+    api.close(60, is_pr=True, reason="not_planned", delete_branch=True)
     # 検証
     kwargs = gh.rest.issues.update.call_args.kwargs
     assert kwargs["state"] == "closed"
@@ -689,19 +664,19 @@ def test_close_when_reason_and_delete_branch(gh):
     assert gh.rest.git.delete_ref.call_args.kwargs["ref"] == "heads/feat/x"
 
 
-def test_close_when_issue_with_delete_branch(gh):
+def test_close_when_issue_with_delete_branch(gh, api):
     """Issue クローズ時の delete_branch 無視を確認する（正常系）。"""
     # 実行
-    server.close(50, is_pr=False, delete_branch=True)
+    api.close(50, is_pr=False, delete_branch=True)
     # 検証
     assert gh.rest.issues.update.call_args.kwargs["state"] == "closed"
     gh.rest.git.delete_ref.assert_not_called()
 
 
-def test_reopen_issue(gh):
+def test_reopen_issue(gh, api):
     """クローズ済み Issue の再オープンを確認する（正常系）。"""
     # 実行
-    res = server.reopen_issue(50)
+    res = api.reopen_issue(50)
     # 検証
     kwargs = gh.rest.issues.update.call_args.kwargs
     assert kwargs["state"] == "open"
@@ -712,12 +687,12 @@ def test_reopen_issue(gh):
 # ---- Issue / PR 作成・マージ ----
 
 
-def test_create_child_issue(gh):
+def test_create_child_issue(gh, api):
     """Sub-issue リンク付きの子 Issue 起票を確認する（正常系）。"""
     # 準備
     gh.rest.issues.create.return_value = _resp(NS(number=36, id=999, html_url="http://i/36"))
     # 実行
-    res = server.create_child_issue(
+    res = api.create_child_issue(
         35, title="プロフィールを編集する", body="本文", labels=["layer:story", "確認:story-conductor"]
     )
     # 検証
@@ -727,12 +702,12 @@ def test_create_child_issue(gh):
     assert res == CreatedIssueResult(issue_number=36, url="http://i/36", parent_issue_number=35)
 
 
-def test_create_draft_pr(gh):
+def test_create_draft_pr(gh, api):
     """base 明示の Draft PR 作成を確認する（正常系）。"""
     # 準備
     gh.rest.pulls.create.return_value = _resp(NS(number=52, node_id="PR_1", html_url="http://p/52"))
     # 実行
-    res = server.create_draft_pr(
+    res = api.create_draft_pr(
         head_branch="feat/backend/profile/edit/edit-api",
         base_branch="feat/story/profile/edit",
         title="プロフィール編集 API",
@@ -746,35 +721,35 @@ def test_create_draft_pr(gh):
     assert res == CreatedPRResult(pr_number=52, url="http://p/52")
 
 
-def test_mark_pr_ready(gh):
+def test_mark_pr_ready(gh, api):
     """markPullRequestReadyForReview mutation での Draft 解除を確認する（正常系）。"""
     # 準備
     gh.rest.pulls.get.return_value = _resp(NS(node_id="PR_1", head=NS(ref="feat/x", sha="S")))
     # 実行
-    server.mark_pr_ready(52)
+    api.mark_pr_ready(52)
     # 検証
     query, variables = gh.graphql.call_args.args
     assert "markPullRequestReadyForReview" in query
     assert variables == {"id": "PR_1"}
 
 
-def test_merge_pr(gh):
+def test_merge_pr(gh, api):
     """既定戦略（squash）でのマージとブランチ削除を確認する（正常系）。"""
     # 準備
     gh.rest.pulls.get.return_value = _resp(NS(head=NS(ref="feat/x", sha="S")))
     # 実行
-    server.merge_pr(52)
+    api.merge_pr(52)
     # 検証
     assert gh.rest.pulls.merge.call_args.kwargs["merge_method"] == "squash"
     assert gh.rest.git.delete_ref.call_args.kwargs["ref"] == "heads/feat/x"
 
 
-def test_merge_pr_when_strategy_given(gh):
+def test_merge_pr_when_strategy_given(gh, api):
     """戦略指定でのマージを確認する（正常系）。"""
     # 準備
     gh.rest.pulls.get.return_value = _resp(NS(head=NS(ref="feat/x", sha="S")))
     # 実行
-    server.merge_pr(52, strategy="rebase")
+    api.merge_pr(52, strategy="rebase")
     # 検証
     assert gh.rest.pulls.merge.call_args.kwargs["merge_method"] == "rebase"
 
@@ -782,10 +757,10 @@ def test_merge_pr_when_strategy_given(gh):
 # ---- worktree 作成 / 削除 ----
 
 
-def test_worktree_create(tmp_git_repo):
+def test_worktree_create(tmp_git_repo, api):
     """ブランチ + worktree の作成を確認する（正常系）。"""
     # 実行
-    res = server.worktree_create("feat/backend/profile/edit/edit-api")
+    res = api.worktree_create("feat/backend/profile/edit/edit-api")
     # 検証
     worktree = Path(res.worktree_path)
     assert worktree == tmp_git_repo / ".claude" / "worktrees" / "feat-backend-profile-edit-edit-api"
@@ -797,53 +772,53 @@ def test_worktree_create(tmp_git_repo):
     assert res.branch in branches
 
 
-def test_worktree_create_when_dirs_missing(tmp_git_repo):
+def test_worktree_create_when_dirs_missing(tmp_git_repo, api):
     """worktree フォルダ未作成時のパス作成を確認する（正常系）。"""
     # 準備
     assert not (tmp_git_repo / ".claude").exists()
     # 実行
-    res = server.worktree_create("feat/a")
+    res = api.worktree_create("feat/a")
     # 検証
     assert Path(res.worktree_path).is_dir()
 
 
-def test_worktree_create_when_remote_branch_exists(tmp_git_repo):
+def test_worktree_create_when_remote_branch_exists(tmp_git_repo, api):
     """リモートに現在ブランチがある場合の base ref 解決を確認する（正常系）。"""
     # 実行
-    res = server.worktree_create("feat/b")
+    res = api.worktree_create("feat/b")
     # 検証
     assert res.base_ref == "origin/master"
 
 
-def test_worktree_create_when_remote_branch_missing(tmp_git_repo):
+def test_worktree_create_when_remote_branch_missing(tmp_git_repo, api):
     """リモートに現在ブランチが無い場合の HEAD フォールバックを確認する（正常系）。"""
     # 準備
     subprocess.run(["git", "checkout", "-b", "local-only"], cwd=tmp_git_repo, check=True, capture_output=True)
     # 実行
-    res = server.worktree_create("feat/c")
+    res = api.worktree_create("feat/c")
     # 検証
     assert res.base_ref == "HEAD"
 
 
-def test_worktree_create_when_branch_exists(tmp_git_repo):
+def test_worktree_create_when_branch_exists(tmp_git_repo, api):
     """既存ブランチ名の指定によるエラーを確認する（異常系）。"""
     # 準備
-    server.worktree_create("feat/dup")
+    api.worktree_create("feat/dup")
     # 実行・検証
     with pytest.raises(subprocess.CalledProcessError):
-        server.worktree_create("feat/dup")
+        api.worktree_create("feat/dup")
 
 
-def test_worktree_remove(tmp_git_repo):
+def test_worktree_remove(tmp_git_repo, api):
     """未マージ commit を持つ worktree + ブランチの強制削除を確認する（正常系）。"""
     # 準備
-    created = server.worktree_create("feat/rm")
+    created = api.worktree_create("feat/rm")
     worktree = Path(created.worktree_path)
     (worktree / "new.txt").write_text("wip", encoding="utf-8")
     subprocess.run(["git", "add", "new.txt"], cwd=worktree, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "wip"], cwd=worktree, check=True, capture_output=True)
     # 実行
-    res = server.worktree_remove("feat/rm")
+    res = api.worktree_remove("feat/rm")
     # 検証
     assert not worktree.exists()
     branches = subprocess.run(
@@ -853,11 +828,11 @@ def test_worktree_remove(tmp_git_repo):
     assert res == WorktreeRemoveResult(branch="feat/rm", worktree_path=str(worktree))
 
 
-def test_worktree_remove_when_worktree_missing(tmp_git_repo):
+def test_worktree_remove_when_worktree_missing(tmp_git_repo, api):
     """worktree 不存在時のエラーを確認する（異常系）。"""
     # 実行・検証
     with pytest.raises(subprocess.CalledProcessError):
-        server.worktree_remove("feat/none")
+        api.worktree_remove("feat/none")
 
 
 # ---- 内部ヘルパー ----
@@ -892,22 +867,6 @@ def test_get_client_when_token_missing(tmp_path, monkeypatch):
         server._get_client()
 
 
-def test_get_repo_when_https_url(monkeypatch):
-    """https 形式の remote URL 解析を確認する（正常系）。"""
-    # 準備
-    monkeypatch.setattr(server.subprocess, "run", _fake_git_run("https://github.com/o/r.git\n"))
-    # 実行・検証
-    assert server._get_repo() == ("o", "r")
-
-
-def test_get_repo_when_ssh_url(monkeypatch):
-    """ssh 形式の remote URL 解析を確認する（正常系）。"""
-    # 準備
-    monkeypatch.setattr(server.subprocess, "run", _fake_git_run("git@github.com:o/r.git\n"))
-    # 実行・検証
-    assert server._get_repo() == ("o", "r")
-
-
 def test_get_current_login(gh):
     """認証ユーザーのログイン名解決を確認する（正常系）。"""
     # 準備
@@ -921,7 +880,7 @@ def test_get_labels(gh):
     # 準備
     gh.rest.issues.get.return_value = _resp(NS(labels=[NS(name="layer:epic"), NS(name="確認:epic-conductor")]))
     # 実行・検証
-    assert server._get_labels(35) == ["layer:epic", "確認:epic-conductor"]
+    assert server._get_labels(35, owner="o", repo="r") == ["layer:epic", "確認:epic-conductor"]
 
 
 def test_get_assignees(gh):
@@ -929,7 +888,7 @@ def test_get_assignees(gh):
     # 準備
     gh.rest.issues.get.return_value = _resp(NS(assignees=[NS(login="shuhei1101")]))
     # 実行・検証
-    assert server._get_assignees(35) == ["shuhei1101"]
+    assert server._get_assignees(35, owner="o", repo="r") == ["shuhei1101"]
 
 
 def test_minimize_comment(gh):
@@ -955,7 +914,7 @@ def test_create_issue_comment(gh):
     # 準備
     gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_9", html_url="http://c/9"))
     # 実行
-    res = server._create_issue_comment(35, "本文")
+    res = server._create_issue_comment(35, "本文", owner="o", repo="r")
     # 検証
     assert gh.rest.issues.create_comment.call_args.kwargs["body"] == "本文"
     assert res == CommentResult(node_id="IC_9", url="http://c/9")
@@ -1067,128 +1026,111 @@ def test_resolve_base_ref(tmp_git_repo):
 # ---- モニター連絡 ----
 
 
-def test_report_completion(tmp_settings, fake_remote, urlopen_calls):
-    """作業完了報告の送信ペイロード組み立てを確認する（正常系）。"""
+def test_report_completion(gh_mon, api, mon_registry, session_factory):
+    """ラベル除去 + 生存更新を確認する（正常系）。"""
+    # 準備
+    session_factory("architect", 52)
+    before = mon_registry.find("sandbox", "architect", 52).last_seen_at
     # 実行
-    res = server.report_completion("architect", 52)
+    res = api.report_completion("architect", 52)
     # 検証
     assert res == MonitorAck(ok=True)
-    req = urlopen_calls[0]
-    assert req.full_url == "http://127.0.0.1:18999/completions"
-    assert req.get_method() == "POST"
-    payload = json.loads(req.data)
-    assert payload == {"agent_name": "architect", "number": 52, "project": "sandbox"}
+    assert gh_mon.rest.issues.remove_label.call_args.kwargs["name"] == "処理中:architect"
+    assert mon_registry.find("sandbox", "architect", 52).last_seen_at != before
 
 
-def test_report_completion_when_unknown_session(tmp_settings, fake_remote, monkeypatch):
-    """セッション不明（404）時のエラーを確認する（異常系）。"""
+def test_report_completion_when_unknown_session(gh_mon, api):
+    """セッション不明時のエラーを確認する（異常系）。"""
+    # 実行・検証
+    with pytest.raises(server.SessionNotFoundError):
+        api.report_completion("architect", 52)
+    gh_mon.rest.issues.remove_label.assert_not_called()
+
+
+def test_add_watch_targets(api, mon_registry, session_factory):
+    """監視面の追加を確認する（正常系）。"""
     # 準備
-    def fake(req, timeout=None):
-        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", None, None)
-
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
-    # 実行・検証
-    with pytest.raises(urllib.error.HTTPError):
-        server.report_completion("architect", 52)
-
-
-def test_report_completion_when_monitor_down(tmp_settings, fake_remote):
-    """モニター未起動（接続拒否）時のエラーを確認する（異常系）。"""
-    # 実行・検証
-    with pytest.raises(urllib.error.URLError):
-        server.report_completion("architect", 52)
-
-
-def test_add_watch_targets(tmp_settings, fake_remote, urlopen_calls):
-    """監視対象追加の送信ペイロード組み立てを確認する（正常系）。"""
+    session_factory("architect", 52)
     # 実行
-    res = server.add_watch_targets("architect", 52, [60, 61])
+    res = api.add_watch_targets("architect", 52, [60, 61])
     # 検証
     assert res == MonitorAck(ok=True)
-    req = urlopen_calls[0]
-    assert req.full_url == "http://127.0.0.1:18999/watch-targets"
-    assert req.get_method() == "POST"
-    payload = json.loads(req.data)
-    assert payload == {
-        "agent_name": "architect",
-        "number": 52,
-        "watch_numbers": [60, 61],
-        "project": "sandbox",
-    }
+    assert mon_registry.find("sandbox", "architect", 52).watch_numbers == [60, 61]
 
 
-def test_add_watch_targets_when_unknown_session(tmp_settings, fake_remote, monkeypatch):
-    """セッション不明（404）時のエラーを確認する（異常系）。"""
-    # 準備
-    def fake(req, timeout=None):
-        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", None, None)
-
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+def test_add_watch_targets_when_unknown_session(api):
+    """セッション不明時のエラーを確認する（異常系）。"""
     # 実行・検証
-    with pytest.raises(urllib.error.HTTPError):
-        server.add_watch_targets("architect", 52, [60])
+    with pytest.raises(server.SessionNotFoundError):
+        api.add_watch_targets("architect", 52, [60])
 
 
-def test_remove_watch_targets(tmp_settings, fake_remote, urlopen_calls):
-    """監視対象除去の送信ペイロード組み立てを確認する（正常系）。"""
+def test_remove_watch_targets(api, mon_registry, session_factory):
+    """監視面の除去を確認する（正常系）。"""
+    # 準備
+    session_factory("architect", 52, watch_numbers=[60, 61])
     # 実行
-    res = server.remove_watch_targets("architect", 52, [60, 61])
+    res = api.remove_watch_targets("architect", 52, [60])
     # 検証
     assert res == MonitorAck(ok=True)
-    req = urlopen_calls[0]
-    assert req.full_url == "http://127.0.0.1:18999/watch-targets"
-    assert req.get_method() == "DELETE"
-    payload = json.loads(req.data)
-    assert payload == {
-        "agent_name": "architect",
-        "number": 52,
-        "watch_numbers": [60, 61],
-        "project": "sandbox",
-    }
+    assert mon_registry.find("sandbox", "architect", 52).watch_numbers == [61]
 
 
-def test_remove_watch_targets_when_unknown_session(tmp_settings, fake_remote, monkeypatch):
-    """セッション不明（404）時のエラーを確認する（異常系）。"""
-    # 準備
-    def fake(req, timeout=None):
-        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", None, None)
-
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+def test_remove_watch_targets_when_unknown_session(api):
+    """セッション不明時のエラーを確認する（異常系）。"""
     # 実行・検証
-    with pytest.raises(urllib.error.HTTPError):
-        server.remove_watch_targets("architect", 52, [60])
+    with pytest.raises(server.SessionNotFoundError):
+        api.remove_watch_targets("architect", 52, [60])
 
 
-def test_resolve_project(tmp_settings, fake_remote):
-    """登録リポジトリの名前解決を確認する（正常系）。"""
+# ---- プロジェクト解決 ----
+
+
+def test_resolve_project(mon_settings, mcp_ctx_factory):
+    """ヘッダからの解決を確認する（正常系）。"""
+    # 実行
+    project = server._resolve_project(mcp_ctx_factory("sandbox"), projects=mon_settings.projects)
+    # 検証
+    assert project.repo == "shuhei1101/ai-monitor-e2e"
+
+
+def test_resolve_project_when_header_missing(mon_settings, mcp_ctx_factory):
+    """ヘッダなし時のエラーを確認する（異常系）。"""
     # 実行・検証
-    assert server._resolve_project() == "sandbox"
+    with pytest.raises(server.ProjectNotFoundError, match="X-Project"):
+        server._resolve_project(mcp_ctx_factory(None), projects=mon_settings.projects)
 
 
-def test_resolve_project_when_unregistered(tmp_path, fake_remote, monkeypatch):
-    """未登録リポジトリのフォールバックを確認する（正常系）。"""
-    # 準備
-    path = tmp_path / "settings.yaml"
-    path.write_text("github_token: github_pat_test\nprojects: []\n", encoding="utf-8")
-    monkeypatch.setattr(server, "SETTINGS_PATH", path)
+def test_resolve_project_when_unknown_name(mon_settings, mcp_ctx_factory):
+    """未登録の名前でのエラーを確認する（異常系）。"""
     # 実行・検証
-    assert server._resolve_project() == "shuhei1101/ai-monitor-e2e"
+    with pytest.raises(server.ProjectNotFoundError, match="sandbox"):
+        server._resolve_project(mcp_ctx_factory("unknown"), projects=mon_settings.projects)
 
 
-def test_load_port(tmp_settings):
-    """設定値からのポート読み込みを確認する（正常系）。"""
-    # 実行・検証
-    assert server._load_port() == 18999
+# ---- アプリ組み立て ----
 
 
-def test_load_port_when_port_missing(tmp_path, monkeypatch):
-    """port 未設定時の既定値を確認する（正常系）。"""
-    # 準備
-    path = tmp_path / "settings.yaml"
-    path.write_text("github_token: github_pat_test\n", encoding="utf-8")
-    monkeypatch.setattr(server, "SETTINGS_PATH", path)
-    # 実行・検証
-    assert server._load_port() == 8765
+def test_build_mcp_app(mon_settings, mon_registry, mcp_agents):
+    """ツールの登録を確認する（正常系）。"""
+    # 実行
+    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents)
+    # 検証
+    tools = _list_tools(app)
+    assert {t.name for t in tools} == EXPECTED_TOOLS
+    assert len(tools) == len(EXPECTED_TOOLS)
+
+
+def test_build_mcp_app_when_signature(mon_settings, mon_registry, mcp_agents):
+    """内部引数の除去を確認する（正常系）。"""
+    # 実行
+    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents)
+    # 検証
+    schemas = {t.name: t.inputSchema.get("properties", {}) for t in _list_tools(app)}
+    for name, properties in schemas.items():
+        assert {"ctx", "settings", "registry", "agents"}.isdisjoint(properties), name
+    assert "number" in schemas["report_completion"]
+
 
 
 def test_log_tool_call(caplog):

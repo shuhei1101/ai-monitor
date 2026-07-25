@@ -70,7 +70,8 @@ def test_poll_when_new_target(agent, io_mocks, registry, mon_project):
     assert registry.find("sandbox", "intake-issue-triager", 35) is not None
     sent_text = io_mocks.send_keys.call_args.args[1]
     assert sent_text.startswith(
-        'claude --model claude-opus-4-7 --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
+        'AI_MONITOR_PROJECT=sandbox claude --model claude-opus-4-7'
+        ' --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
     )
 
 
@@ -146,18 +147,33 @@ def test_process_one(agent, io_mocks, registry, mon_project):
     assert io_mocks.add_label.call_args.args[2] == "処理中:intake-issue-triager"
     sent_text = io_mocks.send_keys.call_args.args[1]
     assert sent_text.startswith(
-        'claude --model claude-opus-4-7 --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
+        'AI_MONITOR_PROJECT=sandbox claude --model claude-opus-4-7'
+        ' --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
     )
     assert "#35" in sent_text
 
 
-def test_build_telemetry_env(mon_project, agent):
-    """テレメトリ環境変数の組み立てを確認する（正常系）。"""
+def test_process_one_when_new_session(agent, io_mocks, registry, mon_project):
+    """新規セッションの起動コマンドを確認する（正常系）。"""
+    # 準備
+    target = _issue(35, labels=["確認:intake-issue-triager"])
+    # 実行
+    service._process_one(
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None
+    )
+    # 検証
+    assert io_mocks.create_session.call_args.args[0] == "ai-monitor-sandbox-35-intake-issue-triager"
+    assert "claude --model claude-opus-4-7 " in io_mocks.send_keys.call_args.args[1]
+
+
+def test_build_launch_env(mon_project, agent):
+    """環境変数の組み立てを確認する（正常系）。"""
     # 準備
     telemetry = TelemetrySettings(otlp_endpoint="http://localhost:14317")
     # 実行
-    env = service.build_telemetry_env(telemetry, mon_project, agent, 131)
+    env = service.build_launch_env(telemetry, mon_project, agent, 131)
     # 検証
+    assert "AI_MONITOR_PROJECT=sandbox" in env
     assert "CLAUDE_CODE_ENABLE_TELEMETRY=1" in env
     assert "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1" in env
     assert "OTEL_LOGS_EXPORTER=otlp" in env
@@ -172,20 +188,21 @@ def test_build_telemetry_env(mon_project, agent):
     assert env.endswith(" ")
 
 
-def test_build_telemetry_env_when_unset(mon_project, agent):
-    """テレメトリ未設定時の空文字を確認する（正常系）。"""
+def test_build_launch_env_when_telemetry_unset(mon_project, agent):
+    """テレメトリなしを確認する（正常系）。"""
     # 実行
-    env = service.build_telemetry_env(None, mon_project, agent, 131)
+    env = service.build_launch_env(None, mon_project, agent, 131)
     # 検証
-    assert env == ""
+    assert env == "AI_MONITOR_PROJECT=sandbox "
+    assert "OTEL_" not in env
 
 
-def test_build_telemetry_env_when_resource_attributes(mon_project, agent):
+def test_build_launch_env_when_resource_attributes(mon_project, agent):
     """識別子の埋め込みを確認する（正常系）。"""
     # 準備
     telemetry = TelemetrySettings(otlp_endpoint="http://localhost:4317")
     # 実行
-    env = service.build_telemetry_env(telemetry, mon_project, agent, 131)
+    env = service.build_launch_env(telemetry, mon_project, agent, 131)
     # 検証
     assert (
         "OTEL_RESOURCE_ATTRIBUTES="
@@ -206,7 +223,7 @@ def test_process_one_when_telemetry_set(agent, io_mocks, registry, mon_project):
     )
     # 検証
     sent_text = io_mocks.send_keys.call_args.args[1]
-    assert sent_text.startswith("CLAUDE_CODE_ENABLE_TELEMETRY=1 ")
+    assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox CLAUDE_CODE_ENABLE_TELEMETRY=1 ")
     assert "ai_monitor.number=35" in sent_text
     assert " claude --model claude-opus-4-7 " in sent_text
 
@@ -221,7 +238,7 @@ def test_process_one_when_telemetry_unset(agent, io_mocks, registry, mon_project
     )
     # 検証
     sent_text = io_mocks.send_keys.call_args.args[1]
-    assert sent_text.startswith("claude --model claude-opus-4-7 ")
+    assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox claude --model claude-opus-4-7 ")
     assert "OTEL_" not in sent_text
 
 

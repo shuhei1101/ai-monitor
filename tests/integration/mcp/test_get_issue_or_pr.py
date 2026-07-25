@@ -6,10 +6,9 @@ from types import SimpleNamespace as NS
 import pytest
 from githubkit.exception import RequestFailed
 
-import server
 
 
-def test_normal(gh, resp):
+def test_normal(gh, resp, api):
     """Issue を取得してスナップショットを組み立てる一連を確認する（正常系）。"""
     # 準備
     gh.rest.issues.get.return_value = resp(
@@ -38,7 +37,7 @@ def test_normal(gh, resp):
         [NS(number=36, title="子", html_url="http://i/36", state="open")]
     )
     # 実行
-    snap = server.get_issue_or_pr(35, is_pr=False)
+    snap = api.get_issue_or_pr(35, is_pr=False)
     # 検証
     assert snap.state == "OPEN"
     assert snap.parent.number == 12
@@ -48,10 +47,10 @@ def test_normal(gh, resp):
     assert snap.comments[0].is_minimized is False
 
 
-def test_error_when_api_error(gh, request_failed):
+def test_error_when_api_error(gh, request_failed, api):
     """API エラー（対象不存在 等）の伝播を確認する（異常系）。"""
     # 準備
     gh.rest.issues.get.side_effect = request_failed()
     # 実行・検証
     with pytest.raises(RequestFailed):
-        server.get_issue_or_pr(999, is_pr=False)
+        api.get_issue_or_pr(999, is_pr=False)

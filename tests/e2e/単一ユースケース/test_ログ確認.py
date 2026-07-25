@@ -22,7 +22,7 @@ GRAFANA_AUTH = b64encode(b"admin:admin").decode()
 _EMIT_SCRIPT = """
 import logging, sys
 sys.path.insert(0, {plugin_dir!r})
-from observability import configure, shutdown
+from ai_monitor.observability import configure, shutdown
 configure({service_name!r})
 logging.getLogger("ai_monitor.e2e").info({message!r})
 shutdown()

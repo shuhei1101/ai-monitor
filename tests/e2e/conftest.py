@@ -11,7 +11,7 @@ import pytest
 import yaml
 from githubkit.exception import RequestFailed
 
-import server
+import ai_monitor.mcp.server as server
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -64,9 +64,10 @@ def gh_live():
 
 
 @pytest.fixture
-def repo_ctx() -> tuple[str, str]:
+def repo_ctx(sandbox) -> tuple[str, str]:
     """sandbox の (owner, repo) を返す。"""
-    return server._get_repo()
+    owner, repo = sandbox["repo"].split("/", 1)
+    return (owner, repo)
 
 
 @pytest.fixture

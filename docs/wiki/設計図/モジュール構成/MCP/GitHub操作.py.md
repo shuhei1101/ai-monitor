@@ -8,13 +8,22 @@ template_version: 1.1.0
 エージェントが使う GitHub 操作 MCP サーバーを扱う。
 ツール定義（`mcp/server.py`）が githubkit（GitHub API）/ git CLI を直接呼ぶ。
 
+transport は HTTP（Streamable HTTP）で、モニターの FastAPI アプリに `/mcp` としてマウントする（[アプリ生成](../モニター/HTTP受信.py.md#アプリ生成)）。
+stdio はクライアントのセッションごとにサーバプロセスを起動するため、接続が確立する前にツール一覧が確定してツールを引けないことがある。
+エージェントは Issue / PR ごとにセッションを作るので、常駐プロセスへ接続する形にしてこの経路を消す。
+
+常駐サーバは複数セッションから同時に叩かれる。
+ツール関数はモジュール変数に状態を持たず、引数と束ねた依存だけで完結させる。
+
 ## 一覧
 
 | ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 共通 | ツール呼び出しログ | `mcp/server.py` | 関数 | [`_log_tool_call`](#ツール呼び出しログ) | 全 MCP ツールに適用し、実行と失敗をログに出すデコレータ | [モニター連絡](./モニター連絡.py.md)のツールにも適用する |
 | 共通 | クライアント生成 | `mcp/server.py` | 関数 | [`_get_client`](#クライアント生成) | 設定の `github_token` から githubkit クライアントを生成・共有 | - |
-| 共通 | リポジトリ解決 | `mcp/server.py` | 関数 | [`_get_repo`](#リポジトリ解決) | git の remote URL から `(owner, repo)` を解決 | - |
+| 共通 | プロジェクト解決 | `mcp/server.py` | 関数 | [`_resolve_project`](#プロジェクト解決) | リクエストヘッダから対象プロジェクトを解決 | 対象リポジトリの出所 |
+| 共通 | 例外 | `mcp/server.py` | クラス | `ProjectNotFoundError` | 対象プロジェクトを解決できない | 仕様は[プロジェクト解決](#プロジェクト解決)の例外表 |
+| 共通 | 配線 | `mcp/server.py` | 関数 | [`アプリ組み立て`](#アプリ組み立て) | ツールを登録した ASGI アプリを返す | モニターの FastAPI にマウントする |
 | 共通 | ログイン解決 | `mcp/server.py` | 関数 | [`_get_current_login`](#ログイン解決) | 認証中ユーザーのログイン名を返す | assignee 操作の対象解決 |
 | 共通 | ラベル再取得 | `mcp/server.py` | 関数 | [`_get_labels`](#ラベル再取得) | 操作後の現在ラベル一覧を返す | - |
 | 共通 | assignee 再取得 | `mcp/server.py` | 関数 | [`_get_assignees`](#assignee-再取得) | 操作後の現在 assignee 一覧を返す | - |
@@ -64,10 +73,34 @@ template_version: 1.1.0
 ## ディレクトリ構成
 
 ```
-plugins/ai-monitor/mcp/
-├── server.py    # FastMCP ツール定義 + 内部ヘルパー（githubkit / git CLI 呼び出し）
+src/ai_monitor/mcp/
+├── server.py    # FastMCP ツール定義 + 内部ヘルパー（githubkit / git CLI 呼び出し）+ build_mcp_app
 └── models.py    # Pydantic DTO 集約
 ```
+
+プラグイン側は接続先を教えるだけで、実装コードを持たない。
+
+```
+plugins/ai-monitor/
+├── .claude-plugin/plugin.json
+└── .mcp.json
+```
+
+```json
+{
+  "mcpServers": {
+    "ai-monitor-tools": {
+      "type": "http",
+      "url": "http://localhost:8765/mcp",
+      "headers": { "X-Project": "${AI_MONITOR_PROJECT}" },
+      "alwaysLoad": true
+    }
+  }
+}
+```
+
+`alwaysLoad` はツール一覧が確定するまでセッション開始を待たせる指定で、接続完了前にツールを引けなくなるのを防ぐ。
+`X-Project` はモニターが tmux 起動時に渡した環境変数から展開され、[プロジェクト解決](#プロジェクト解決)が読む。
 
 ## 構成図
 
@@ -210,12 +243,12 @@ classDiagram
 ## `mcp/server.py`
 > 種別: ファイル
 
-FastMCP（stdio）でツールを公開するエントリポイント。
+FastMCP でツールを定義するファイル。
 各ツール関数が githubkit / git CLI を直接呼ぶ（委譲層は持たない）。
-GitHub 系の全ツールは[クライアント生成](#クライアント生成)と[リポジトリ解決](#リポジトリ解決)を、worktree 系の全ツールは [git 実行入口](#git-実行入口)を共通で通る。
+GitHub 系の全ツールは[クライアント生成](#クライアント生成)と[プロジェクト解決](#プロジェクト解決)を、worktree 系の全ツールは [git 実行入口](#git-実行入口)を共通で通る。
 全ツールは[ツール呼び出しログ](#ツール呼び出しログ)でラップし、ログ出力を個々のツールに書かない。
 各ツールのインターフェース（リクエスト / レスポンス / 制約）は [バックエンド結合](../../バックエンド結合/README.md) の詳細ファイルが SoT。
-疎通テストは sandbox（`shuhei1101/ai-monitor-e2e`）のクローンを CWD にして手動実行する（[リポジトリ解決](#リポジトリ解決)が CWD の remote から対象リポジトリを決めるため。手順は `テスト/テスト実行方法.md`）。
+疎通テストは sandbox（`shuhei1101/ai-monitor-e2e`）を対象に手動実行する（[プロジェクト解決](#プロジェクト解決)が読むヘッダに sandbox を指定する。手順は `テスト/テスト実行方法.md`）。
 
 ---
 
@@ -691,7 +724,7 @@ search_issues_and_prs('"プロフィール編集" in:title is:issue', sort="crea
 
 #### 処理
 
-1. 対象リポジトリを解決し、検索クエリに `repo:{owner}/{repo}` を付与する（[リポジトリ解決](#リポジトリ解決)）
+1. 対象リポジトリを解決し、検索クエリに `repo:{owner}/{repo}` を付与する（[プロジェクト解決](#プロジェクト解決)）
 2. 検索 API を `sort` / `order` / `per_page` / `page` 付きで呼ぶ（REST）
 3. 各要素を番号・PR 判定（`pull_request` の有無）・タイトル・状態・URL の `SearchResultItem` に変換して配列で返す
 
@@ -1821,53 +1854,110 @@ GitHub(auth="github_pat_...")
 
 ---
 
-### リポジトリ解決
-> 物理名: `_get_repo`<br>
+### アプリ組み立て
+> 物理名: `build_mcp_app`<br>
 > 種別: 関数
 
-git の remote URL（`origin`）から `(owner, repo)` を解決する。
+全ツールを登録した ASGI アプリを返す。
+モニターの [アプリ生成](../モニター/HTTP受信.py.md#アプリ生成) が `/mcp` にマウントする。
 
 #### 引数
 
-なし
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 全体設定 | `settings` | [`Settings`](../モニター/エージェント管理.py.md#全体設定) | ✅ | - | GitHub Token・プロジェクト一覧の出所 | - |
+| セッション台帳 | `registry` | [`SessionRegistry`](../モニター/エージェント管理.py.md#セッション台帳) | ✅ | - | [モニター連絡](./モニター連絡.py.md)のツールが操作する台帳 | キーワード引数 |
+| エージェント一覧 | `agents` | [`list[Agent]`](../モニター/エージェント管理.py.md#エージェント定義) | ✅ | - | 処理中ラベルの解決に使う | キーワード引数 |
 
 引数例:
 
 ```python
-_get_repo()
+build_mcp_app(settings, registry=registry, agents=agents)
 ```
 
 #### 戻り値
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `tuple[str, str]` | `(owner, repo)` | - |
-
-戻り値例:
-
-```python
-("shuhei1101", "ai-monitor")
-```
+| `ASGIApp` | Streamable HTTP の ASGI アプリ | マウント先で `/mcp` を待ち受ける |
 
 #### 処理
 
-1. `git remote get-url origin` で remote URL を取得する
-2. https / ssh（`git@` / `ssh://`）の各形式をパースして `(owner, repo)` を返す
+1. MCP サーバーのインスタンスを作る
+2. 全ツールに設定・台帳・エージェント一覧を束ねて登録する（束ねた引数は公開シグネチャから隠す）
+3. Streamable HTTP の ASGI アプリを生成して返す
 
 #### 例外
 
-| 例外名 | 発生条件 | メッセージ | 補足 |
-| --- | --- | --- | --- |
-| `CalledProcessError` | git が非 0 で終了（remote 未設定 等） | git の stderr | - |
+なし
 
 #### 単体テスト
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_repo_when_https_url` | 正常 | https 形式の解析 | remote が `https://github.com/o/r.git` | git CLI | `("o", "r")` | - |
-| `test_get_repo_when_ssh_url` | 正常 | ssh 形式の解析 | remote が `git@github.com:o/r.git` | git CLI | `("o", "r")` | - |
+| `test_build_mcp_app` | 正常 | ツールの登録 | 設定・台帳・エージェント一覧を渡す | なし | 全ツールが登録された ASGI アプリが返る | 名前と個数を確認する |
+| `test_build_mcp_app_when_signature` | 正常 | 内部引数の除去 | 同上 | なし | 公開シグネチャに `settings` / `registry` / `agents` が無い | MCP のスキーマ生成に効く |
 
 ---
+
+### プロジェクト解決
+> 物理名: `_resolve_project`<br>
+> 種別: 関数
+
+リクエストヘッダ `X-Project` から対象の[監視対象プロジェクト](../モニター/エージェント管理.py.md#監視対象プロジェクト)を解決する。
+
+モニターが tmux セッションを起動するときに環境変数へ入れた値が、プラグインの `.mcp.json` の `headers` で展開されてヘッダに載る（[1 件処理](../モニター/エージェント管理.py.md#1-件処理)）。
+常駐サーバは複数プロジェクトのセッションから同時に叩かれるため、作業ディレクトリではなく呼び出し元が名乗った値で対象を決める。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| コンテキスト | `ctx` | `Context` | ✅ | - | MCP のリクエストコンテキスト | ヘッダの取得元 |
+| プロジェクト一覧 | `projects` | [`list[MonitoredProject]`](../モニター/エージェント管理.py.md#監視対象プロジェクト) | ✅ | - | 設定の監視対象プロジェクト | キーワード引数 |
+
+引数例:
+
+```python
+_resolve_project(ctx, projects=settings.projects)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`MonitoredProject`](../モニター/エージェント管理.py.md#監視対象プロジェクト) | 対象プロジェクトの設定 | `repo` から `(owner, repo)` を得る |
+
+戻り値例:
+
+```python
+MonitoredProject(name="sandbox", repo="shuhei1101/ai-monitor-e2e", local_path="/home/user/repo/ai-monitor-e2e", wiki_base="https://...")
+```
+
+#### 処理
+
+1. リクエストコンテキストから `X-Project` ヘッダを取り出す（無ければ `ProjectNotFoundError` を投げる）
+   - `[WARNING]` プロジェクト名の指定が無い呼び出しを拒否した
+2. `projects` から名前が一致する設定を探して返す（無ければ `ProjectNotFoundError` を投げる）
+   - `[WARNING]` 未登録のプロジェクト名を拒否した（受け取った名前）
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `ProjectNotFoundError` | `X-Project` ヘッダが無い | 期待するヘッダ名 | 設定漏れ。MCP がツールエラーとして返す |
+| `ProjectNotFoundError` | 設定に無いプロジェクト名 | 受け取った名前と設定済みの名前一覧 | 同じ例外の別発生箇所 |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_resolve_project` | 正常 | ヘッダからの解決 | `X-Project` に登録済みの名前 | MCP コンテキスト | 対応する設定が返る | - |
+| `test_resolve_project_when_header_missing` | 異常 | ヘッダなし | `X-Project` を送らない | MCP コンテキスト | `ProjectNotFoundError` | 例外表「ヘッダが無い」に対応 |
+| `test_resolve_project_when_unknown_name` | 異常 | 未登録の名前 | 設定に無い名前を送る | MCP コンテキスト | `ProjectNotFoundError`（設定済みの名前一覧を含む） | 例外表「設定に無いプロジェクト名」に対応 |
+
+---
+
 
 ### ログイン解決
 > 物理名: `_get_current_login`<br>
@@ -1926,11 +2016,13 @@ _get_current_login()
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 番号 | `number` | `int` | ✅ | - | 対象の Issue / PR 番号 | - |
+| オーナー | `owner` | `str` | ✅ | - | 対象リポジトリのオーナー | キーワード引数。[プロジェクト解決](#プロジェクト解決)の結果から得る |
+| リポジトリ | `repo` | `str` | ✅ | - | 対象リポジトリ名 | キーワード引数。同上 |
 
 引数例:
 
 ```python
-_get_labels(35)
+_get_labels(35, owner="shuhei1101", repo="ai-monitor-e2e")
 ```
 
 #### 戻り値
@@ -1974,11 +2066,13 @@ _get_labels(35)
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 番号 | `number` | `int` | ✅ | - | 対象の Issue / PR 番号 | - |
+| オーナー | `owner` | `str` | ✅ | - | 対象リポジトリのオーナー | キーワード引数。[プロジェクト解決](#プロジェクト解決)の結果から得る |
+| リポジトリ | `repo` | `str` | ✅ | - | 対象リポジトリ名 | キーワード引数。同上 |
 
 引数例:
 
 ```python
-_get_assignees(35)
+_get_assignees(35, owner="shuhei1101", repo="ai-monitor-e2e")
 ```
 
 #### 戻り値
@@ -2113,11 +2207,13 @@ False
 | --- | --- | --- | --- | --- | --- | --- |
 | 番号 | `number` | `int` | ✅ | - | 対象の Issue / PR 番号 | - |
 | 本文 | `body` | `str` | ✅ | - | 投稿するコメント本文 | - |
+| オーナー | `owner` | `str` | ✅ | - | 対象リポジトリのオーナー | キーワード引数。[プロジェクト解決](#プロジェクト解決)の結果から得る |
+| リポジトリ | `repo` | `str` | ✅ | - | 対象リポジトリ名 | キーワード引数。同上 |
 
 引数例:
 
 ```python
-_create_issue_comment(35, "> from: @architect\n\n設計 Wiki を更新しました。")
+_create_issue_comment(35, "> from: @architect\n\n設計 Wiki を更新しました。", owner="shuhei1101", repo="ai-monitor-e2e")
 ```
 
 #### 戻り値

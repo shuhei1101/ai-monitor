@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,15 +18,10 @@ from ai_monitor.features.cleanup.service import (
 from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.integrations.github.client import get_client
 from ai_monitor.integrations.github.search import list_open_targets
+from ai_monitor.observability import configure
 from ai_monitor.server.app import create_app
 from ai_monitor.shared.settings import _AGENT_NAMES, AgentModel, LabelSettings, Settings
 from ai_monitor.shared.types import MonitorTarget
-
-# 観測モジュールは MCP サーバーと共用するためプラグイン配下に置かれている
-PLUGIN_DIR = Path(__file__).resolve().parents[2] / "plugins" / "ai-monitor"
-sys.path.insert(0, str(PLUGIN_DIR))
-
-from observability import configure  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

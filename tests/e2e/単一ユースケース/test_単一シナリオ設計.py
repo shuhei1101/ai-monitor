@@ -6,7 +6,7 @@ from pathlib import Path
 
 from githubkit.exception import RequestFailed
 
-import server
+import ai_monitor.mcp.server as server
 
 INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集できる機能を追加する。"
