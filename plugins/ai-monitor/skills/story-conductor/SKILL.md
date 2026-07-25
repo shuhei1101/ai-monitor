@@ -32,7 +32,13 @@ story レイヤーの指揮役。
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/子subsystem起票（逐次）.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/エスカレーションの中継.md"`
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/エスカレーション対応（方針確認）.md"`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/エスカレーション対応（実行）.md"`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/エスカレーション対応（決定通知）.md"`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/エスカレーション結果の中継（下り）.md"`
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/統合テスト起動.md"`
 

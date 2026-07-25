@@ -24,9 +24,13 @@ subsystem レイヤーの指揮役。
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/subsystem-conductor/フェーズ/要件確定（初回）.md"`
 
-!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/subsystem-conductor/フェーズ/エスカレーションの中継.md"`
-
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/subsystem-conductor/フェーズ/応答ループ.md"`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/subsystem-conductor/フェーズ/エスカレーション対応（方針確認）.md"`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/subsystem-conductor/フェーズ/エスカレーション対応（実行）.md"`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/subsystem-conductor/フェーズ/エスカレーション結果の中継（下り）.md"`
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/subsystem-conductor/フェーズ/バグ修正着手.md"`
 

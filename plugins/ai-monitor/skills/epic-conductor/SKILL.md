@@ -36,6 +36,12 @@ epic レイヤーの指揮役。
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/統合テスト起動.md"`
 
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/エスカレーション対応（方針確認）.md"`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/エスカレーション対応（実行）.md"`
+
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/エスカレーション対応（決定通知）.md"`
+
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/バグ差し戻し（方針確認）.md"`
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/epic-conductor/フェーズ/バグ差し戻し（実行）.md"`
