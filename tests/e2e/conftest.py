@@ -1,6 +1,7 @@
 """E2E テスト共通の fixture（実モニター + sandbox 実環境・--run-e2e ガード）。"""
 from __future__ import annotations
 
+import base64
 import os
 import socket
 import subprocess
@@ -312,26 +313,122 @@ def story_issue_factory(gh_live, repo_ctx, sandbox):
 
 
 @pytest.fixture
-def epic_pr_factory(gh_live, repo_ctx):
-    """master から空 commit ブランチを生やして Draft PR を作成する factory。
+def draft_pr_factory(gh_live, repo_ctx):
+    """指定 base から空 commit ブランチを生やして Draft PR を作成する factory。
 
-    後片付けは epic_issue_factory の紐づく PR 掃除（close + ブランチ削除）に委ねる。
+    後片付けは各 issue_factory の紐づく PR 掃除（close + ブランチ削除）に委ねる。
     """
     owner, repo = repo_ctx
 
-    def _create(branch: str, title: str, body: str) -> object:
-        # master 先端の commit / tree を取得して空 commit を作る（API のみで diff なし PR を成立させる）
-        base = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch="master").parsed_data
+    def _create(branch: str, title: str, body: str, *, base_branch: str = "master") -> object:
+        # base 先端の commit / tree を取得して空 commit を作る（API のみで diff なし PR を成立させる）
+        base = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch=base_branch).parsed_data
         commit = gh_live.rest.git.create_commit(
             owner=owner, repo=repo, message="chore: e2e 用の空コミット",
             tree=base.commit.commit.tree.sha, parents=[base.commit.sha],
         ).parsed_data
         gh_live.rest.git.create_ref(owner=owner, repo=repo, ref=f"refs/heads/{branch}", sha=commit.sha)
         return gh_live.rest.pulls.create(
-            owner=owner, repo=repo, title=title, head=branch, base="master", body=body, draft=True
+            owner=owner, repo=repo, title=title, head=branch, base=base_branch, body=body, draft=True
         ).parsed_data
 
     return _create
+
+
+@pytest.fixture
+def epic_pr_factory(draft_pr_factory):
+    """master を base とする Draft PR を作成する factory。"""
+
+    def _create(branch: str, title: str, body: str) -> object:
+        return draft_pr_factory(branch, title, body)
+
+    return _create
+
+
+@pytest.fixture
+def commit_file(gh_live, repo_ctx):
+    """指定ブランチにファイルを 1 件 commit する function fixture。"""
+    owner, repo = repo_ctx
+
+    def _commit(branch: str, path: str, content: str, message: str) -> None:
+        gh_live.rest.repos.create_or_update_file_contents(
+            owner=owner, repo=repo, path=path, message=message,
+            content=base64.b64encode(content.encode("utf-8")).decode("ascii"), branch=branch,
+        )
+
+    return _commit
+
+
+@pytest.fixture
+def subsystem_issue_factory(gh_live, repo_ctx, sandbox):
+    """親 story 付きの subsystem Issue を作成し、テスト後に PR・ブランチ・worktree・tmux セッションごと片付ける factory。"""
+    owner, repo = repo_ctx
+    created: list[int] = []
+
+    def _create(
+        parent_story_number: int,
+        title: str,
+        *,
+        body: str = "",
+        labels: list[str] | None = None,
+    ) -> object:
+        # 既定は本文空 + layer:subsystem + 確認:subsystem-conductor で作成する
+        labels_ = labels if labels is not None else ["layer:subsystem", "確認:subsystem-conductor"]
+        subsystem = gh_live.rest.issues.create(
+            owner=owner, repo=repo, title=title, body=body, labels=labels_
+        ).parsed_data
+        # 親 story に Sub-issue リンクする
+        gh_live.rest.issues.add_sub_issue(
+            owner=owner, repo=repo, issue_number=parent_story_number, sub_issue_id=subsystem.id
+        )
+        created.append(subsystem.number)
+        return subsystem
+
+    yield _create
+    cleanup_numbers: list[int] = []
+    branches: list[str] = []
+    for subsystem_number in reversed(created):
+        # subsystem に紐づく open PR をクローズしてリモートブランチを削除する
+        try:
+            pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data
+        except RequestFailed:
+            pulls = []
+        for pr in pulls:
+            if f"#{subsystem_number}" not in (pr.body or ""):
+                continue
+            cleanup_numbers.append(pr.number)
+            branches.append(pr.head.ref)
+            try:
+                gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
+            except RequestFailed:
+                pass
+            try:
+                gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
+            except RequestFailed:
+                pass
+        # subsystem Issue を not_planned でクローズする
+        cleanup_numbers.append(subsystem_number)
+        try:
+            gh_live.rest.issues.update(
+                owner=owner, repo=repo, issue_number=subsystem_number, state="closed", state_reason="not_planned"
+            )
+        except RequestFailed:
+            pass
+    # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
+    local_path = sandbox["local_path"]
+    for branch in branches:
+        worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
+        subprocess.run(
+            ["git", "-C", local_path, "worktree", "remove", "--force", str(worktree_path)],
+            capture_output=True, text=True, check=False,
+        )
+        subprocess.run(["git", "-C", local_path, "branch", "-D", branch], capture_output=True, text=True, check=False)
+    subprocess.run(["git", "-C", local_path, "worktree", "prune"], capture_output=True, text=True, check=False)
+    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
+    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
+    for name in listed.stdout.splitlines():
+        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
+            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
 
 
 @pytest.fixture

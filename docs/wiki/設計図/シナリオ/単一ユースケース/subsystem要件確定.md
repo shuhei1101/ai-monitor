@@ -8,6 +8,8 @@ subsystem-conductor が subsystem Issue の本文整形 + 現状調査（既存�
 
 対応エージェント: `subsystem-conductor`
 
+- 対応テストファイル: `tests/e2e/単一ユースケース/test_subsystem要件確定.py`
+
 ## 正常シナリオ
 
 ### セットアップ
