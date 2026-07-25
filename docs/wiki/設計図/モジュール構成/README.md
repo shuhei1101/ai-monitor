@@ -18,10 +18,11 @@ ai-monitor の構成要素（クラス / 関数 / 関数型 / データモデル
 | モニター | GitHub連携 | [GitHub連携](./モニター/GitHub連携.py.md) | GitHub API（githubkit）を呼ぶ薄い連携層（検索 / 取得 / ラベル / クローズ） | - |
 | モニター | tmux連携 | [tmux連携](./モニター/tmux連携.py.md) | tmux セッションの実体操作（作成 / 送信 / 生存確認 / kill） | - |
 | モニター | クリーンアップ | [クリーンアップ](./モニター/クリーンアップ.py.md) | 周期の検知 4 種（intake 自動クローズ / epic 一括解放 / 個別解放 / タイムアウト回収） | - |
-| モニター | HTTP受信 | [HTTP受信](./モニター/HTTP受信.py.md) | MCP からの localhost HTTP（完了報告・監視対象追加 / 除去）の受信 | - |
+| モニター | HTTP受信 | [HTTP受信](./モニター/HTTP受信.py.md) | MCP サーバーをマウントする FastAPI アプリとポーリングループの駆動 | - |
 | MCP | GitHub操作 | [GitHub操作](./MCP/GitHub操作.py.md) | エージェントが使う GitHub 操作 MCP サーバー（githubkit / git CLI を直接呼ぶツール定義） | - |
-| MCP | モニター連絡 | [モニター連絡](./MCP/モニター連絡.py.md) | 作業完了報告（モニター HTTP API のラッパー） | - |
+| MCP | モニター連絡 | [モニター連絡](./MCP/モニター連絡.py.md) | 作業完了報告・監視対象の追加 / 除去（セッション台帳を直接操作） | - |
+| MCP | Wiki参照 | [Wiki参照](./MCP/Wiki参照.py.md) | 事前注入されていない Wiki ページを実行時に取得するツール定義 | - |
 | 注入 | エージェントドキュメント | [エージェントドキュメント](./注入/エージェントドキュメント.py.md) | 対応表からエージェントごとの参照ドキュメントを展開する注入 CLI | - |
 | 注入 | URLドキュメント | [URLドキュメント](./注入/URLドキュメント.py.md) | 指定 URL の本文を md コードブロックで展開する注入 CLI | - |
 | 注入 | Wiki索引 | [Wiki索引](./注入/Wiki索引.py.md) | プロジェクト Wiki の README を再帰的に辿った「ページ（raw URL）/ 概要」2 列表を展開する注入 CLI | - |
-| 観測 | OTel初期化 | [OTel初期化](./観測/OTel初期化.py.md) | OpenTelemetry SDK（Log / Trace / Metric Provider）を起動時に 1 回配線するモジュール | モニター / MCP サーバー 常駐プロセスの composition root から呼ぶ |
+| 観測 | OTel初期化 | [OTel初期化](./観測/OTel初期化.py.md) | OpenTelemetry SDK（Log / Trace / Metric Provider）を起動時に 1 回配線するモジュール | モニターの composition root から呼ぶ |

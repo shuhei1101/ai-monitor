@@ -43,6 +43,7 @@ from ai_monitor.mcp.models import (
     WorktreeCreateResult,
     WorktreeRemoveResult,
 )
+from ai_monitor.mcp.wiki import read_wiki_pages
 from ai_monitor.shared.settings import MonitoredProject, Settings
 
 logger = logging.getLogger(__name__)
@@ -1036,6 +1037,7 @@ def build_mcp_app(settings: Settings, *, registry: SessionRegistry, agents: list
         (resolve_comments, "コメント一括Resolve", None),
         (list_addressed_comments, "宛先コメント一覧", _READ_ONLY),
         (search_issues_and_prs, "Issue・PR検索", _READ_ONLY),
+        (_log_tool_call(read_wiki_pages), "Wikiページ取得", _READ_ONLY),
         (create_review_comment, "インラインコメント投稿", None),
         (list_review_threads, "レビュースレッド一覧", _READ_ONLY),
         (resolve_review_threads, "レビュースレッド一括Resolve", None),

@@ -31,6 +31,7 @@ EXPECTED_TOOLS = {
     "get_issue_or_pr",
     "list_addressed_comments",
     "search_issues_and_prs",
+    "read_wiki_pages",
     "comment",
     "ask_questions",
     "reply_comment",

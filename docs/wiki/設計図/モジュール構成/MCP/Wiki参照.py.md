@@ -1,0 +1,173 @@
+---
+template_version: 1.1.0
+---
+
+# モジュール構成: MCP / Wiki参照
+
+`Wiki参照` ドメイン（MCP 側）に属する構成要素詳細。
+エージェントが自ターンの実行中に Wiki ページを読むためのツールを扱う。
+
+本ドメインのツールも [GitHub操作](./GitHub操作.py.md) と同じ [`_log_tool_call`](./GitHub操作.py.md#ツール呼び出しログ) でラップし、ログ出力を個々のツールに書かない。
+デコレータは [アプリ組み立て](./GitHub操作.py.md#アプリ組み立て) の登録時に適用する（`mcp/wiki.py` から `mcp/server.py` を import しないため）。
+
+URL の正規化・取得・front matter 除去は [URLドキュメント注入](../注入/URLドキュメント.py.md) の関数をそのまま使う。
+実体をプラグイン配下に置くのは、注入 CLI がプラグインのインストール先から起動されて `src/` を参照できないため。
+モニターは ai-monitor のクローンから動くので、リポジトリルートからの相対パスで `plugins/ai-monitor/inject` を `sys.path` に追加して読み込む（`constants.env` の参照と同じ向き）。
+
+## 一覧
+
+| ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 共通 | 取得結果 DTO | `mcp/models.py` | データモデル | [`WikiPage`](#wikiページ) / [`WikiPagesResult`](#wikiページ取得結果) | 取得したページ本文 | - |
+| 共通 | 例外 | `mcp/wiki.py` | クラス | `WikiFetchError` | ページを取得できない | 仕様は[Wikiページ取得](#wikiページ取得)の例外表 |
+| Wikiページ取得 | MCP ツール | `mcp/wiki.py` | 関数 | [`read_wiki_pages`](#wikiページ取得) | 指定 URL の本文を配列で返す | 読み取り専用 |
+
+## ディレクトリ構成
+
+```
+src/ai_monitor/mcp/
+├── wiki.py      # read_wiki_pages
+└── models.py    # WikiPage / WikiPagesResult
+```
+
+## 構成図
+
+```mermaid
+classDiagram
+  Wikiページ取得 ..> URL正規化 : raw URL 化
+  Wikiページ取得 ..> URL取得 : 本文取得
+  Wikiページ取得 ..> frontmatter除去 : 本文整形
+  Wikiページ取得 ..> Wikiページ取得結果 : DTO 生成
+  Wikiページ取得結果 o-- Wikiページ : ページ一覧
+
+  class Wikiページ取得 {
+    <<function>>
+    +Wikiページ取得(URL一覧) Wikiページ取得結果
+  }
+  class URL正規化 {
+    <<function>>
+  }
+  class frontmatter除去 {
+    <<function>>
+  }
+  class URL取得 {
+    <<function>>
+  }
+  class Wikiページ取得結果 {
+    +ページ一覧: list~Wikiページ~
+  }
+  class Wikiページ {
+    +URL: str
+    +本文: str
+  }
+
+  click Wikiページ取得 href "#wikiページ取得"
+  click URL正規化 href "../注入/URLドキュメント.py.md#url-正規化"
+  click frontmatter除去 href "../注入/URLドキュメント.py.md#front-matter-除去"
+  click URL取得 href "../注入/URLドキュメント.py.md#url-取得"
+  click Wikiページ取得結果 href "#wikiページ取得結果"
+  click Wikiページ href "#wikiページ"
+```
+
+## Wikiページ
+> 物理名: `WikiPage`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+取得した Wiki ページ 1 件（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| URL | `url` | `str` | 公開 | - | 実際に取得した URL | `"https://raw.githubusercontent.com/o/r/master/docs/wiki/規約/コメント.md"` | blob URL を渡した場合は変換後の raw URL |
+| 本文 | `body` | `str` | 公開 | - | ページ本文 | `"# 規約: コメント\n..."` | 先頭の YAML front matter は除去済み |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## Wikiページ取得結果
+> 物理名: `WikiPagesResult`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+[Wikiページ取得](#wikiページ取得)の戻り値（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ページ一覧 | `pages` | [`list[WikiPage]`](#wikiページ) | 公開 | - | 取得したページの配列 | `[WikiPage(url="...", body="...")]` | 並びは引数の指定順 |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## `mcp/wiki.py`
+> 種別: ファイル
+
+Wiki ページ取得ツールを定義するファイル。
+
+---
+
+### Wikiページ取得
+> 物理名: `read_wiki_pages`<br>
+> 種別: 関数
+
+指定 URL の本文を取得して配列で返す。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| URL 一覧 | `urls` | `list[str]` | ✅ | - | 取得対象 URL の配列 | 1 件以上 |
+
+引数例:
+
+```python
+read_wiki_pages(["https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/シナリオ.md"])
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`WikiPagesResult`](#wikiページ取得結果) | 取得したページの配列 | - |
+
+戻り値例:
+
+```python
+WikiPagesResult(pages=[WikiPage(url="https://raw.githubusercontent.com/.../シナリオ.md", body="# ai-monitor テンプレート: シナリオ\n...")])
+```
+
+#### 処理
+
+1. `urls` を 1 件ずつ raw URL に正規化する（[URL 正規化](../注入/URLドキュメント.py.md#url-正規化)）
+2. 正規化した URL から本文を取得する（[URL 取得](../注入/URLドキュメント.py.md#url-取得)。失敗時は `WikiFetchError` を投げる）
+   - `[WARNING]` Wiki ページの取得に失敗した（対象 URL）
+3. 本文先頭の YAML front matter を除去して [Wikiページ](#wikiページ) に詰める（[front matter 除去](../注入/URLドキュメント.py.md#front-matter-除去)）
+4. 指定順に並べた [Wikiページ取得結果](#wikiページ取得結果) を返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `WikiFetchError` | いずれかの URL の取得に失敗 | 取得に失敗した URL と原因 | 1 件でも失敗したら残りは取得しない |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_read_wiki_pages` | 正常 | 複数ページの取得 | URL 2 件 | HTTP | 指定順に 2 件の `WikiPage` が返る | - |
+| `test_read_wiki_pages_when_blob_url` | 正常 | blob URL の変換 | blob 形式の URL を渡す | HTTP | raw URL で取得され `url` が raw URL になる | - |
+| `test_read_wiki_pages_when_frontmatter` | 正常 | front matter の除去 | 先頭に front matter があるページ | HTTP | `body` に front matter が含まれない | - |
+| `test_read_wiki_pages_when_fetch_fails` | 異常 | 取得失敗 | HTTP が 404 を返す | HTTP | `WikiFetchError`（対象 URL を含む） | 例外表「取得に失敗」に対応 |

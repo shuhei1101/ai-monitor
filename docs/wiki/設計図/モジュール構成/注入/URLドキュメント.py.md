@@ -5,13 +5,17 @@ template_version: 1.1.0
 # モジュール構成: 注入 / URLドキュメント
 
 `URLドキュメント` ドメイン（注入側）に属する構成要素詳細。
-SKILL.md の動的コンテキスト注入・フェーズ内の実行時取得から呼ばれ、指定 URL の本文を標準出力に展開する。
+SKILL.md の動的コンテキスト注入から呼ばれ、指定 URL の本文を標準出力に展開する。
+
+本ドメインの関数はプラグイン配下に置き、モニターと注入 CLI の両方から使う。
+CLI はプラグインのインストール先から起動されて `src/` を参照できないため、共有できる位置がプラグイン配下になる。
+モニター側は [Wiki参照](../MCP/Wiki参照.py.md) の MCP ツールが `sys.path` 経由で読み込む。
 
 ## 一覧
 
 | ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| URLドキュメント注入 | URL 取得 | `inject/fetch.py` | 関数 | [`fetch_url`](#url-取得) | URL からテキストを取得する | エージェントドキュメント注入と共有 |
+| URLドキュメント注入 | URL 取得 | `inject/fetch.py` | 関数 | [`fetch_url`](#url-取得) | URL からテキストを取得する | エージェントドキュメント注入・[Wiki参照](../MCP/Wiki参照.py.md)と共有 |
 | URLドキュメント注入 | URL 正規化 | `inject/read_urls.py` | 関数 | [`normalize_github_url`](#url-正規化) | GitHub blob URL を raw URL に変換する | - |
 | URLドキュメント注入 | front matter 除去 | `inject/read_urls.py` | 関数 | [`strip_frontmatter`](#front-matter-除去) | 本文先頭の YAML front matter を除去する | - |
 | URLドキュメント注入 | CLI | `inject/read_urls.py` | 関数 | [`main`](#cli) | URL 一覧を受けて本文一式を出力する | - |
@@ -20,8 +24,8 @@ SKILL.md の動的コンテキスト注入・フェーズ内の実行時取得�
 
 ```
 plugins/ai-monitor/inject/
-├── fetch.py         # fetch_url（エージェントドキュメント注入と共有）
-└── read_urls.py     # normalize_github_url / strip_frontmatter / main
+├── fetch.py         # fetch_url（エージェントドキュメント注入・Wiki参照と共有）
+└── read_urls.py     # normalize_github_url / strip_frontmatter（Wiki参照と共有）/ main
 ```
 
 ## 構成図

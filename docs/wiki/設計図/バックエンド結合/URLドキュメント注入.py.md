@@ -6,7 +6,8 @@ template_version: 1.0.0
 
 CLI: `python plugins/ai-monitor/inject/read_urls.py <url>...`
 
-SKILL.md の動的コンテキスト注入・フェーズ内の実行時取得から呼ばれ、指定 URL の本文を md コードブロックで包んで標準出力に展開する。
+SKILL.md の動的コンテキスト注入から呼ばれ、指定 URL の本文を md コードブロックで包んで標準出力に展開する。
+エージェントが実行中に読む経路は MCP ツール（[Wikiページ取得](./Wikiページ取得.py.md)）が担う。
 
 - 対応テストファイル: `tests/integration/inject/test_read_urls.py`
 

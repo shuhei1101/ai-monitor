@@ -192,3 +192,16 @@ class MonitorAck(BaseModel):
     """モニター HTTP API の受理結果。"""
 
     ok: bool
+
+
+class WikiPage(BaseModel):
+    """取得した Wiki ページ 1 件。"""
+
+    url: str
+    body: str
+
+
+class WikiPagesResult(BaseModel):
+    """read_wiki_pages が返す取得結果。"""
+
+    pages: list[WikiPage]

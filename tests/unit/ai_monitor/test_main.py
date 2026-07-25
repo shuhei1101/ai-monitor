@@ -27,7 +27,7 @@ def test_build_agents(label_settings, agent_models):
     # 準備: implementer だけ opus を指定して個別注入を検証する
     from ai_monitor.shared.settings import AgentModel
 
-    agent_models["implementer"] = AgentModel(model="claude-opus-4-7")
+    agent_models["implementer"] = AgentModel(model="opus")
     # 実行
     agents = main_mod.build_agents(label_settings, agent_models=agent_models)
     # 検証
@@ -36,7 +36,7 @@ def test_build_agents(label_settings, agent_models):
     assert by_name["epic-conductor"].confirm_label == "確認:epic-conductor"
     assert by_name["epic-conductor"].processing_label == "処理中:epic-conductor"
     assert by_name["epic-conductor"].model == "sonnet"
-    assert by_name["implementer"].model == "claude-opus-4-7"
+    assert by_name["implementer"].model == "opus"
     assert {a.name for a in agents if a.standalone} == STANDALONE_NAMES
 
 
