@@ -1,8 +1,11 @@
 """tmux セッションの実体操作。"""
 from __future__ import annotations
 
+import logging
 import subprocess
 import time
+
+logger = logging.getLogger(__name__)
 
 
 def create_session(name: str, cwd: str) -> None:
@@ -31,4 +34,11 @@ def kill_session(name: str) -> None:
 
 def _run_tmux(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
     """tmux CLI 呼び出しの単一入口。"""
-    return subprocess.run(["tmux", *args], capture_output=True, text=True, check=check)
+    result = subprocess.run(["tmux", *args], capture_output=True, text=True, check=check)
+    logger.debug(
+        "tmux コマンドを実行しました: subcommand=%s session_name=%s returncode=%s",
+        args[0],
+        args[2] if len(args) > 2 else None,
+        result.returncode,
+    )
+    return result

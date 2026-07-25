@@ -1,10 +1,16 @@
 """ai-monitor の GitHub 操作 + モニター連絡 MCP サーバー（stdio）。"""
 from __future__ import annotations
 
+import functools
+import inspect
 import json
+import logging
 import re
 import subprocess
+import sys
+import time
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
@@ -37,6 +43,13 @@ from models import (
     WorktreeCreateResult,
     WorktreeRemoveResult,
 )
+
+# 観測モジュールはプラグインルート直下にあるため親ディレクトリを解決して読み込む
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from observability import configure  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 SETTINGS_PATH = Path.home() / ".config" / "ai-monitor" / "settings.yaml"
 
@@ -80,6 +93,36 @@ _DESTRUCTIVE = ToolAnnotations(destructiveHint=True)
 
 
 # ---- 内部ヘルパー ----
+
+
+def _log_tool_call[**P, R](func: Callable[P, R]) -> Callable[P, R]:
+    """MCP ツールの実行と失敗をログに出すデコレータ。"""
+    signature = inspect.signature(func)
+
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        # 対象番号を引数から解決する（受け取らないツールは None）
+        try:
+            number = signature.bind_partial(*args, **kwargs).arguments.get("number")
+        except TypeError:
+            number = None
+        started = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+        except Exception:
+            logger.warning(
+                "MCP ツールが失敗しました: tool=%s number=%s", func.__name__, number, exc_info=True
+            )
+            raise
+        logger.info(
+            "MCP ツールを実行しました: tool=%s number=%s elapsed_ms=%s",
+            func.__name__,
+            number,
+            int((time.perf_counter() - started) * 1000),
+        )
+        return result
+
+    return wrapper
 
 
 def _get_client() -> GitHub:
@@ -250,6 +293,7 @@ def _is_minimized(node_id: str) -> bool:
 
 
 @mcp.tool(title="Issue・PR情報取得", annotations=_READ_ONLY)
+@_log_tool_call
 def get_issue_or_pr(
     number: int,
     is_pr: bool,
@@ -358,6 +402,7 @@ def get_issue_or_pr(
 
 
 @mcp.tool(title="コメント投稿")
+@_log_tool_call
 def comment(number: int, is_pr: bool, sender: str, body: str, receiver: str | None = None) -> CommentResult:
     """定型ブロックでコメントを投稿する。"""
     # from / to ヘッダー + 本文を組み立てる
@@ -367,6 +412,7 @@ def comment(number: int, is_pr: bool, sender: str, body: str, receiver: str | No
 
 
 @mcp.tool(title="質問投稿")
+@_log_tool_call
 def ask_questions(
     number: int,
     is_pr: bool,
@@ -401,6 +447,7 @@ def ask_questions(
 
 
 @mcp.tool(title="コメント返信")
+@_log_tool_call
 def reply_comment(comment_node_id: str, sender: str, body: str, receiver: str | None = None) -> CommentResult:
     """既存コメントに `---` 区切りで定型ブロックを追記する。"""
     client = _get_client()
@@ -417,6 +464,7 @@ def reply_comment(comment_node_id: str, sender: str, body: str, receiver: str | 
 
 
 @mcp.tool(title="コメント一括Resolve")
+@_log_tool_call
 def resolve_comments(node_ids: list[str]) -> ResolveResult:
     """複数コメントの Resolve をまとめて実行する。"""
     # node_ids を 1 件ずつ Resolve する
@@ -427,6 +475,7 @@ def resolve_comments(node_ids: list[str]) -> ResolveResult:
 
 
 @mcp.tool(title="宛先コメント一覧", annotations=_READ_ONLY)
+@_log_tool_call
 def list_addressed_comments(
     number: int, is_pr: bool, addressee: str, include_resolved: bool = False
 ) -> list[AddressedComment]:
@@ -465,6 +514,7 @@ def list_addressed_comments(
 
 
 @mcp.tool(title="Issue・PR検索", annotations=_READ_ONLY)
+@_log_tool_call
 def search_issues_and_prs(
     query: str,
     sort: Literal[
@@ -509,6 +559,7 @@ def search_issues_and_prs(
 
 
 @mcp.tool(title="インラインコメント投稿")
+@_log_tool_call
 def create_review_comment(
     pr_number: int,
     path: str,
@@ -537,6 +588,7 @@ def create_review_comment(
 
 
 @mcp.tool(title="レビュースレッド一覧", annotations=_READ_ONLY)
+@_log_tool_call
 def list_review_threads(pr_number: int, include_resolved: bool = False) -> list[ReviewThread]:
     """PR のレビュースレッド一覧を取得する。"""
     client = _get_client()
@@ -574,6 +626,7 @@ def list_review_threads(pr_number: int, include_resolved: bool = False) -> list[
 
 
 @mcp.tool(title="レビュースレッド一括Resolve")
+@_log_tool_call
 def resolve_review_threads(thread_node_ids: list[str]) -> ResolveResult:
     """レビュースレッドを一括で解決する。"""
     client = _get_client()
@@ -585,6 +638,7 @@ def resolve_review_threads(thread_node_ids: list[str]) -> ResolveResult:
 
 
 @mcp.tool(title="ラベル追加")
+@_log_tool_call
 def add_labels(number: int, is_pr: bool, labels: list[str]) -> LabelsResult:
     """ラベルを追加して付与後の一覧を返す。"""
     owner, repo = _get_repo()
@@ -595,6 +649,7 @@ def add_labels(number: int, is_pr: bool, labels: list[str]) -> LabelsResult:
 
 
 @mcp.tool(title="ラベル除去", annotations=_DESTRUCTIVE)
+@_log_tool_call
 def remove_labels(number: int, is_pr: bool, labels: list[str]) -> LabelsResult:
     """ラベルを除去して除去後の一覧を返す（議論中は対象外）。"""
     # labels に議論中が含まれていれば ValueError を投げる（API は呼ばない）
@@ -614,6 +669,7 @@ def remove_labels(number: int, is_pr: bool, labels: list[str]) -> LabelsResult:
 
 
 @mcp.tool(title="フェーズ遷移")
+@_log_tool_call
 def transition_phase(
     number: int,
     is_pr: bool,
@@ -640,6 +696,7 @@ def transition_phase(
 
 
 @mcp.tool(title="assignee設定")
+@_log_tool_call
 def set_assignee(number: int, is_pr: bool) -> AssigneesResult:
     """認証ユーザーを assignee に設定して現況を返す。"""
     # 認証ユーザーのログイン名を求める
@@ -652,6 +709,7 @@ def set_assignee(number: int, is_pr: bool) -> AssigneesResult:
 
 
 @mcp.tool(title="assignee除去", annotations=_DESTRUCTIVE)
+@_log_tool_call
 def remove_assignee(number: int, is_pr: bool) -> AssigneesResult:
     """認証ユーザーの assignee を除去して現況を返す。"""
     # 認証ユーザーのログイン名を求める
@@ -664,6 +722,7 @@ def remove_assignee(number: int, is_pr: bool) -> AssigneesResult:
 
 
 @mcp.tool(title="本文更新")
+@_log_tool_call
 def update_body(number: int, is_pr: bool, body: str) -> EmptyResult:
     """本文を完全置換で更新する。"""
     owner, repo = _get_repo()
@@ -673,6 +732,7 @@ def update_body(number: int, is_pr: bool, body: str) -> EmptyResult:
 
 
 @mcp.tool(title="タイトル更新")
+@_log_tool_call
 def update_title(number: int, is_pr: bool, title: str) -> EmptyResult:
     """タイトルを更新する。"""
     owner, repo = _get_repo()
@@ -682,6 +742,7 @@ def update_title(number: int, is_pr: bool, title: str) -> EmptyResult:
 
 
 @mcp.tool(title="クローズ", annotations=_DESTRUCTIVE)
+@_log_tool_call
 def close(
     number: int,
     is_pr: bool,
@@ -704,6 +765,7 @@ def close(
 
 
 @mcp.tool(title="Issue再オープン")
+@_log_tool_call
 def reopen_issue(number: int) -> EmptyResult:
     """クローズ済み Issue を再オープンする。"""
     owner, repo = _get_repo()
@@ -715,6 +777,7 @@ def reopen_issue(number: int) -> EmptyResult:
 
 
 @mcp.tool(title="子Issue作成")
+@_log_tool_call
 def create_child_issue(
     parent_issue_number: int, title: str, body: str, labels: list[str] | None = None
 ) -> CreatedIssueResult:
@@ -736,6 +799,7 @@ def create_child_issue(
 
 
 @mcp.tool(title="DraftPR作成")
+@_log_tool_call
 def create_draft_pr(head_branch: str, base_branch: str, title: str, body: str) -> CreatedPRResult:
     """base 明示で Draft PR を作成する。"""
     owner, repo = _get_repo()
@@ -747,6 +811,7 @@ def create_draft_pr(head_branch: str, base_branch: str, title: str, body: str) -
 
 
 @mcp.tool(title="PR_Ready化")
+@_log_tool_call
 def mark_pr_ready(pr_number: int) -> EmptyResult:
     """Draft を解除して Ready 状態にする。"""
     client = _get_client()
@@ -759,6 +824,7 @@ def mark_pr_ready(pr_number: int) -> EmptyResult:
 
 
 @mcp.tool(title="PRマージ", annotations=_DESTRUCTIVE)
+@_log_tool_call
 def merge_pr(pr_number: int, strategy: Literal["squash", "merge", "rebase"] | None = None) -> EmptyResult:
     """既定 squash + ブランチ削除で PR をマージする。"""
     client = _get_client()
@@ -772,6 +838,7 @@ def merge_pr(pr_number: int, strategy: Literal["squash", "merge", "rebase"] | No
 
 
 @mcp.tool(title="worktree作成")
+@_log_tool_call
 def worktree_create(branch: str) -> WorktreeCreateResult:
     """ブランチと worktree を .claude/worktrees/ 配下に作成し、Draft PR 用の空 commit を push する。"""
     # 分岐元（origin/{current} or HEAD）を求める
@@ -788,6 +855,7 @@ def worktree_create(branch: str) -> WorktreeCreateResult:
 
 
 @mcp.tool(title="worktree削除", annotations=_DESTRUCTIVE)
+@_log_tool_call
 def worktree_remove(branch: str) -> WorktreeRemoveResult:
     """worktree とローカルブランチを削除する。"""
     # 対象の worktree パスを求める
@@ -803,6 +871,7 @@ def worktree_remove(branch: str) -> WorktreeRemoveResult:
 
 
 @mcp.tool(title="作業完了報告")
+@_log_tool_call
 def report_completion(agent_name: str, number: int) -> MonitorAck:
     """自ターン終了をモニターの HTTP API へ通知する。"""
     # CWD から project を求める
@@ -822,6 +891,7 @@ def report_completion(agent_name: str, number: int) -> MonitorAck:
 
 
 @mcp.tool(title="監視対象追加")
+@_log_tool_call
 def add_watch_targets(agent_name: str, number: int, watch_numbers: list[int]) -> MonitorAck:
     """作成した派生 PR を自セッションの監視面として台帳に登録する。"""
     # CWD から project を求める
@@ -841,6 +911,7 @@ def add_watch_targets(agent_name: str, number: int, watch_numbers: list[int]) ->
 
 
 @mcp.tool(title="監視対象除去", annotations=_DESTRUCTIVE)
+@_log_tool_call
 def remove_watch_targets(agent_name: str, number: int, watch_numbers: list[int]) -> MonitorAck:
     """自セッションの監視面から番号を取り除く。"""
     # CWD から project を求める
@@ -860,4 +931,5 @@ def remove_watch_targets(agent_name: str, number: int, watch_numbers: list[int])
 
 
 if __name__ == "__main__":
+    configure("github-mcp")
     mcp.run()

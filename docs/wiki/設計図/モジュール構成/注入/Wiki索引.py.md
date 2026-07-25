@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 1.1.0
 ---
 
 # モジュール構成: 注入 / Wiki索引

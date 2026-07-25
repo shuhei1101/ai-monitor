@@ -16,5 +16,6 @@ template_version: 1.0.0
 | gh（GitHub CLI） | [gh](./gh.md) | セッションフックのリポジトリ情報取得 | Python ライブラリではなく CLI |
 | tmux | [tmux](./tmux.md) | エージェントセッションの実体操作（作成 / 送信 / 生存確認 / kill） | Python ライブラリではなく CLI |
 | OpenTelemetry Python SDK | [opentelemetry](./opentelemetry.md) | モニター / エージェントから telemetry（Traces / Metrics / Logs）を Collector に送信 | `opentelemetry-api` + `opentelemetry-sdk` + `opentelemetry-exporter-otlp` のセット |
+| OpenTelemetry Collector | [opentelemetry-collector](./opentelemetry-collector.md) | OTLP 受信 + Loki / 他バックエンドへ転送する中継バイナリ | contrib ディストリビューションを Docker Compose 1 サービスで起動 |
 | Grafana Loki | [loki](./loki.md) | telemetry の Log 保存・検索バックエンド | OTel Collector 経由で受信、LogQL で検索 |
 | Grafana | [Grafana](./grafana.md) | telemetry の可視化 UI（Loki / Prometheus / Tempo 等を横断表示） | Docker Compose で単体起動 + datasource プロビジョニング |

@@ -1,6 +1,7 @@
 """プロジェクト × エージェントの対ごとのポーリング。"""
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from ai_monitor.features.agents.types import Agent
@@ -12,6 +13,8 @@ from ai_monitor.shared.types import Issue, MonitorTarget, PullRequest
 
 if TYPE_CHECKING:
     from ai_monitor.features.sessions.registry import SessionRegistry
+
+logger = logging.getLogger(__name__)
 
 RESUME_TEXT = "状態が変化しました。最新の Issue/PR 状態と自分宛の未解決コメントを取得し、起動判定からやり直してください。"
 
@@ -57,6 +60,14 @@ def _process_one(
         )
         create_session(session.session_name, project.local_path)
         registry.register(session)
+        logger.info(
+            "エージェントセッションを新規作成しました: project=%s agent_name=%s number=%s session_name=%s model=%s",
+            project.name,
+            agent.name,
+            target.number,
+            session.session_name,
+            agent.model,
+        )
     # 送信前に処理中ラベルを付与する（除去は作業完了報告の受信時）
     add_label(project, target.number, agent.processing_label)
     # 送信文を組み立てて send-keys で送信する（スナップショットを添付）
@@ -68,6 +79,14 @@ def _process_one(
         # 既存セッションは稼働中の claude への入力として再開の定型文を送る
         text = f"{RESUME_TEXT}\n\n{snapshot}"
     send_keys(session.session_name, text)
+    logger.info(
+        "エージェントへ送信しました: project=%s agent_name=%s number=%s session_name=%s kind=%s",
+        project.name,
+        agent.name,
+        target.number,
+        session.session_name,
+        "新規起動" if is_new else "再開",
+    )
 
 
 def _sort_key(target: MonitorTarget) -> tuple[int, int]:

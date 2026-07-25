@@ -1,12 +1,15 @@
 """セッション台帳ファイルの読み書き。"""
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from pathlib import Path
 
 import yaml
 
 from ai_monitor.features.sessions.types import AgentSession
+
+logger = logging.getLogger(__name__)
 
 
 def load_sessions(path: Path) -> list[AgentSession]:
@@ -16,7 +19,9 @@ def load_sessions(path: Path) -> list[AgentSession]:
         return []
     entries = yaml.safe_load(path.read_text(encoding="utf-8")) or []
     # 各エントリを AgentSession に変換して返す
-    return [AgentSession(**entry) for entry in entries]
+    sessions = [AgentSession(**entry) for entry in entries]
+    logger.info("セッション台帳を復元しました: path=%s count=%s", path, len(sessions))
+    return sessions
 
 
 def save_sessions(path: Path, sessions: list[AgentSession]) -> None:

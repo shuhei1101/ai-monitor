@@ -1,6 +1,7 @@
 """単体 / 結合テスト共通の fixture。"""
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 import urllib.error
@@ -11,10 +12,13 @@ from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
 
 import pytest
+from opentelemetry.sdk.metrics.export import MetricExporter
 
-MCP_DIR = Path(__file__).resolve().parents[1] / "plugins" / "ai-monitor" / "mcp"
+PLUGIN_DIR = Path(__file__).resolve().parents[1] / "plugins" / "ai-monitor"
+sys.path.insert(0, str(PLUGIN_DIR))
+MCP_DIR = PLUGIN_DIR / "mcp"
 sys.path.insert(0, str(MCP_DIR))
-INJECT_DIR = Path(__file__).resolve().parents[1] / "plugins" / "ai-monitor" / "inject"
+INJECT_DIR = PLUGIN_DIR / "inject"
 sys.path.insert(0, str(INJECT_DIR))
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
@@ -277,6 +281,123 @@ def tmux_calls(monkeypatch):
 
 def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+
+
+class _FakeLogExporter:
+    """OTLP Log Exporter のスタブ。生成引数と送出済みレコードを記録する。"""
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.records = []
+        self.export_calls = 0
+        self.shutdown_called = False
+        self.fail = False
+
+    def export(self, batch):
+        from opentelemetry.sdk._logs.export import LogRecordExportResult
+
+        self.export_calls += 1
+        # 送信失敗を誘発する設定なら例外を投げる（Collector 未起動の再現）
+        if self.fail:
+            raise RuntimeError("Collector に接続できません")
+        self.records.extend(batch)
+        return LogRecordExportResult.SUCCESS
+
+    def shutdown(self):
+        self.shutdown_called = True
+
+    def force_flush(self, timeout_millis: float = 30_000) -> bool:
+        return True
+
+
+class _FakeSpanExporter:
+    """OTLP Span Exporter のスタブ。生成引数と送出済み Span を記録する。"""
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.spans = []
+
+    def export(self, spans):
+        from opentelemetry.sdk.trace.export import SpanExportResult
+
+        self.spans.extend(spans)
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self):
+        return None
+
+    def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        return True
+
+
+class _FakeMetricExporter(MetricExporter):
+    """OTLP Metric Exporter のスタブ。生成引数と送出済みメトリクスを記録する。"""
+
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.kwargs = kwargs
+        self.metrics = []
+
+    def export(self, metrics_data, timeout_millis: float = 10_000, **kwargs) -> bool:
+        self.metrics.append(metrics_data)
+        return True
+
+    def shutdown(self, timeout_millis: float = 30_000, **kwargs) -> None:
+        return None
+
+    def force_flush(self, timeout_millis: float = 10_000) -> bool:
+        return True
+
+
+@pytest.fixture
+def otel_stub(monkeypatch):
+    """観測基盤のプロセス外依存（3 種の Exporter / atexit）をスタブに差し替える。"""
+    from opentelemetry import trace as otel_trace
+    from opentelemetry._logs import _internal as logs_internal
+    from opentelemetry.metrics import _internal as metrics_internal
+    from opentelemetry.util._once import Once
+
+    from observability import otel
+
+    # 環境変数の値がテストに漏れ込まないように既定値へ戻す
+    for name in ("OTEL_OTLP_ENDPOINT", "OTEL_OTLP_INSECURE", "OTEL_DEPLOYMENT_ENVIRONMENT", "OTEL_SERVICE_NAMESPACE"):
+        monkeypatch.delenv(name, raising=False)
+    # 前のテストが登録した Provider を捨てる（グローバル Provider は 1 度しか設定できない）
+    monkeypatch.setattr(otel, "_logger_provider", None)
+    monkeypatch.setattr(otel, "_tracer_provider", None)
+    monkeypatch.setattr(otel, "_meter_provider", None)
+    monkeypatch.setattr(logs_internal, "_LOGGER_PROVIDER", None)
+    monkeypatch.setattr(logs_internal, "_LOGGER_PROVIDER_SET_ONCE", Once())
+    monkeypatch.setattr(otel_trace, "_TRACER_PROVIDER", None)
+    monkeypatch.setattr(otel_trace, "_TRACER_PROVIDER_SET_ONCE", Once())
+    monkeypatch.setattr(metrics_internal, "_METER_PROVIDER", None)
+    monkeypatch.setattr(metrics_internal, "_METER_PROVIDER_SET_ONCE", Once())
+
+    state = NS(log_exporters=[], span_exporters=[], metric_exporters=[], atexit_calls=[])
+
+    def _make(cls, sink):
+        def _factory(**kwargs):
+            exporter = cls(**kwargs)
+            sink.append(exporter)
+            return exporter
+
+        return _factory
+
+    monkeypatch.setattr(otel, "OTLPLogExporter", _make(_FakeLogExporter, state.log_exporters))
+    monkeypatch.setattr(otel, "OTLPSpanExporter", _make(_FakeSpanExporter, state.span_exporters))
+    monkeypatch.setattr(otel, "OTLPMetricExporter", _make(_FakeMetricExporter, state.metric_exporters))
+    monkeypatch.setattr(otel.atexit, "register", state.atexit_calls.append)
+
+    root = logging.getLogger()
+    handlers = list(root.handlers)
+    level = root.level
+    yield state
+    # configure が触った root logger を戻し、送出スレッドを止める
+    root.handlers = handlers
+    root.setLevel(level)
+    for exporter in state.log_exporters:
+        exporter.fail = False
+    otel.shutdown()
 
 
 @pytest.fixture

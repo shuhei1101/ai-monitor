@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 1.1.0
 ---
 
 # モジュール構成: モニター / HTTP受信
@@ -208,8 +208,10 @@ handle_completion(CompletionPayload(project="sandbox", agent_name="architect", n
 #### 処理
 
 1. `project` / `agent_name` / `number` でセッションを検索し、`project` 名から監視対象プロジェクトを解決する（[検索](./エージェント管理.py.md#検索)。いずれも無ければ `HTTPException`（404）を投げる）
+   - `[WARNING]` 台帳に無いセッションからの完了報告を拒否した（`project` / `agent_name` / `number`）
 2. 対象から `処理中:{agent_name}` を除去する（[ラベル除去](./GitHub連携.py.md#ラベル除去)。未付与は無視される冪等操作）
 3. セッションの生存時刻を更新し（[生存更新](./エージェント管理.py.md#生存更新)）、`{"ok": True}` を返す
+   - `[INFO]` 作業完了報告を受信した（`project` / `agent_name` / `number`）
 
 #### 例外
 
@@ -254,7 +256,9 @@ handle_add_watch(WatchPayload(project="sandbox", agent_name="architect", number=
 #### 処理
 
 1. 監視面へ番号を追加する（[監視面追加](./エージェント管理.py.md#監視面追加)。`KeyError` は `HTTPException`（404）に変換する）
+   - `[WARNING]` 台帳に無いセッションへの監視面追加を拒否した（`project` / `agent_name` / `primary_number`）
 2. `{"ok": True}` を返す
+   - `[INFO]` 監視面へ番号を追加した（`project` / `agent_name` / `primary_number` / 追加した番号）
 
 #### 例外
 
@@ -299,7 +303,9 @@ handle_remove_watch(WatchPayload(project="sandbox", agent_name="architect", numb
 #### 処理
 
 1. 監視面から番号を取り除く（[監視面除去](./エージェント管理.py.md#監視面除去)。`KeyError` は `HTTPException`（404）に変換する）
+   - `[WARNING]` 台帳に無いセッションへの監視面除去を拒否した（`project` / `agent_name` / `primary_number`）
 2. `{"ok": True}` を返す
+   - `[INFO]` 監視面から番号を除去した（`project` / `agent_name` / `primary_number` / 除去した番号）
 
 #### 例外
 

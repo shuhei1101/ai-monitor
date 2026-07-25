@@ -1,7 +1,6 @@
 ---
 version:
   - number: 1.0.0
-    date: 2026-07-24
     changes: 初版
 ---
 

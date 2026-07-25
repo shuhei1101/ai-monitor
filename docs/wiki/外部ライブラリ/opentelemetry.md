@@ -14,6 +14,7 @@ Python アプリから telemetry（Traces / Metrics / Logs）を計装して OTe
 | 項目 | 内容 | 補足 |
 | --- | --- | --- |
 | バージョン | `opentelemetry-api` / `opentelemetry-sdk` / `opentelemetry-exporter-otlp` すべて `1.44.0` | 2026-07-24 時点最新 |
+| バージョン（instrumentation 系） | `opentelemetry-instrumentation-logging` は `0.65b0` | 2026-07-25 時点最新。SDK 本体とは別系列の版番号 |
 | ライセンス | Apache-2.0 | - |
 | 公式 URL | https://github.com/open-telemetry/opentelemetry-python | - |
 | 公式ドキュメント | https://opentelemetry.io/docs/languages/python/ | - |
@@ -21,7 +22,7 @@ Python アプリから telemetry（Traces / Metrics / Logs）を計装して OTe
 ## インストール手順
 
 ```bash
-uv add opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp
+uv add opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp opentelemetry-instrumentation-logging
 ```
 
 Exporter は用途に応じて内訳を選ぶ:
@@ -31,22 +32,23 @@ Exporter は用途に応じて内訳を選ぶ:
 | `opentelemetry-exporter-otlp` | 依存メタパッケージ | gRPC / HTTP 両方を入れる |
 | `opentelemetry-exporter-otlp-proto-grpc` | OTLP over gRPC 送信 | ローカル Collector（4317 番）向け |
 | `opentelemetry-exporter-otlp-proto-http` | OTLP over HTTP 送信 | ネットワーク経由（4318 番）向け |
+| `opentelemetry-instrumentation-logging` | 標準 `logging` と OTel Log のブリッジ | [`LoggingHandler`](#logginghandler) の提供元 |
 
-auto-instrumentation を使う場合は別途:
+他のライブラリの auto-instrumentation を使う場合は別途:
 
 ```bash
-uv add opentelemetry-instrumentation-logging opentelemetry-instrumentation-requests
+uv add opentelemetry-instrumentation-requests
 ```
 
 ## API 一覧
 
-バージョン: `1.29.0`
+バージョン: `1.44.0`
 
 | 種別 | 名前 | 用途 | 補足 |
 | --- | --- | --- | --- |
 | クラス | [`Resource`](#resource) | telemetry の共通属性（`service.name` 等）を保持 | Provider に必ず渡す |
 | クラス | [`LoggerProvider`](#loggerprovider) | Log レコードのプロバイダ | プロセス起動時に 1 回だけ生成 |
-| クラス | [`LoggingHandler`](#logginghandler) | Python 標準 `logging` を OTel に橋渡し | root logger に addHandler して自動送信 |
+| クラス | [`LoggingHandler`](#logginghandler) | Python 標準 `logging` を OTel に橋渡し | root logger に addHandler して自動送信。`opentelemetry-instrumentation-logging` が提供元（SDK 同梱版は非推奨） |
 | クラス | [`BatchLogRecordProcessor`](#batchlogrecordprocessor) | Log レコードをバッチで Exporter に流す | LoggerProvider に登録 |
 | クラス | [`OTLPLogExporter`](#otlplogexporter) | Log レコードを OTLP プロトコルで送信 | gRPC / HTTP どちらか |
 | クラス | [`TracerProvider`](#tracerprovider) | Span のプロバイダ | プロセス起動時に 1 回だけ生成 |
@@ -113,6 +115,7 @@ set_logger_provider(provider)
 
 Python 標準 `logging` を OpenTelemetry Log にブリッジする `logging.Handler`。
 root logger に `addHandler` するだけで、既存の `logger.info(...)` などが Collector に流れる。
+root logger のレベルは既定で `WARNING` のため、INFO ログを流すには `setLevel` も併せて呼ぶ。
 
 #### パラメータ
 
@@ -120,12 +123,13 @@ root logger に `addHandler` するだけで、既存の `logger.info(...)` な�
 | --- | --- | --- | --- | --- | --- |
 | `level` | `int` | 任意 | `logging.NOTSET` | 転送するログレベル | `logging.INFO` 等 |
 | `logger_provider` | `LoggerProvider` | 任意 | グローバル取得 | 使用する Provider | 明示指定推奨 |
+| `log_code_attributes` | `bool` | 任意 | `False` | 呼び出し元のファイル / 関数 / 行番号を属性に載せるか | `code.file.path` 等が付く |
 
 パラメータ例:
 
 ```python
 import logging
-from opentelemetry.sdk._logs import LoggingHandler
+from opentelemetry.instrumentation.logging.handler import LoggingHandler
 
 handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
 logging.getLogger().addHandler(handler)

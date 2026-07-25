@@ -24,3 +24,4 @@ ai-monitor の構成要素（クラス / 関数 / 関数型 / データモデル
 | 注入 | エージェントドキュメント | [エージェントドキュメント](./注入/エージェントドキュメント.py.md) | 対応表からエージェントごとの参照ドキュメントを展開する注入 CLI | - |
 | 注入 | URLドキュメント | [URLドキュメント](./注入/URLドキュメント.py.md) | 指定 URL の本文を md コードブロックで展開する注入 CLI | - |
 | 注入 | Wiki索引 | [Wiki索引](./注入/Wiki索引.py.md) | プロジェクト Wiki の README を再帰的に辿った「ページ（raw URL）/ 概要」2 列表を展開する注入 CLI | - |
+| 観測 | OTel初期化 | [OTel初期化](./観測/OTel初期化.py.md) | OpenTelemetry SDK（Log / Trace / Metric Provider）を起動時に 1 回配線するモジュール | モニター / MCP サーバー 常駐プロセスの composition root から呼ぶ |

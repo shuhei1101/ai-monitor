@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 1.1.0
 ---
 
 # モジュール構成: モニター / tmux連携
@@ -312,6 +312,7 @@ CompletedProcess(returncode=0, stdout="")
 1. `tmux` をサブプロセスで実行し、`CompletedProcess` を返す
    - `check=True` の場合、非 0 終了で `CalledProcessError` を投げる
    - `check=False` の場合、非 0 終了でもそのまま返す
+   - `[DEBUG]` tmux コマンドを実行した（サブコマンド / セッション名 / 終了コード）
 
 #### 例外
 

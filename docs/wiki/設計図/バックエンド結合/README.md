@@ -88,3 +88,9 @@ ai-monitor 自身のバックエンド 1 操作（MCP ツール / 注入 CLI）�
 | - | [epic一括解放](./epic一括解放.py.md) | epic close 検知で配下の全セッションを一括解放 | polling 直轄（HTTP なし） |
 | - | [個別解放](./個別解放.py.md) | 独立系セッションを担当面の close / merge 検知で解放 | polling 直轄（HTTP なし） |
 | - | [タイムアウト検知](./タイムアウト検知.py.md) | 処理中のまま超過したセッションの kill + 台帳修復 | heartbeat 直轄（HTTP なし） |
+
+## 観測
+
+| ツール | リンク | 概要 | 補足 |
+| --- | --- | --- | --- |
+| `configure` | [ログ送出](./ログ送出.py.md) | 観測基盤の初期化と、標準 logging から OTel Collector へのログ送出 | 常駐プロセスの composition root から呼ぶ（HTTP なし） |

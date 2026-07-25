@@ -1,6 +1,7 @@
 """モニターの FastAPI アプリ（HTTP 受信 + ポーリングループの駆動）。"""
 from __future__ import annotations
 
+import logging
 import threading
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
@@ -14,6 +15,8 @@ from ai_monitor.shared.settings import MonitoredProject, Settings
 
 if TYPE_CHECKING:
     from ai_monitor.features.sessions.registry import SessionRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class CompletionPayload(BaseModel):
@@ -90,6 +93,12 @@ def handle_completion(
     session = registry.find(payload.project, payload.agent_name, payload.number)
     project = next((p for p in projects if p.name == payload.project), None)
     if session is None or project is None:
+        logger.warning(
+            "台帳に無いセッションからの完了報告を拒否しました: project=%s agent_name=%s number=%s",
+            payload.project,
+            payload.agent_name,
+            payload.number,
+        )
         raise HTTPException(status_code=404, detail="session not found")
     # 処理中ラベルを除去する（未付与は無視される冪等操作）
     processing_label = next((a.processing_label for a in agents if a.name == payload.agent_name), None)
@@ -97,6 +106,12 @@ def handle_completion(
         remove_label(project, payload.number, processing_label)
     # 生存時刻を更新する
     registry.touch(session.session_name)
+    logger.info(
+        "作業完了報告を受信しました: project=%s agent_name=%s number=%s",
+        payload.project,
+        payload.agent_name,
+        payload.number,
+    )
     return {"ok": True}
 
 
@@ -105,7 +120,20 @@ def handle_add_watch(payload: WatchPayload, *, registry: SessionRegistry) -> dic
     try:
         registry.add_watch(payload.project, payload.agent_name, payload.number, payload.watch_numbers)
     except KeyError as exc:
+        logger.warning(
+            "台帳に無いセッションへの監視面追加を拒否しました: project=%s agent_name=%s primary_number=%s",
+            payload.project,
+            payload.agent_name,
+            payload.number,
+        )
         raise HTTPException(status_code=404, detail="session not found") from exc
+    logger.info(
+        "監視面へ番号を追加しました: project=%s agent_name=%s primary_number=%s watch_numbers=%s",
+        payload.project,
+        payload.agent_name,
+        payload.number,
+        payload.watch_numbers,
+    )
     return {"ok": True}
 
 
@@ -114,5 +142,18 @@ def handle_remove_watch(payload: WatchPayload, *, registry: SessionRegistry) -> 
     try:
         registry.remove_watch(payload.project, payload.agent_name, payload.number, payload.watch_numbers)
     except KeyError as exc:
+        logger.warning(
+            "台帳に無いセッションへの監視面除去を拒否しました: project=%s agent_name=%s primary_number=%s",
+            payload.project,
+            payload.agent_name,
+            payload.number,
+        )
         raise HTTPException(status_code=404, detail="session not found") from exc
+    logger.info(
+        "監視面から番号を除去しました: project=%s agent_name=%s primary_number=%s watch_numbers=%s",
+        payload.project,
+        payload.agent_name,
+        payload.number,
+        payload.watch_numbers,
+    )
     return {"ok": True}

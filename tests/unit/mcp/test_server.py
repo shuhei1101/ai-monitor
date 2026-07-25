@@ -1189,3 +1189,33 @@ def test_load_port_when_port_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "SETTINGS_PATH", path)
     # 実行・検証
     assert server._load_port() == 8765
+
+
+def test_log_tool_call(caplog):
+    """戻り値の素通しと実行ログを確認する（正常系）。"""
+    # 準備
+    @server._log_tool_call
+    def sample_tool(number: int) -> str:
+        return f"ok:{number}"
+
+    # 実行
+    with caplog.at_level("INFO"):
+        result = sample_tool(35)
+    # 検証
+    assert result == "ok:35"
+    assert "tool=sample_tool" in caplog.text
+    assert "number=35" in caplog.text
+
+
+def test_log_tool_call_when_tool_raises(caplog):
+    """例外の再送出と失敗ログを確認する（異常系）。"""
+    # 準備
+    @server._log_tool_call
+    def sample_tool(number: int) -> str:
+        raise ValueError("失敗")
+
+    # 実行・検証
+    with caplog.at_level("WARNING"), pytest.raises(ValueError, match="失敗"):
+        sample_tool(35)
+    assert "MCP ツールが失敗しました" in caplog.text
+    assert "tool=sample_tool" in caplog.text

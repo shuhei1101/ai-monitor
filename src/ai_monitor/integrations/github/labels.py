@@ -1,11 +1,15 @@
 """処理中ラベルの付け外し。"""
 from __future__ import annotations
 
+import logging
+
 from githubkit.exception import RequestFailed
 
 from ai_monitor.integrations.github.client import get_client
 from ai_monitor.shared.settings import MonitoredProject
 from ai_monitor.shared.types import LabelName
+
+logger = logging.getLogger(__name__)
 
 
 def add_label(project: MonitoredProject, number: int, label: LabelName) -> None:
@@ -23,3 +27,4 @@ def remove_label(project: MonitoredProject, number: int, label: LabelName) -> No
         # 未付与による 404 は無視する
         if exc.response.status_code != 404:
             raise
+        logger.debug("未付与のラベル除去を無視しました: number=%s label=%s", number, label)

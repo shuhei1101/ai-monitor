@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,6 +22,12 @@ from ai_monitor.integrations.github.search import list_open_targets
 from ai_monitor.server.app import create_app
 from ai_monitor.shared.settings import _AGENT_NAMES, AgentModel, LabelSettings, Settings
 from ai_monitor.shared.types import MonitorTarget
+
+# 観測モジュールは MCP サーバーと共用するためプラグイン配下に置かれている
+PLUGIN_DIR = Path(__file__).resolve().parents[2] / "plugins" / "ai-monitor"
+sys.path.insert(0, str(PLUGIN_DIR))
+
+from observability import configure  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +86,7 @@ def run_cycle(
                     project, targets, registry=registry, agents=agents, timeout_min=settings.session_timeout_min
                 )
         except Exception:
-            logger.exception("周期を見送ります: project=%s", project.name)
+            logger.exception("プロジェクトの周期を見送ります: project=%s", project.name)
             targets_by_project.pop(project.name, None)
     if heartbeat_elapsed:
         last_heartbeat_at = now.isoformat()
@@ -91,6 +98,7 @@ def main() -> int:
     settings = Settings()
     labels = LabelSettings()
     get_client(settings)
+    configure("monitor")
     agents = build_agents(labels, agent_models=settings.agents)
     registry = SessionRegistry(Path(settings.state_path))
     app = create_app(settings, registry=registry, agents=agents)

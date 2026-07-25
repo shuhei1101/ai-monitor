@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 1.1.0
 ---
 
 # モジュール構成: モニター / GitHub連携
@@ -334,6 +334,7 @@ remove_label(project, 52, "処理中:architect")
 
 1. REST でラベルを除去する
 2. 未付与による 404 は無視する（作業完了報告の再送でも壊れない冪等操作にする）
+   - `[DEBUG]` 未付与のラベル除去を無視した（`number` / `label`）
 
 #### 例外
 

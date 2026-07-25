@@ -1,0 +1,50 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+
+  # Stream Selector で絞り込めるように Resource 属性を Loki ラベルへ昇格させる
+  resource:
+    attributes:
+      - action: insert
+        key: loki.resource.labels
+        value: service.name,service.namespace,host.name
+  attributes:
+    actions:
+      - action: insert
+        key: loki.attribute.labels
+        value: level,severity
+
+exporters:
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+  debug:
+    verbosity: basic
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [resource, attributes, batch]
+      exporters: [loki, debug]
+    # Traces / Metrics は保存先を持たないため受信後に破棄する
+    # 送信側でエラーにしないために pipeline 自体は用意しておく
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
