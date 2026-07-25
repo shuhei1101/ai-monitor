@@ -75,7 +75,7 @@ def run_cycle(
             targets_by_project[project.name] = targets
             # プロジェクト × エージェントの対ごとにポーリングを実行する
             for agent in agents:
-                poll(project, agent, targets, registry=registry)
+                poll(project, agent, targets, registry=registry, telemetry=settings.telemetry)
             # クリーンアップ検知を実行する
             close_completed_intakes(project, targets)
             release_closed_epics(project, targets, prev_targets.get(project.name, []), registry=registry)

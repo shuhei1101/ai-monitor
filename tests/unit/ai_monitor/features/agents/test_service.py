@@ -9,6 +9,7 @@ import ai_monitor.features.agents.service as service
 import ai_monitor.features.sessions.registry as registry_mod
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
+from ai_monitor.shared.settings import TelemetrySettings
 from ai_monitor.shared.types import Issue, PullRequest
 
 
@@ -51,7 +52,7 @@ def test_poll_when_mixed_targets(agent, io_mocks, registry, mon_project):
         _issue(37, labels=["layer:epic"]),
     ]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
     # 検証
     assert io_mocks.send_keys.call_count == 1
     assert "35" in io_mocks.send_keys.call_args.args[0]
@@ -62,7 +63,7 @@ def test_poll_when_new_target(agent, io_mocks, registry, mon_project):
     # 準備
     targets = [_issue(35, labels=["確認:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
     # 検証
     session_name = "ai-monitor-sandbox-35-intake-issue-triager"
     assert io_mocks.create_session.call_args.args[0] == session_name
@@ -86,7 +87,7 @@ def test_poll_when_existing_session(agent, io_mocks, registry, mon_project):
     )
     targets = [_issue(35, labels=["確認:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
     # 検証
     io_mocks.create_session.assert_not_called()
     assert io_mocks.send_keys.call_args.args[0] == "ai-monitor-sandbox-35-intake-issue-triager"
@@ -98,7 +99,7 @@ def test_poll_when_processing_label(agent, io_mocks, registry, mon_project):
     # 準備
     targets = [_issue(35, labels=["確認:intake-issue-triager", "処理中:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
     # 検証
     io_mocks.send_keys.assert_not_called()
     io_mocks.add_label.assert_not_called()
@@ -112,7 +113,7 @@ def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
         _issue(36, labels=["確認:intake-issue-triager", "優先度:急ぎ"]),
     ]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
     # 検証
     sent_sessions = [c.args[0] for c in io_mocks.send_keys.call_args_list]
     assert sent_sessions == [
@@ -138,7 +139,9 @@ def test_process_one(agent, io_mocks, registry, mon_project):
     # 準備
     target = _issue(35, labels=["確認:intake-issue-triager"])
     # 実行
-    service._process_one(mon_project, agent, target, open_targets=[target], registry=registry)
+    service._process_one(
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None
+    )
     # 検証
     assert io_mocks.add_label.call_args.args[2] == "処理中:intake-issue-triager"
     sent_text = io_mocks.send_keys.call_args.args[1]
@@ -146,6 +149,80 @@ def test_process_one(agent, io_mocks, registry, mon_project):
         'claude --model claude-opus-4-7 --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
     )
     assert "#35" in sent_text
+
+
+def test_build_telemetry_env(mon_project, agent):
+    """テレメトリ環境変数の組み立てを確認する（正常系）。"""
+    # 準備
+    telemetry = TelemetrySettings(otlp_endpoint="http://localhost:14317")
+    # 実行
+    env = service.build_telemetry_env(telemetry, mon_project, agent, 131)
+    # 検証
+    assert "CLAUDE_CODE_ENABLE_TELEMETRY=1" in env
+    assert "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1" in env
+    assert "OTEL_LOGS_EXPORTER=otlp" in env
+    assert "OTEL_TRACES_EXPORTER=otlp" in env
+    assert "OTEL_METRICS_EXPORTER=otlp" in env
+    assert "OTEL_EXPORTER_OTLP_PROTOCOL=grpc" in env
+    assert "OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14317" in env
+    assert "OTEL_LOG_USER_PROMPTS=1" in env
+    assert "OTEL_LOG_ASSISTANT_RESPONSES=1" in env
+    assert "OTEL_LOG_TOOL_DETAILS=1" in env
+    assert "OTEL_LOG_TOOL_CONTENT=1" in env
+    assert env.endswith(" ")
+
+
+def test_build_telemetry_env_when_unset(mon_project, agent):
+    """テレメトリ未設定時の空文字を確認する（正常系）。"""
+    # 実行
+    env = service.build_telemetry_env(None, mon_project, agent, 131)
+    # 検証
+    assert env == ""
+
+
+def test_build_telemetry_env_when_resource_attributes(mon_project, agent):
+    """識別子の埋め込みを確認する（正常系）。"""
+    # 準備
+    telemetry = TelemetrySettings(otlp_endpoint="http://localhost:4317")
+    # 実行
+    env = service.build_telemetry_env(telemetry, mon_project, agent, 131)
+    # 検証
+    assert (
+        "OTEL_RESOURCE_ATTRIBUTES="
+        "ai_monitor.project=sandbox,"
+        "ai_monitor.agent=intake-issue-triager,"
+        "ai_monitor.number=131" in env
+    )
+
+
+def test_process_one_when_telemetry_set(agent, io_mocks, registry, mon_project):
+    """テレメトリ環境変数の前置を確認する（正常系）。"""
+    # 準備
+    target = _issue(35, labels=["確認:intake-issue-triager"])
+    telemetry = TelemetrySettings(otlp_endpoint="http://localhost:4317")
+    # 実行
+    service._process_one(
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=telemetry
+    )
+    # 検証
+    sent_text = io_mocks.send_keys.call_args.args[1]
+    assert sent_text.startswith("CLAUDE_CODE_ENABLE_TELEMETRY=1 ")
+    assert "ai_monitor.number=35" in sent_text
+    assert " claude --model claude-opus-4-7 " in sent_text
+
+
+def test_process_one_when_telemetry_unset(agent, io_mocks, registry, mon_project):
+    """テレメトリなしの起動コマンドを確認する（正常系）。"""
+    # 準備
+    target = _issue(35, labels=["確認:intake-issue-triager"])
+    # 実行
+    service._process_one(
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None
+    )
+    # 検証
+    sent_text = io_mocks.send_keys.call_args.args[1]
+    assert sent_text.startswith("claude --model claude-opus-4-7 ")
+    assert "OTEL_" not in sent_text
 
 
 def test_sort_key():

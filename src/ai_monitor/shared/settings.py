@@ -43,6 +43,12 @@ class AgentModel(BaseModel):
     model: str = Field(min_length=1)
 
 
+class TelemetrySettings(BaseModel):
+    """エージェントの telemetry 送出設定。"""
+
+    otlp_endpoint: str = "http://localhost:4317"
+
+
 class MonitoredProject(BaseModel):
     """監視対象プロジェクト 1 件分の設定。"""
 
@@ -65,6 +71,7 @@ class Settings(BaseSettings):
     state_path: str = "data/state.yaml"
     projects: list[MonitoredProject] = []
     agents: dict[str, AgentModel]
+    telemetry: TelemetrySettings | None = None
 
     @model_validator(mode="after")
     def _validate_agents_completeness(self):

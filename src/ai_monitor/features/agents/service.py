@@ -8,7 +8,7 @@ from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
 from ai_monitor.integrations.github.labels import add_label
 from ai_monitor.integrations.tmux.ops import create_session, send_keys
-from ai_monitor.shared.settings import MonitoredProject
+from ai_monitor.shared.settings import MonitoredProject, TelemetrySettings
 from ai_monitor.shared.types import Issue, MonitorTarget, PullRequest
 
 if TYPE_CHECKING:
@@ -22,7 +22,12 @@ _PRIORITY_RANKS = {"優先度:急ぎ": 0, "優先度:いつでも": 2}
 
 
 def poll(
-    project: MonitoredProject, agent: Agent, targets: list[MonitorTarget], *, registry: SessionRegistry
+    project: MonitoredProject,
+    agent: Agent,
+    targets: list[MonitorTarget],
+    *,
+    registry: SessionRegistry,
+    telemetry: TelemetrySettings | None,
 ) -> None:
     """対象の絞り込みから送信までのポーリング 1 周期を実行する。"""
     # 確認ラベルあり + assignee なしの対象を絞り込む
@@ -31,12 +36,47 @@ def poll(
     matched = [t for t in matched if agent.processing_label not in t.labels]
     # 優先度順にソートして 1 件ずつ処理する
     for target in sorted(matched, key=_sort_key):
-        _process_one(project, agent, target, open_targets=targets, registry=registry)
+        _process_one(
+            project, agent, target, open_targets=targets, registry=registry, telemetry=telemetry
+        )
 
 
 def build_skill_command(agent: Agent, number: int) -> str:
     """`/ai-monitor:{name} {number}` を組み立てて返す。"""
     return f"/ai-monitor:{agent.name} {number}"
+
+
+def build_telemetry_env(
+    telemetry: TelemetrySettings | None, project: MonitoredProject, agent: Agent, number: int
+) -> str:
+    """claude 起動コマンドに前置する環境変数の並びを組み立てて返す。"""
+    # 設定を持たない環境では何も前置しない
+    if telemetry is None:
+        return ""
+    # どの対象のどのエージェントが出した telemetry かを後から引くための識別子
+    resource_attributes = ",".join(
+        (
+            f"ai_monitor.project={project.name}",
+            f"ai_monitor.agent={agent.name}",
+            f"ai_monitor.number={number}",
+        )
+    )
+    variables = (
+        "CLAUDE_CODE_ENABLE_TELEMETRY=1",
+        # トレースと OTEL_LOG_TOOL_CONTENT は beta ゲートの内側にある
+        "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1",
+        "OTEL_LOGS_EXPORTER=otlp",
+        "OTEL_TRACES_EXPORTER=otlp",
+        "OTEL_METRICS_EXPORTER=otlp",
+        "OTEL_EXPORTER_OTLP_PROTOCOL=grpc",
+        f"OTEL_EXPORTER_OTLP_ENDPOINT={telemetry.otlp_endpoint}",
+        "OTEL_LOG_USER_PROMPTS=1",
+        "OTEL_LOG_ASSISTANT_RESPONSES=1",
+        "OTEL_LOG_TOOL_DETAILS=1",
+        "OTEL_LOG_TOOL_CONTENT=1",
+        f"OTEL_RESOURCE_ATTRIBUTES={resource_attributes}",
+    )
+    return " ".join(variables) + " "
 
 
 def _process_one(
@@ -46,6 +86,7 @@ def _process_one(
     *,
     open_targets: list[MonitorTarget],
     registry: SessionRegistry,
+    telemetry: TelemetrySettings | None,
 ) -> None:
     """対象 1 件のセッション解決と send-keys 送信を行う。"""
     # セッションを解決する（無ければ新規作成して台帳へ登録）
@@ -74,7 +115,8 @@ def _process_one(
     snapshot = build_context_snapshot(target, open_targets)
     if is_new:
         # 新規セッションは shell に対して claude コマンドで skill を起動する
-        text = f'claude --model {agent.model} --dangerously-skip-permissions "{build_skill_command(agent, target.number)}\n\n{snapshot}"'
+        telemetry_env = build_telemetry_env(telemetry, project, agent, target.number)
+        text = f'{telemetry_env}claude --model {agent.model} --dangerously-skip-permissions "{build_skill_command(agent, target.number)}\n\n{snapshot}"'
     else:
         # 既存セッションは稼働中の claude への入力として再開の定型文を送る
         text = f"{RESUME_TEXT}\n\n{snapshot}"

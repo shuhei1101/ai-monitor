@@ -127,6 +127,26 @@ def test_settings_when_agents_empty_model(tmp_config_dir):
         settings_mod.Settings()
 
 
+def test_settings_when_telemetry_unset(tmp_config_dir):
+    """テレメトリ未設定時の既定を確認する（正常系）。"""
+    # 実行
+    settings = settings_mod.Settings()
+    # 検証
+    assert settings.telemetry is None
+
+
+def test_settings_when_telemetry_set(tmp_config_dir):
+    """テレメトリ設定の読み込みを確認する（正常系）。"""
+    # 準備
+    yaml_with_telemetry = BASE_YAML + "telemetry:\n  otlp_endpoint: http://localhost:14317\n"
+    (tmp_config_dir / "settings.yaml").write_text(yaml_with_telemetry, encoding="utf-8")
+    # 実行
+    settings = settings_mod.Settings()
+    # 検証
+    assert settings.telemetry is not None
+    assert settings.telemetry.otlp_endpoint == "http://localhost:14317"
+
+
 def test_agent_model_when_empty():
     """AgentModel の空文字禁止を確認する（異常系）。"""
     # 実行・検証
