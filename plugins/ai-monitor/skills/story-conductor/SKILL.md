@@ -32,6 +32,8 @@ story レイヤーの指揮役。
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/子subsystem起票（逐次）.md"`
 
+!`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/エスカレーションの中継.md"`
+
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/統合テスト起動.md"`
 
 !`python "${CLAUDE_PLUGIN_ROOT}/inject/read_urls.py" "${AI_MONITOR_WIKI_BASE}/エージェント/story-conductor/フェーズ/バグ差し戻し（方針確認）.md"`

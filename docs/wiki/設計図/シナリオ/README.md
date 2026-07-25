@@ -46,6 +46,7 @@ template_version: 1.0.0
 | 単一ユースケース | インターフェース確定の中継 | architect のインターフェース確定報告を story-conductor へ中継（後続 subsystem 起票の起点） | [インターフェース確定の中継](./単一ユースケース/インターフェース確定の中継.md) | subsystem-conductor 復帰・後続 subsystem が依存する場合のみ |
 | 単一ユースケース | バグ修正着手 | バグ差し戻しの受領 → 影響範囲分析 + 修正用 PR / タスク一覧作成 → architect 委任 | [バグ修正着手](./単一ユースケース/バグ修正着手.md) | subsystem-conductor 復帰・SA 変更時のみユーザー確認 |
 | 単一ユースケース | バグ差し戻しの中継 | epic レベルのバグ差し戻しを story → subsystem へ中継 + 修正完了を epic へ遡上報告 | [バグ差し戻しの中継](./単一ユースケース/バグ差し戻しの中継.md) | story-conductor 復帰・epic 統合テスト失敗時のみ |
+| 単一ユースケース | エスカレーションの中継 | 自レイヤーで判断できない論点を要約 + 元コメントリンクで 1 段上位の conductor へ渡す | [エスカレーションの中継](./単一ユースケース/エスカレーションの中継.md) | subsystem / story-conductor 復帰・図は subsystem レベルで代表 |
 | 単一ユースケース | ログ確認 | OTel バックエンド UI でモニター / エージェントのログを検索・絞り込み表示 | [ログ確認](./単一ユースケース/ログ確認.md) | ユーザー操作・OTel Collector + バックエンド起動前提 |
 | 複合ユースケース | Issueから自動マージまで | Issue 起票 → intake → epic → story → subsystem → merge のメインフロー | [Issueから自動マージまで](./複合ユースケース/Issueから自動マージまで.md) | epic フルスコープ |
 | 複合ユースケース | 軽微修正の短絡マージ | chore 判定 → quick-implementer で即マージ | [軽微修正の短絡マージ](./複合ユースケース/軽微修正の短絡マージ.md) | intake → chore の短絡 |

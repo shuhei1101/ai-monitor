@@ -16,6 +16,7 @@ template_version: 2.0.0
 | [要件確定（完了処理）](./フェーズ/要件確定（完了処理）.md) | story Draft PR の作成と single-scenario-writer への引き継ぎ | `議論中` なし + 本文確定済み + story Draft PR 未作成 |
 | [子subsystem起票（初回）](./フェーズ/子subsystem起票（初回）.md) | subsystem 分担の洗い出しと依存順の先頭グループの起票 | 未解決の自分宛コメントに single-scenario-writer の完了報告があり、story 本文の依存順が未記入 |
 | [子subsystem起票（逐次）](./フェーズ/子subsystem起票（逐次）.md) | インターフェース確定報告を受けた次 subsystem の起票 | 未解決の自分宛コメントに subsystem-conductor のインターフェース確定報告があり、story 本文の依存順に `未起票` が残る |
+| [エスカレーションの中継](./フェーズ/エスカレーションの中継.md) | story レイヤーで判断できない論点の epic-conductor への中継 | 未解決の自分宛コメントに subsystem-conductor のエスカレーション報告がある |
 | [統合テスト起動](./フェーズ/統合テスト起動.md) | 全子 subsystem の close 状態に応じた統合テストの委任 | 未解決の自分宛コメントに subsystem-conductor の完了報告がある |
 | [バグ差し戻し（方針確認）](./フェーズ/バグ差し戻し（方針確認）.md) | 失敗報告を受けた対応方針案の確認 | 未解決の自分宛コメントに single-scenario-writer の失敗報告があり、対応方針案コメント未投稿 |
 | [バグ差し戻し（実行）](./フェーズ/バグ差し戻し（実行）.md) | 承認された方針での該当 subsystem Issue への差し戻し | `議論中` なし + 対応方針案コメント投稿済み（未 Resolve） |
