@@ -115,14 +115,15 @@ parse_index_table(text, "設計図")
 #### 処理
 
 1. 環境変数 `WIKI_BASE` を読む（末尾スラッシュがあれば落とす）
-2. 本文から `## 目次` 見出しの次にある表を抽出する（見出しが無い or 「ページ」「概要」列が無い場合は `ValueError`）
-3. ヘッダー行から「ページ」列と「概要」列のインデックスを特定する（他の列があってもよい）
-4. 各データ行を先頭から順にループし、各行の [`WikiPage`](#wiki-ページ) を組み立てて戻り値配列に追加する
+2. 本文からコードブロック（``` で囲まれた範囲）を取り除く（書式の記述例に含まれる `## 目次` を索引と誤認しないため）
+3. 本文から `## 目次` 見出しの次にある表を抽出する（見出しが無い or 「ページ」「概要」列が無い場合は `ValueError`）
+4. ヘッダー行から「ページ」列と「概要」列のインデックスを特定する（他の列があってもよい）
+5. 各データ行を先頭から順にループし、各行の [`WikiPage`](#wiki-ページ) を組み立てて戻り値配列に追加する
    1. 「ページ」セルの Markdown リンク `[表示](./xxx)` から URL 部分（ファイル名）を取り出し、先頭の `./` を落とす
    2. 末尾が `/`（サブディレクトリ）なら末尾に `README.md` を補完する
    3. 引数 `folder_path` を前置して Wiki ルート相対のパスを組み立てる（`folder_path` が空なら前置なし）
    4. `{WIKI_BASE}/{Wiki ルート相対パス}` を連結して `raw_url` を作り、「概要」セルを `summary` にした [`WikiPage`](#wiki-ページ) を戻り値配列に追加する
-5. 戻り値配列を返す
+6. 戻り値配列を返す
 
 #### 例外
 
@@ -138,6 +139,7 @@ parse_index_table(text, "設計図")
 | `test_parse_index_table` | 正常 | サブディレクトリ + md ページの混在 | `WIKI_BASE` 設定 + `folder_path="設計図"` + サブディレクトリと md が混在する目次表 | monkeypatch.setenv | サブディレクトリ行は `raw_url` が `/設計図/xxx/README.md`、md 行は `/設計図/xxx.md`、両方 [`WikiPage`](#wiki-ページ) | - |
 | `test_parse_index_table_when_root` | 正常 | ルート直下（folder_path=`""`）の解析 | folder_path=`""` を渡す | monkeypatch.setenv | `raw_url` が `{WIKI_BASE}/xxx` の形（folder_path 前置なし） | - |
 | `test_parse_index_table_when_extra_columns` | 正常 | 他の列が混じっていても取れる | ページ / 概要に加えて補足など別列を持つ目次表 | monkeypatch.setenv | ページと概要だけが登場順で取れる（例外なし） | - |
+| `test_parse_index_table_when_fenced_example` | 正常 | コードブロック内の記述例を無視する | 実際の目次表の後ろに ``` で囲んだ `## 目次` の記述例がある本文 | monkeypatch.setenv | 実際の目次表の行だけが返る | 書式定義ページの README を索引に載せるため |
 | `test_parse_index_table_when_no_toc_heading` | 異常 | 目次見出しなし | `## 目次` 見出しの無い本文 | monkeypatch.setenv | `ValueError`（`目次見出しなし`） | - |
 | `test_parse_index_table_when_missing_columns` | 異常 | 表に必須列がない | 「ページ」or「概要」列を欠いた表 | monkeypatch.setenv | `ValueError`（`ページ／概要列なし`） | - |
 | `test_parse_index_table_when_wiki_base_missing` | 異常 | `WIKI_BASE` 未設定 | 環境変数を消して呼び出す | monkeypatch.delenv | `KeyError` | [`main`](#メイン) が事前チェックを迂回した場合の防護 |

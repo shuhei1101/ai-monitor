@@ -65,8 +65,11 @@ def _configure_logs(resource: Resource, settings: ObservabilitySettings) -> None
     provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
     set_logger_provider(provider)
     _logger_provider = provider
+    handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+    # 送信失敗時に SDK 自身が出すログを再び送信しようとする再帰を避ける
+    handler.addFilter(lambda record: not record.name.startswith("opentelemetry"))
     root = logging.getLogger()
-    root.addHandler(LoggingHandler(level=logging.INFO, logger_provider=provider))
+    root.addHandler(handler)
     # root の既定レベル（WARNING）のままでは INFO ログがレコード化されない
     root.setLevel(logging.INFO)
 

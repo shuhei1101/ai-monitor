@@ -10,9 +10,9 @@ template_version: 1.0.0
 **評価方針:** 画面がないため Playwright ではなく **pytest + gh CLI + sandbox リポ** で「gh api で観測可能なアーティファクト状態」を assert する。
 テスト対象のシナリオノードは全て「Issue のラベル / assignee / comment」「PR の state / base」「Sub-issue の存在」等の外部観測可能な状態変化として書く。
 
-## 一覧
+## 目次
 
-| 種別 | シナリオ / 機能名 | 概要 | リンク | 補足 |
+| 種別 | シナリオ / 機能名 | 概要 | ページ | 補足 |
 | --- | --- | --- | --- | --- |
 | 単一ユースケース | Issue分解と子起票 | intake Issue の分解 → 承認 → Sub-issue 起票 | [Issue分解と子起票](./単一ユースケース/Issue分解と子起票.md) | intake-issue-triager |
 | 単一ユースケース | epic要件確定 | epic 本文 5 セクション確定 + PoC 要否判定 | [epic要件確定](./単一ユースケース/epic要件確定.md) | epic-conductor 初回 |

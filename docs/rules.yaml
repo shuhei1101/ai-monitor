@@ -1,0 +1,72 @@
+# ai-monitor inject-rules ルール索引（SoT）
+# url: ルール本文の絶対 URL / paths: 注入トリガーの glob（クォート必須）
+# 実体ファイルを書くときに、その書式を定義するテンプレートを注入する
+rules:
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/シナリオ.md
+    paths:
+      - "**/docs/wiki/設計図/シナリオ/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/結合.md
+    paths:
+      - "**/docs/wiki/設計図/バックエンド結合/**/*.md"
+      - "**/docs/wiki/設計図/フロントエンド結合/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/モジュール構成.md
+    paths:
+      - "**/docs/wiki/設計図/モジュール構成/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/コンテナ構成.md
+    paths:
+      - "**/docs/wiki/設計図/コンテナ構成/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/設定.md
+    paths:
+      - "**/docs/wiki/設計図/設定/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/ER図.md
+    paths:
+      - "**/docs/wiki/設計図/ER図/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/状態遷移.md
+    paths:
+      - "**/docs/wiki/設計図/状態遷移/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/画面構成.md
+    paths:
+      - "**/docs/wiki/設計図/画面構成/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/データフロー.md
+    paths:
+      - "**/docs/wiki/設計図/データフロー/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/テストフィクスチャ.md
+    paths:
+      - "**/docs/wiki/設計図/テストフィクスチャ.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/チェックシート.md
+    paths:
+      - "**/docs/wiki/チェックシート/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/判定フローチャート.md
+    paths:
+      - "**/docs/wiki/判定フローチャート/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/外部API.md
+    paths:
+      - "**/docs/wiki/外部API/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/外部API一覧.md
+    paths:
+      - "**/docs/wiki/外部API/README.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/外部ライブラリ.md
+    paths:
+      - "**/docs/wiki/外部ライブラリ/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/外部ライブラリ一覧.md
+    paths:
+      - "**/docs/wiki/外部ライブラリ/README.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/対応表.md
+    paths:
+      - "**/docs/wiki/Claudeハーネス/対応表/**/*.md"
+      - "**/docs/wiki/Claudeハーネス/共通対応表/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/テスト実行方法.md
+    paths:
+      - "**/docs/wiki/テスト/テスト実行方法.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/テンプレート.md
+    paths:
+      - "**/docs/wiki/テンプレート/**/*.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/README書式.md
+    paths:
+      - "**/docs/wiki/**/README.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/スキル.md
+    paths:
+      - "**/plugins/*/skills/**/SKILL.md"
+  - url: https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/規約/Wiki管理.md
+    paths:
+      - "**/docs/wiki/**/*.md"

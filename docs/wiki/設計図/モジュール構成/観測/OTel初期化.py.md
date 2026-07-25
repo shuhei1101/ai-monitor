@@ -5,10 +5,10 @@ template_version: 1.1.0
 # モジュール構成: 観測 / OTel初期化
 
 `OTel初期化` ドメイン（観測側）に属する構成要素詳細。
-常駐プロセス（[モニター](../モニター/エージェント管理.py.md#エージェント組み立て) / [MCP サーバー](../MCP/GitHub操作.py.md)）の composition root から起動時に 1 回だけ呼ばれ、[OpenTelemetry Python SDK](../../../外部ライブラリ/opentelemetry.md) の Log / Trace / Metric 各 Provider を [OTel Collector](../../コンテナ構成/observability.yaml.md#otel-collector)（OTLP gRPC 4317）向けに配線する。
+常駐プロセス（[モニター](../モニター/エージェント管理.py.md#エージェント組み立て) / [MCP サーバー](../MCP/GitHub操作.py.md)）の composition root から起動時に 1 回だけ呼ばれ、[OpenTelemetry Python SDK](../../../外部ライブラリ/opentelemetry.md) の Log / Trace / Metric 各 Provider を OTel Collector（OTLP gRPC 4317）向けに配線する。
 
-Python 標準 `logging` に [`LoggingHandler`](../../../外部ライブラリ/opentelemetry.md#logginghandler) を addHandler するので、既存の `logger.info(...)` などがそのまま Collector 経由で [Loki](../../../外部ライブラリ/loki.md) に流れる。
-Trace / Metric は SDK 側 pipeline のみ用意し、Collector 側の debug exporter で破棄する（[Compose 構成](../../コンテナ構成/observability.yaml.md#otel-collector) 参照）。
+Python 標準 `logging` に [`LoggingHandler`](../../../外部ライブラリ/opentelemetry.md#logginghandler) を addHandler するので、既存の `logger.info(...)` などがそのまま Collector 経由で Loki に流れる。
+Trace / Metric は SDK 側 pipeline のみ用意し、Collector 側の debug exporter で破棄する（Compose 構成は observability リポジトリが持つ）。
 将来 Tempo / Prometheus を追加する際は Collector の exporter を差し替えるだけで済み、本モジュール（および呼び出し側の `tracer.start_as_current_span(...)` / `meter.create_counter(...)`）は変更不要にする。
 
 短命な inject / hook スクリプト（`plugins/ai-monitor/inject/*.py` / `plugins/ai-monitor/hooks/**/*.py`）は本モジュールを呼ばない。
@@ -18,7 +18,7 @@ Trace / Metric は SDK 側 pipeline のみ用意し、Collector 側の debug exp
 
 | ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 共通 | 設定 | `observability/settings.py` | データモデル | [`ObservabilitySettings`](#観測設定) | OTLP 送信先・環境名を型安全に読む Pydantic Settings | 環境変数 `OTEL_*` から読む |
+| 共通 | 設定 | `observability/settings.py` | データモデル | [`ObservabilitySettings`](#観測設定) | OTLP 送信先・環境名を型安全に読む Pydantic Settings | 環境変数 `AI_MONITOR_OTEL_*` から読む |
 | 共通 | 初期化 | `observability/otel.py` | 関数 | [`configure`](#初期化) | Resource / 3 Provider を組み立て `logging` の root にハンドラを追加する | プロセス起動時に 1 回呼ぶ |
 | 共通 | シャットダウン | `observability/otel.py` | 関数 | [`shutdown`](#シャットダウン) | 3 Provider の `force_flush` + `shutdown` を呼ぶ | [`configure`](#初期化) が `atexit` に登録する |
 | 共通 | 内部処理 | `observability/otel.py` | 関数 | [`_build_resource`](#共通属性組み立て) | `service.name` / `service.namespace` / `deployment.environment` を持つ [`Resource`](../../../外部ライブラリ/opentelemetry.md#resource) を作る | - |
@@ -131,17 +131,18 @@ classDiagram
 > 種別: データモデル<br>
 > コンテナ: `observability/settings.py`
 
-OTLP 送信先・環境名を環境変数から型安全に読む Pydantic Settings（`pydantic_settings.BaseSettings`・`env_prefix="OTEL_"`）。
+OTLP 送信先・環境名を環境変数から型安全に読む Pydantic Settings（`pydantic_settings.BaseSettings`・`env_prefix="AI_MONITOR_OTEL_"`）。
+Claude Code は全サブプロセスから `OTEL_` で始まる環境変数を削除するため、MCP サーバーへ値を届けるにはプレフィックスを `OTEL_` 以外にする必要がある。
 [`configure`](#初期化) の内部で 1 回だけインスタンス化される。
 
 ### プロパティ
 
 | 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| OTLP エンドポイント | `otlp_endpoint` | `str` | 公開 | `"http://localhost:4317"` | Collector の OTLP gRPC 受付 URL | `"http://otel-collector:4317"` | 環境変数 `OTEL_OTLP_ENDPOINT`。同一ホストの [otel-collector](../../コンテナ構成/observability.yaml.md#otel-collector) を既定 |
-| TLS 無効 | `otlp_insecure` | `bool` | 公開 | `True` | TLS を無効化するか | `True` | 環境変数 `OTEL_OTLP_INSECURE`。ローカル Compose 内は `True` |
-| 環境名 | `deployment_environment` | `Literal["dev", "staging", "prod"]` | 公開 | `"dev"` | `deployment.environment` Resource 属性の値 | `"prod"` | 環境変数 `OTEL_DEPLOYMENT_ENVIRONMENT`。Grafana Loki のフィルタキーになる |
-| サービス空間 | `service_namespace` | `str` | 公開 | `"ai-monitor"` | `service.namespace` Resource 属性の値 | `"ai-monitor"` | 環境変数 `OTEL_SERVICE_NAMESPACE`。監視対象プロジェクトが増えても本値は固定 |
+| OTLP エンドポイント | `otlp_endpoint` | `str` | 公開 | `"http://localhost:4317"` | Collector の OTLP gRPC 受付 URL | `"http://otel-collector:4317"` | 環境変数 `AI_MONITOR_OTEL_OTLP_ENDPOINT`。同一ホストの otel-collector を既定 |
+| TLS 無効 | `otlp_insecure` | `bool` | 公開 | `True` | TLS を無効化するか | `True` | 環境変数 `AI_MONITOR_OTEL_OTLP_INSECURE`。ローカル Compose 内は `True` |
+| 環境名 | `deployment_environment` | `Literal["dev", "staging", "prod"]` | 公開 | `"dev"` | `deployment.environment` Resource 属性の値 | `"prod"` | 環境変数 `AI_MONITOR_OTEL_DEPLOYMENT_ENVIRONMENT`。Grafana Loki のフィルタキーになる |
+| サービス空間 | `service_namespace` | `str` | 公開 | `"ai-monitor"` | `service.namespace` Resource 属性の値 | `"ai-monitor"` | 環境変数 `AI_MONITOR_OTEL_SERVICE_NAMESPACE`。監視対象プロジェクトが増えても本値は固定 |
 
 ### メソッド
 
@@ -202,13 +203,13 @@ configure("monitor")
 
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
-| 環境変数 `OTEL_OTLP_ENDPOINT` / `OTEL_OTLP_INSECURE` / `OTEL_DEPLOYMENT_ENVIRONMENT` の設定 | 各テストで monkeypatch.setenv で最小値を投入し、テスト終了時に自動 unset | `otel_stub` fixture でグローバル Provider を初期化する |
+| 環境変数 `AI_MONITOR_OTEL_OTLP_ENDPOINT` / `AI_MONITOR_OTEL_OTLP_INSECURE` / `AI_MONITOR_OTEL_DEPLOYMENT_ENVIRONMENT` の設定 | 各テストで monkeypatch.setenv で最小値を投入し、テスト終了時に自動 unset | `otel_stub` fixture でグローバル Provider を初期化する |
 | Mock（本ファイルの全テスト共通） | 3 種の OTLP Exporter・バッチ Processor / MetricReader・`atexit.register` をスタブに差し替え | プロセス外への送信と送出スレッドを発生させない |
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_configure` | 正常 | 3 Provider 起動 + root ハンドラ追加 + atexit 登録 | `service_name="monitor"` で呼び出し | `atexit.register` / `set_logger_provider` / `trace.set_tracer_provider` / `metrics.set_meter_provider` | 各 setter が Provider を受けて呼ばれ・root logger の handlers に `LoggingHandler` が 1 つ増え・`atexit.register` が [シャットダウン](#シャットダウン) を受けて呼ばれる | Provider は SDK 提供物をそのまま組む |
-| `test_configure_when_reads_env` | 正常 | 設定を環境変数から読む | `OTEL_OTLP_ENDPOINT=http://collector:4317` / `OTEL_DEPLOYMENT_ENVIRONMENT=prod` を投入して呼ぶ | monkeypatch.setenv | 起動した [`OTLPLogExporter`](../../../外部ライブラリ/opentelemetry.md#otlplogexporter) の `endpoint` に環境変数の値が渡り、[`Resource`](../../../外部ライブラリ/opentelemetry.md#resource) の `deployment.environment` が `"prod"` | 分岐は無い（環境変数の反映確認） |
+| `test_configure_when_reads_env` | 正常 | 設定を環境変数から読む | `AI_MONITOR_OTEL_OTLP_ENDPOINT=http://collector:4317` / `AI_MONITOR_OTEL_DEPLOYMENT_ENVIRONMENT=prod` を投入して呼ぶ | monkeypatch.setenv | 起動した [`OTLPLogExporter`](../../../外部ライブラリ/opentelemetry.md#otlplogexporter) の `endpoint` に環境変数の値が渡り、[`Resource`](../../../外部ライブラリ/opentelemetry.md#resource) の `deployment.environment` が `"prod"` | 分岐は無い（環境変数の反映確認） |
 
 ---
 
@@ -330,7 +331,7 @@ _configure_logs(resource, ObservabilitySettings())
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `None` | なし | 副作用: グローバル LoggerProvider の差し替え + root logger の handlers に `LoggingHandler` を 1 つ追加 + root logger のレベルを INFO に設定 |
+| `None` | なし | 副作用: グローバル LoggerProvider の差し替え + root logger の handlers に `LoggingHandler`（`opentelemetry` 配下を除外するフィルタ付き）を 1 つ追加 + root logger のレベルを INFO に設定 |
 
 #### 処理
 
@@ -338,8 +339,9 @@ _configure_logs(resource, ObservabilitySettings())
 2. [`BatchLogRecordProcessor`](../../../外部ライブラリ/opentelemetry.md#batchlogrecordprocessor) に Exporter を渡して組み立てる
 3. [`LoggerProvider`](../../../外部ライブラリ/opentelemetry.md#loggerprovider) を Resource から組み立て、Processor を `add_log_record_processor` で登録する
 4. `set_logger_provider(provider)` でグローバル Provider に登録する
-5. [`LoggingHandler`](../../../外部ライブラリ/opentelemetry.md#logginghandler) を `level=logging.INFO` + `logger_provider=provider` で組み立て、`logging.getLogger()` の root に `addHandler` する
-6. root logger のレベルを `logging.INFO` に設定する
+5. [`LoggingHandler`](../../../外部ライブラリ/opentelemetry.md#logginghandler) を `level=logging.INFO` + `logger_provider=provider` で組み立てる
+6. `opentelemetry` 配下のロガーのレコードを転送対象から外すフィルタをハンドラに追加する（送信失敗時に SDK 自身が出すログを再び送信しようとする再帰を避ける）
+7. ハンドラを `logging.getLogger()` の root に `addHandler` し、root logger のレベルを `logging.INFO` に設定する
 
 #### 例外
 
@@ -351,6 +353,7 @@ _configure_logs(resource, ObservabilitySettings())
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_configure_logs` | 正常 | LoggerProvider 起動 + root ハンドラ追加 | 有効な Resource + 設定を渡す | `set_logger_provider` | `set_logger_provider` が LoggerProvider を受けて呼ばれ・root logger の handlers に `LoggingHandler` が 1 つ増え・root logger のレベルが `INFO` になる | - |
 | `test_configure_logs_when_endpoint_overridden` | 正常 | Exporter が設定の endpoint を受ける | `otlp_endpoint="http://collector:4317"` の設定を渡す | `set_logger_provider` + `OTLPLogExporter` の `__init__` をスパイ | `OTLPLogExporter.__init__` の `endpoint` 引数が `"http://collector:4317"` | 環境変数からの反映は [`configure`](#初期化) 側の責任なのでここでは設定オブジェクト経由で確認 |
+| `test_configure_logs_when_sdk_logger` | 正常 | SDK 自身のログを転送対象から外す | `opentelemetry.exporter.otlp.proto.grpc.exporter` 名義のレコードを流す | `set_logger_provider` | 追加したハンドラのフィルタがそのレコードを落とし、業務ロガーのレコードは通す | - |
 
 ---
 
@@ -451,9 +454,9 @@ _configure_metrics(resource, ObservabilitySettings())
 - モニターの composition root（[`main`](../モニター/エージェント管理.py.md#エージェント組み立て) の直前）で `configure("monitor")` を呼ぶ。
   MCP サーバー（`plugins/ai-monitor/mcp/server.py`）は `mcp.run()` の直前で `configure("github-mcp")` を呼ぶ。
   `service.name` はそれぞれ違えるが、`service.namespace="ai-monitor"` が共通なので Grafana Loki 側で `{service_namespace="ai-monitor"}` で横断検索できる。
-- Log は Collector の [Loki exporter](../../../外部ライブラリ/opentelemetry-collector.md#loki-exporter) を通って [Loki](../../../外部ライブラリ/loki.md) に届く。
-  `service.name` / `service.namespace` / `deployment.environment` を Loki の Stream Selector で使いたいので、Collector 側の `resource` processor で `loki.resource.labels` に列挙する（[OTLP から Loki へのラベル昇格](../../../外部ライブラリ/opentelemetry-collector.md#otlp-から-loki-へのラベル昇格) 参照）。
-- Trace / Metric は Collector の [debug exporter](../../../外部ライブラリ/opentelemetry-collector.md#debug-exporter) に流して破棄する。
+- Log は Collector の Loki exporter を通って Loki に届く。
+  `service.name` / `service.namespace` / `deployment.environment` を Loki の Stream Selector で使いたいので、Collector 側の `resource` processor で `loki.resource.labels` に列挙する（Collector 側のラベル昇格設定は observability リポジトリが持つ）。
+- Trace / Metric は Collector の debug exporter に流して破棄する。
   将来 Tempo / Prometheus を追加する際は Collector の `service.pipelines.traces.exporters` / `metrics.exporters` を差し替えるだけで、本モジュール側は変更不要。
 - 短命な inject / hook スクリプトは本モジュールを呼ばない。
   `BatchLogRecordProcessor` は 5 秒間隔でフラッシュするため、100ms オーダーで終了する短命プロセスでは初期化コストと flush 待ち（`atexit` から呼ばれる `shutdown` で最大 10 秒待つ）が割に合わない。

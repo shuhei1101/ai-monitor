@@ -28,12 +28,17 @@ _TOC_TABLE_RE = re.compile(
 )
 # 目次表「ページ」セルの Markdown リンク `[表示](./xxx)` から URL 部分を取り出す
 _LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+# ``` で囲まれたコードブロック（書式の記述例）
+_FENCE_RE = re.compile(r"^(`{3,})[^\n]*\n.*?^\1`*\s*$", re.MULTILINE | re.DOTALL)
 
 
 def parse_index_table(text: str, folder_path: str) -> list[WikiPage]:
     """README 本文の `## 目次` 表を解析し、各リンクを raw URL 化した WikiPage 配列で返す。"""
     # 環境変数 WIKI_BASE を読む（末尾スラッシュがあれば落とす）
     wiki_base = os.environ["WIKI_BASE"].rstrip("/")
+
+    # 書式の記述例に含まれる ## 目次 を索引と誤認しないようコードブロックを取り除く
+    text = _FENCE_RE.sub("", text)
 
     # ## 目次 見出しの次にある表を抽出する（見出しが無ければ ValueError）
     match = _TOC_TABLE_RE.search(text)

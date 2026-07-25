@@ -360,7 +360,7 @@ def otel_stub(monkeypatch):
     from observability import otel
 
     # 環境変数の値がテストに漏れ込まないように既定値へ戻す
-    for name in ("OTEL_OTLP_ENDPOINT", "OTEL_OTLP_INSECURE", "OTEL_DEPLOYMENT_ENVIRONMENT", "OTEL_SERVICE_NAMESPACE"):
+    for name in ("AI_MONITOR_OTEL_OTLP_ENDPOINT", "AI_MONITOR_OTEL_OTLP_INSECURE", "AI_MONITOR_OTEL_DEPLOYMENT_ENVIRONMENT", "AI_MONITOR_OTEL_SERVICE_NAMESPACE"):
         monkeypatch.delenv(name, raising=False)
     # 前のテストが登録した Provider を捨てる（グローバル Provider は 1 度しか設定できない）
     monkeypatch.setattr(otel, "_logger_provider", None)

@@ -117,6 +117,8 @@ Python 標準 `logging` を OpenTelemetry Log にブリッジする `logging.Han
 root logger に `addHandler` するだけで、既存の `logger.info(...)` などが Collector に流れる。
 root logger のレベルは既定で `WARNING` のため、INFO ログを流すには `setLevel` も併せて呼ぶ。
 
+root に付けると SDK 自身のログも拾う（[SDK 自身のログによる再帰](#sdk-自身のログによる再帰) 参照）。
+
 #### パラメータ
 
 | パラメータ | 型 | 必須 | 既定 | 説明 | 補足 |
@@ -134,6 +136,22 @@ from opentelemetry.instrumentation.logging.handler import LoggingHandler
 handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
 logging.getLogger().addHandler(handler)
 logging.getLogger().setLevel(logging.INFO)
+```
+
+#### SDK 自身のログによる再帰
+
+`OTLPLogExporter` は送信に失敗すると `opentelemetry.exporter.otlp.proto.grpc.exporter` ロガーへリトライの警告を出す。
+root に `LoggingHandler` を付けているとこの警告自体が転送対象になり、送信 → 失敗 → ログ → 送信 の再帰が起きる。
+ハンドラ側は再帰を検知して以下を標準エラーへ出し、そのレコードを捨てる。
+
+```text
+LoggingHandler.emit detected recursive logging, skipping to prevent deadlock.
+```
+
+ハンドラに `opentelemetry` 配下のロガーを落とすフィルタを付けて回避する。
+
+```python
+handler.addFilter(lambda record: not record.name.startswith("opentelemetry"))
 ```
 
 ### `BatchLogRecordProcessor`

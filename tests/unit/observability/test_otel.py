@@ -78,8 +78,8 @@ def test_configure(monkeypatch, otel_stub):
 def test_configure_when_reads_env(monkeypatch, otel_stub):
     """設定を環境変数から読む（正常系）。"""
     # 準備
-    monkeypatch.setenv("OTEL_OTLP_ENDPOINT", "http://collector:4317")
-    monkeypatch.setenv("OTEL_DEPLOYMENT_ENVIRONMENT", "prod")
+    monkeypatch.setenv("AI_MONITOR_OTEL_OTLP_ENDPOINT", "http://collector:4317")
+    monkeypatch.setenv("AI_MONITOR_OTEL_DEPLOYMENT_ENVIRONMENT", "prod")
     # 実行
     otel.configure("monitor")
     # 検証
@@ -159,6 +159,24 @@ def test_configure_logs(monkeypatch, otel_stub):
     assert len(root.handlers) == handler_count + 1
     assert isinstance(root.handlers[-1], LoggingHandler)
     assert root.level == logging.INFO
+
+
+def test_configure_logs_when_sdk_logger(monkeypatch, otel_stub):
+    """SDK 自身のログを転送対象から外す（正常系）。"""
+    # 準備
+    monkeypatch.setattr(otel, "set_logger_provider", MagicMock())
+    settings = ObservabilitySettings()
+    resource = otel._build_resource("monitor", settings)
+    sdk_record = logging.LogRecord(
+        "opentelemetry.exporter.otlp.proto.grpc.exporter", logging.WARNING, "", 0, "再送します", None, None
+    )
+    app_record = logging.LogRecord("ai_monitor.main", logging.INFO, "", 0, "起動しました", None, None)
+    # 実行
+    otel._configure_logs(resource, settings)
+    # 検証: SDK のレコードだけ落ち、業務ロガーのレコードは通る
+    handler = logging.getLogger().handlers[-1]
+    assert not handler.filter(sdk_record)
+    assert handler.filter(app_record)
 
 
 def test_configure_logs_when_endpoint_overridden(monkeypatch, otel_stub):

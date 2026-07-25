@@ -81,6 +81,38 @@ def test_parse_index_table_when_extra_columns(monkeypatch):
     ]
 
 
+def test_parse_index_table_when_fenced_example(monkeypatch):
+    """コードブロック内の記述例を無視する（正常系）。"""
+    # 準備: 実際の目次表の後ろに、書式の記述例として同じ見出しを含むコードブロックを置く
+    monkeypatch.setenv("WIKI_BASE", BASE)
+    text = (
+        "## 目次\n"
+        "\n"
+        "| ページ | 概要 |\n"
+        "| --- | --- |\n"
+        "| [フェーズ](./フェーズ/フェーズ.md) | フェーズページの書式定義 |\n"
+        "\n"
+        "### 記述例\n"
+        "\n"
+        "```markdown\n"
+        "## 目次\n"
+        "\n"
+        "| ページ | 概要 |\n"
+        "| --- | --- |\n"
+        "| [初期処理](./フェーズ/初期処理.md) | 最新状態の取得 |\n"
+        "```\n"
+    )
+    # 実行
+    pages = build_wiki_index.parse_index_table(text, "エージェント/テンプレート")
+    # 検証: 記述例の行は含まれない
+    assert pages == [
+        WikiPage(
+            raw_url=f"{BASE}/エージェント/テンプレート/フェーズ/フェーズ.md",
+            summary="フェーズページの書式定義",
+        )
+    ]
+
+
 def test_parse_index_table_when_no_toc_heading(monkeypatch):
     """目次見出しなし（異常系）。"""
     # 準備

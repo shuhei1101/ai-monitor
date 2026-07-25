@@ -10,7 +10,7 @@ template_version: 1.0.0
 
 ## 目次
 
-| フォルダ | 概要 | 補足 |
+| ページ | 概要 | 補足 |
 | --- | --- | --- |
 | [テンプレート](./テンプレート/) | フェーズ索引 + フェーズページの書式定義 | - |
 | [intake-issue-triager](./intake-issue-triager/) | intake Issue の分解とサブ Issue 起票 | - |

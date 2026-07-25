@@ -7,9 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ObservabilitySettings(BaseSettings):
-    """`OTEL_*` 環境変数を型安全に読む観測設定。"""
+    """`AI_MONITOR_OTEL_*` 環境変数を型安全に読む観測設定。"""
 
-    model_config = SettingsConfigDict(env_prefix="OTEL_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="AI_MONITOR_OTEL_", extra="ignore")
 
     otlp_endpoint: str = "http://localhost:4317"
     otlp_insecure: bool = True
