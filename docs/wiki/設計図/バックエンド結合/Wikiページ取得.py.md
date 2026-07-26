@@ -7,10 +7,10 @@ template_version: 1.0.0
 MCP ツール: `read_wiki_pages`
 
 エージェントが自ターンの実行中に、事前注入されていない Wiki ページを読むための取得口。
-注入済みの Wiki 索引にある raw URL、または環境変数のベース URL と相対パスを結合した URL を渡す。
+注入済みの Wiki 索引に載っている場所をそのまま渡す。
 
-同じ取得処理を持つ [URLドキュメント注入](./URLドキュメント注入.py.md) の CLI は、SKILL.md の動的コンテキスト注入（スキル読み込み時）が使う。
-スキル読み込み時点ではツール一覧が未確定で MCP を呼べないため、CLI と MCP ツールの 2 つの入口を残す。
+場所は raw URL とローカル絶対パスの両方を受け付ける。
+索引は設定の Wiki ベースを起点に作られ、ベースがローカルなら索引の各行もローカルパスになるため、読む側も同じ形を受けられる必要がある。
 
 - 対応テストファイル: `tests/integration/mcp/test_read_wiki_pages.py`
 
@@ -20,14 +20,14 @@ MCP ツール: `read_wiki_pages`
 
 | パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `urls` | list[str] | ✅ | - | 取得対象 URL の配列 | 1 件以上・公開 URL であること | GitHub blob URL は raw URL に変換して取得する |
+| `locations` | list[str] | ✅ | - | 取得対象の場所の配列 | 1 件以上 | raw URL / GitHub blob URL / ローカル絶対パスのいずれか。blob URL は raw URL に変換して取得する |
 
 リクエスト例:
 
 ```json
 {
-  "urls": [
-    "https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/テンプレート/シナリオ.md",
+  "locations": [
+    "/home/user/repo/ai-monitor/docs/wiki/テンプレート/シナリオ.md",
     "https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/wiki/規約/コメント.md"
   ]
 }
@@ -37,12 +37,12 @@ MCP ツール: `read_wiki_pages`
 
 | フィールド | 型 | 説明 | 制限 | 補足 |
 | --- | --- | --- | --- | --- |
-| `pages` | object[] | 取得できたページの配列 | - | 並びは `urls` の指定順 |
-| `pages[].url` | str | 実際に取得した URL | - | blob URL を渡した場合は変換後の raw URL |
+| `pages` | object[] | 取得できたページの配列 | - | 並びは `locations` の指定順 |
+| `pages[].url` | str | 実際に取得した場所 | - | blob URL を渡した場合は変換後の raw URL。ローカルはパスのまま |
 | `pages[].body` | str | ページ本文 | - | 先頭の YAML front matter は除去済み |
 | `failures` | object[] | 取得できなかったページの配列 | - | 全件成功なら空配列 |
-| `failures[].url` | str | 取得に失敗した URL | - | 正規化後の URL |
-| `failures[].reason` | str | 失敗の理由 | - | HTTP ステータスや接続エラーの内容 |
+| `failures[].url` | str | 取得に失敗した場所 | - | 正規化後の値 |
+| `failures[].reason` | str | 失敗の理由 | - | HTTP ステータス・接続エラー・ファイル不在の内容 |
 
 レスポンス例:
 
@@ -65,7 +65,7 @@ MCP ツール: `read_wiki_pages`
 
 **補足:**
 
-- 同じ URL を複数回渡した場合はその回数分の要素を返す（重複除去はしない）
+- 同じ場所を複数回渡した場合はその回数分の要素を返す（重複除去はしない）
 - 1 件も取得できなかった場合も `pages` が空配列・`failures` に全件でツールエラーにはしない（呼び出し側が読めた分だけで判断できるようにする）
 
 ## 制約
@@ -73,18 +73,19 @@ MCP ツール: `read_wiki_pages`
 | 項目 | 制約 | 補足 |
 | --- | --- | --- |
 | タイムアウト | 制限なし | - |
-| 対象プロジェクト | 参照しない | 取得先は引数の URL だけで決まる |
-| 認可 | なし（認証情報を付けない） | 対象は公開 URL のみ |
-| フォールバック | なし（取得できなかった URL は `failures` に載せる） | 取得できたページは返し、欠落は呼び出し側が結果から判断する |
+| 対象プロジェクト | 参照しない | 取得先は引数の場所だけで決まる |
+| 認可 | なし（認証情報を付けない） | ネットワーク経由の対象は公開 URL のみ |
+| フォールバック | なし（取得できなかった場所は `failures` に載せる） | 取得できたページは返し、欠落は呼び出し側が結果から判断する |
 
 ## フロー一覧
 
 | 分類 | フロー名 | 概要 | 補足 |
 | --- | --- | --- | --- |
-| 正常 | 正常系 | 複数 URL の取得 → 本文配列で返却 | - |
+| 正常 | 正常系 | 複数の場所の取得 → 本文配列で返却 | - |
 | 正常 | 正常系（blob URL） | GitHub blob URL を raw URL に変換して取得 | - |
 | 正常 | 正常系（front matter あり） | 本文先頭の YAML front matter を除去して返却 | - |
-| 正常 | 正常系（一部が取得失敗） | 取得できたページを返し、失敗した URL を `failures` に載せる | - |
+| 正常 | 正常系（ローカルパス） | ローカル絶対パスをファイルとして読む | - |
+| 正常 | 正常系（一部が取得失敗） | 取得できたページを返し、失敗した場所を `failures` に載せる | - |
 
 ## 正常系
 
@@ -166,6 +167,35 @@ sequenceDiagram
 ### 期待値
 
 - `pages[0].body` に YAML front matter が含まれない
+
+## 正常系（ローカルパス）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（一時ディレクトリにページを作成） | - |
+| 入力 | 一時ディレクトリ内のファイルの絶対パスを渡す | ローカル分岐を決定的に誘発 |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  participant C as クライアント
+  participant IF as MCP ツール read_wiki_pages
+  participant F as ローカルファイル
+
+  C->>IF: locations（絶対パス 1 件）
+  IF-->>F: ファイルを読む
+  IF->>IF: 先頭の YAML front matter を除去
+  IF-->>C: pages（1 件）
+```
+
+### 期待値
+
+- `pages[0].body` にファイル本文が入る
+- `pages[0].url` が渡した絶対パスのままになっている
+- ネットワークアクセスが発生していない
 
 ## 正常系（一部が取得失敗）
 
