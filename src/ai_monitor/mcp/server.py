@@ -301,6 +301,8 @@ def get_issue_or_pr(
     comments: bool = True,
     assignees: bool = True,
     author: bool = True,
+    head_ref: bool = True,
+    base_ref: bool = True,
     parent: bool = True,
     sub_issues: bool = True,
     sub_issues_summary: bool = True,
@@ -319,6 +321,10 @@ def get_issue_or_pr(
         data = client.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
     merged = bool(getattr(data, "merged_at", None))
     state_value = "MERGED" if merged else data.state.upper()
+
+    # head / base ブランチ名は PR の応答から取り出す（Issue はブランチを持たないため None）
+    head_ref_value = data.head.ref if (head_ref and is_pr) else None
+    base_ref_value = data.base.ref if (base_ref and is_pr) else None
 
     # 取得フラグが True のフィールドを追加取得する
     comments_value = None
@@ -390,6 +396,8 @@ def get_issue_or_pr(
         comments=comments_value,
         assignees=[UserRef(login=user.login) for user in data.assignees] if assignees else None,
         author=(UserRef(login=data.user.login) if getattr(data, "user", None) else None) if author else None,
+        head_ref=head_ref_value,
+        base_ref=base_ref_value,
         parent=parent_value,
         sub_issues=sub_issues_value,
         sub_issues_summary=summary_value,

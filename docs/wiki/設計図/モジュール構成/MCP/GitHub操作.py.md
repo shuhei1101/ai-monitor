@@ -336,6 +336,8 @@ Issue / PR の情報を取得し[イシュースナップショット](#イシ�
 | コメント取得 | `comments` | `bool` | - | `True` | コメントを取得するか | - |
 | 担当者取得 | `assignees` | `bool` | - | `True` | 担当者を取得するか | - |
 | 起票者取得 | `author` | `bool` | - | `True` | 起票者を取得するか | - |
+| headブランチ取得 | `head_ref` | `bool` | - | `True` | head ブランチ名を取得するか | PR のみ有効 |
+| baseブランチ取得 | `base_ref` | `bool` | - | `True` | base ブランチ名を取得するか | PR のみ有効 |
 | 親 Issue取得 | `parent` | `bool` | - | `True` | 親 Issueを取得するか | - |
 | 子 Issue取得 | `sub_issues` | `bool` | - | `True` | 子 Issueを取得するか | - |
 | 子集計取得 | `sub_issues_summary` | `bool` | - | `True` | 子集計を取得するか | - |
@@ -362,7 +364,10 @@ IssueSnapshot(number=35, title="プロフィール編集機能", state="OPEN", l
 
 1. REST で Issue / PR の基本情報を取得する（PR は `is_pr` でエンドポイントを切り替え）
 2. 取得フラグが `True` のフィールド（コメント / 親子 Issue / 子集計 等）を追加取得する（コメントの `isMinimized` は GraphQL）
-3. 結果を[イシュースナップショット](#イシュースナップショット)に変換して返す（取得しなかったフィールドは `None`）
+3. head / base ブランチ名を確定する
+   - `is_pr` が `True` の場合、手順 1 の応答から取り出す（追加の API 呼び出しはしない）
+   - `is_pr` が `False` の場合、`None` にする（Issue はブランチを持たない）
+4. 結果を[イシュースナップショット](#イシュースナップショット)に変換して返す（取得しなかったフィールドは `None`）
 
 #### 例外
 
@@ -375,8 +380,9 @@ IssueSnapshot(number=35, title="プロフィール編集機能", state="OPEN", l
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_issue_or_pr` | 正常 | スナップショット組み立て | REST 応答をモック | githubkit | `IssueSnapshot` の各フィールドが対応 | - |
-| `test_get_issue_or_pr_when_flags_false` | 正常 | 取得フラグ `False` の除外 | `comments=False` で呼び出し | githubkit | `comments` が `None` で返る | - |
+| `test_get_issue_or_pr` | 正常 | スナップショット組み立て | REST 応答をモック | githubkit | `IssueSnapshot` の各フィールドが対応・`head_ref` / `base_ref` が `None` | Issue はブランチを持たない |
+| `test_get_issue_or_pr_when_pr` | 正常 | PR のブランチ名の取り込み | `is_pr=True` で PR 応答をモック | githubkit | `head_ref` / `base_ref` に PR のブランチ名が入る | 追加の API 呼び出しなし |
+| `test_get_issue_or_pr_when_flags_false` | 正常 | 取得フラグ `False` の除外 | `comments=False` / `base_ref=False` で呼び出し | githubkit | `comments` と `base_ref` が `None` で返る | - |
 | `test_get_issue_or_pr_when_api_error` | 異常 | API エラーの伝播 | REST が 404 を返す | githubkit | `RequestFailed` がそのまま伝播 | 代表 1 ツールで共通経路を確認 |
 
 #### 疎通テスト
@@ -2941,6 +2947,8 @@ get_issue_or_pr が返す Issue / PR のスナップショット（Pydantic `Bas
 | コメント | `comments` | [`list[IssueCommentEntry]`](#コメントエントリ) | 公開 | `[]` | コメント一覧（投稿順） | - | - |
 | 担当者 | `assignees` | [`list[UserRef]`](#ユーザー参照) | 公開 | `[]` | assignee 一覧 | - | 空 = 未設定 |
 | 起票者 | `author` | `UserRef \| None` | 公開 | `None` | 起票者 | - | - |
+| head ブランチ | `head_ref` | `str \| None` | 公開 | `None` | PR の head ブランチ名 | `"feat/backend/profile/edit/edit-api"` | Issue では `None` |
+| base ブランチ | `base_ref` | `str \| None` | 公開 | `None` | PR の base ブランチ名 | `"feat/story/profile/edit"` | Issue では `None` |
 | 親 Issue | `parent` | `IssueRef \| None` | 公開 | `None` | Sub-issue リンクの親 | - | 親なしは `None` |
 | 子 Issue | `sub_issues` | [`list[IssueRef]`](#イシュー参照) | 公開 | `[]` | Sub-issue リンクの子 | - | - |
 | 子集計 | `sub_issues_summary` | `SubIssuesSummary \| None` | 公開 | `None` | 子 Issue の集計 | - | - |

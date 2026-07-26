@@ -183,6 +183,9 @@ class IssueSnapshot(BaseModel):
     comments: list[IssueCommentEntry] | None = []
     assignees: list[UserRef] | None = []
     author: UserRef | None = None
+    # PR の head / base ブランチ名（Issue は None）。子ブランチの分岐元・Stacked PR の親の特定に使う
+    head_ref: str | None = None
+    base_ref: str | None = None
     parent: IssueRef | None = None
     sub_issues: list[IssueRef] | None = []
     sub_issues_summary: SubIssuesSummary | None = None

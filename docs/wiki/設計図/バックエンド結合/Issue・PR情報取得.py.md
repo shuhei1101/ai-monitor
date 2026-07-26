@@ -32,6 +32,8 @@ Issue / PR の情報を 1 コマンドで取得する。
 | `comments` | bool | - | `True` | comments を取得するか | - | - |
 | `assignees` | bool | - | `True` | assignees を取得するか | - | - |
 | `author` | bool | - | `True` | author を取得するか | - | - |
+| `head_ref` | bool | - | `True` | head ブランチ名を取得するか | - | PR のみ有効 |
+| `base_ref` | bool | - | `True` | base ブランチ名を取得するか | - | PR のみ有効 |
 | `parent` | bool | - | `True` | parent を取得するか | - | Sub-issue リンクの親 |
 | `sub_issues` | bool | - | `True` | subIssues を取得するか | - | Sub-issue リンクの子一覧 |
 | `sub_issues_summary` | bool | - | `True` | subIssuesSummary を取得するか | - | 子の完了集計 |
@@ -71,6 +73,8 @@ Issue / PR の情報を 1 コマンドで取得する。
 | `comments[].is_minimized` | bool | Resolved 済みか | - | - |
 | `assignees[].login` | str | assignee のログイン名 | - | 空配列 = 未設定 |
 | `author.login` | str | 起票者のログイン名 | - | - |
+| `head_ref` | str | head ブランチ名 | - | PR のみ。Issue では `null` |
+| `base_ref` | str | base ブランチ名 | - | PR のみ。Issue では `null`。子ブランチの分岐元・Stacked PR の親の特定に使う |
 | `parent.number` | int | 親 Issue 番号 | - | `title` / `url` / `state` も返る |
 | `sub_issues[].number` | int | 子 Issue 番号 | - | `title` / `url` / `state` も返る |
 | `sub_issues_summary.total` | int | 子 Issue の総数 | - | - |
@@ -104,7 +108,8 @@ Issue / PR の情報を 1 コマンドで取得する。
 
 | 分類 | フロー名 | 概要 | 補足 |
 | --- | --- | --- | --- |
-| 正常 | 正常系 | Issue / PR を取得 → スナップショット組み立て | - |
+| 正常 | 正常系 | Issue を取得 → スナップショット組み立て | ブランチ名は `null` |
+| 正常 | 正常系（PR 指定） | PR を取得 → head / base ブランチ名を含むスナップショット組み立て | Sub-issue 系は `null` |
 | 異常 | 異常系（API エラー） | 認証切れ / 対象不存在 / ネットワーク断 | - |
 
 ## 正常系
@@ -134,6 +139,36 @@ sequenceDiagram
 
 - `True` を指定したフィールドがスナップショットに入っている
 - `False` を指定したフィールドが `null` になっている
+- `head_ref` / `base_ref` が `null`（Issue のため）
+
+## 正常系（PR 指定）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | GitHub API を差し替え（正常応答を返す） | - |
+| 対象 PR | head / base ブランチを持つ PR が存在 | `is_pr: true` で分岐を決定的に誘発 |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  participant A as エージェント
+  participant T as MCP ツール get_issue_or_pr
+  participant GH as GitHub
+
+  A->>T: number, is_pr（true）, フィールドフラグ
+  T-->>GH: PR を照会
+  T->>T: head / base ブランチ名を含む<br>スナップショットに変換
+  T-->>A: スナップショット
+```
+
+### 期待値
+
+- `head_ref` に PR の head ブランチ名が入っている
+- `base_ref` に PR の base ブランチ名が入っている
+- Sub-issue 系（`parent` / `sub_issues` / `sub_issues_summary`）が `null`
 
 ## 異常系（API エラー）
 

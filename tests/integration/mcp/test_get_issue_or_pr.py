@@ -45,6 +45,40 @@ def test_normal(gh, resp, api):
     assert snap.sub_issues_summary.total == 2
     assert snap.comments[0].id == "IC_1"
     assert snap.comments[0].is_minimized is False
+    assert snap.head_ref is None
+    assert snap.base_ref is None
+
+
+def test_normal_when_pr(gh, resp, api):
+    """PR を取得して head / base ブランチ名を含むスナップショットを組み立てる一連を確認する（正常系・PR 指定）。"""
+    # 準備
+    gh.rest.pulls.get.return_value = resp(
+        NS(
+            number=157,
+            title="タスク編集 バックエンド",
+            body="## 紐づく Issue",
+            html_url="http://p/157",
+            state="open",
+            merged_at=None,
+            closed_at=None,
+            created_at="2026-07-01T00:00:00Z",
+            updated_at="2026-07-02T00:00:00Z",
+            labels=[NS(name="layer:subsystem", id=1, color="5319e7", description=None)],
+            assignees=[],
+            user=NS(login="shuhei1101"),
+            head=NS(ref="feat/backend/task-edit-154/update-api"),
+            base=NS(ref="feat/story/task-edit-154"),
+        )
+    )
+    gh.rest.issues.list_comments.return_value = resp([])
+    # 実行
+    snap = api.get_issue_or_pr(157, is_pr=True)
+    # 検証
+    assert snap.head_ref == "feat/backend/task-edit-154/update-api"
+    assert snap.base_ref == "feat/story/task-edit-154"
+    assert snap.parent is None
+    assert snap.sub_issues is None
+    assert snap.sub_issues_summary is None
 
 
 def test_error_when_api_error(gh, request_failed, api):

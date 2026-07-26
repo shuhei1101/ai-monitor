@@ -149,18 +149,50 @@ def test_get_issue_or_pr(gh, api):
     assert [label.name for label in snap.labels] == ["layer:epic"]
     assert [a.login for a in snap.assignees] == ["shuhei1101"]
     assert snap.author.login == "shuhei1101"
+    assert snap.head_ref is None
+    assert snap.base_ref is None
+
+
+def test_get_issue_or_pr_when_pr(gh, api):
+    """PR の head / base ブランチ名の取り込みを確認する（正常系）。"""
+    # 準備
+    pr = _issue_ns()
+    pr.head = NS(ref="feat/backend/profile/edit/edit-api")
+    pr.base = NS(ref="feat/story/profile/edit")
+    pr.merged_at = None
+    gh.rest.pulls.get.return_value = _resp(pr)
+    # 実行
+    snap = api.get_issue_or_pr(
+        35, is_pr=True, comments=False, parent=False, sub_issues=False, sub_issues_summary=False
+    )
+    # 検証
+    assert snap.head_ref == "feat/backend/profile/edit/edit-api"
+    assert snap.base_ref == "feat/story/profile/edit"
+    gh.rest.issues.get.assert_not_called()
 
 
 def test_get_issue_or_pr_when_flags_false(gh, api):
     """取得フラグ False のフィールド除外を確認する（正常系）。"""
     # 準備
-    gh.rest.issues.get.return_value = _resp(_issue_ns())
+    pr = _issue_ns()
+    pr.head = NS(ref="feat/a")
+    pr.base = NS(ref="master")
+    pr.merged_at = None
+    gh.rest.pulls.get.return_value = _resp(pr)
     # 実行
     snap = api.get_issue_or_pr(
-        35, is_pr=False, comments=False, parent=False, sub_issues=False, sub_issues_summary=False
+        35,
+        is_pr=True,
+        comments=False,
+        base_ref=False,
+        parent=False,
+        sub_issues=False,
+        sub_issues_summary=False,
     )
     # 検証
     assert snap.comments is None
+    assert snap.base_ref is None
+    assert snap.head_ref == "feat/a"
     gh.rest.issues.list_comments.assert_not_called()
 
 
