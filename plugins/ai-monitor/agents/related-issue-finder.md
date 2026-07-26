@@ -1,6 +1,6 @@
 ---
 name: ai-monitor:related-issue-finder
-description: 指定 Issue に関連する既存 Issue（open/closed 含む）を検索して、リンクと一言概要のリストを返すエージェント。issue-triage の現状調査で使う。
+description: 指定 Issue に関連する既存 Issue（open/closed 含む）を検索して、リンクと一言概要のリストを返すエージェント。subsystem-conductor の現状調査で使う。
 ---
 
 # related-issue-finder

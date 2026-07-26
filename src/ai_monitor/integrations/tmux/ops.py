@@ -21,10 +21,13 @@ def send_keys(name: str, text: str) -> None:
     _run_tmux(["send-keys", "-t", name, "Enter"])
 
 
-def send_escape(name: str) -> None:
-    """既存セッションへ Escape を送信して実行中の処理を中断させる。"""
+def interrupt(name: str) -> None:
+    """既存セッションの処理を中断し、入力欄を空にする。"""
     # 処理中のセッションへ文字列を送っても入力が queue に積まれるだけで実行されないため、先に中断する
     _run_tmux(["send-keys", "-t", name, "Escape"])
+    time.sleep(1)
+    # 中断で入力欄に戻った文字列に後続の送信文が連結されないよう、行を消す
+    _run_tmux(["send-keys", "-t", name, "C-u"])
     time.sleep(1)
 
 

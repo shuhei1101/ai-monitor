@@ -82,17 +82,18 @@ def test_normal(client, tmux_calls, session_factory):
         "/context_reset",
         json={"project": "sandbox", "agent_name": "subsystem-conductor", "number": 170},
     )
-    # 検証: 200 + 該当セッションへ Escape → /clear → ドキュメントの順で送信
+    # 検証: 200 + 該当セッションへ Escape → C-u → /clear → ドキュメントの順で送信
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     # send_keys は本文と Enter で 2 回 tmux を呼ぶため、本文送信だけを数える
     sends = [c for c in tmux_calls.calls if c[0] == "send-keys" and c[3] != "Enter"]
-    assert len(sends) == 3
+    assert len(sends) == 4
     assert all(c[2] == session.session_name for c in sends)
     assert sends[0][3] == "Escape"
-    assert sends[1][3] == "/clear"
+    assert sends[1][3] == "C-u"
+    assert sends[2][3] == "/clear"
     # フェーズ + 参考資料 + Wiki 索引が載る
-    sent_text = sends[2][3]
+    sent_text = sends[3][3]
     assert "# 初期処理" in sent_text
     assert "# 規約: コメント" in sent_text
     assert "規約.md" in sent_text

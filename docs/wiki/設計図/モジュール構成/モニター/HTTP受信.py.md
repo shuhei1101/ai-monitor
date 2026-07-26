@@ -121,7 +121,7 @@ receive_context_reset(project="sandbox", agent_name="subsystem-conductor", numbe
    - 見つからない場合、`404` を返す
    - `[WARNING]` 台帳に無いセッションからのリセット要求を拒否した（`project` / `agent_name` / `number`）
 2. 設定から対象プロジェクトを引き、エージェントドキュメントを組み立てる（[エージェントドキュメント組み立て](./エージェントドキュメント.py.md#エージェントドキュメント組み立て)）
-3. 該当セッションへ Escape を送ってコンパクト処理を中断する（[中断送信](./tmux連携.py.md#中断送信)）
+3. 該当セッションのコンパクト処理を中断して入力欄を空にする（[中断](./tmux連携.py.md#中断)）
    - 処理中のセッションへ文字列を送っても入力が queue に積まれるだけで実行されないため、`/clear` より先に行う
 4. 該当セッションへ `/clear` を送る（[キー送信](./tmux連携.py.md#キー送信)）
 5. 続けて該当セッションへドキュメントを送り、受理結果を返す（[キー送信](./tmux連携.py.md#キー送信)）
@@ -137,5 +137,5 @@ receive_context_reset(project="sandbox", agent_name="subsystem-conductor", numbe
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_receive_context_reset` | 正常 | リセットと送信 | 台帳に該当セッションあり | tmux / エージェントドキュメント組み立て | 該当セッションへ Escape → `/clear` → ドキュメントの順に送信され `{"ok": true}` が返る | - |
+| `test_receive_context_reset` | 正常 | リセットと送信 | 台帳に該当セッションあり | tmux / エージェントドキュメント組み立て | 該当セッションへ 中断 → `/clear` → ドキュメントの順に送信され `{"ok": true}` が返る | - |
 | `test_receive_context_reset_when_session_missing` | 異常 | セッション不明 | 台帳に該当なし | tmux | `404` が返り送信が発生しない | 例外表「台帳に該当セッションが無い」に対応 |

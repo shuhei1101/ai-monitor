@@ -1,6 +1,6 @@
 ---
 name: ai-monitor:related-pr-finder
-description: 指定 Issue に関連する PR（open/merged/closed）を検索して、リンクと一言概要のリストを返すエージェント。過去の対応で影響を与えた可能性のある merged PR も探す。issue-triage の現状調査で使う。
+description: 指定 Issue に関連する PR（open/merged/closed）を検索して、リンクと一言概要のリストを返すエージェント。過去の対応で影響を与えた可能性のある merged PR も探す。subsystem-conductor の現状調査で使う。
 ---
 
 # related-pr-finder

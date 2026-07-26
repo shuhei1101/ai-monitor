@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from ai_monitor.features.agents.docs import build_agent_docs
 from ai_monitor.features.agents.types import Agent
-from ai_monitor.integrations.tmux.ops import send_escape, send_keys
+from ai_monitor.integrations.tmux.ops import interrupt, send_keys
 from ai_monitor.mcp.server import build_mcp_app
 from ai_monitor.shared.settings import Settings
 
@@ -85,8 +85,9 @@ def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Ag
         agent_docs = build_agent_docs(
             body.agent_name, project, ai_monitor_wiki_base=settings.ai_monitor_wiki_base
         )
-        # コンパクト処理を中断してから /clear を打つ（処理中は入力が queue に積まれるだけで実行されない）
-        send_escape(session.session_name)
+        # コンパクト処理を中断して入力欄を空にしてから /clear を打つ
+        # （処理中は入力が queue に積まれるだけで実行されず、中断で戻った文字列にも連結される）
+        interrupt(session.session_name)
         # /clear で空にしてからドキュメントを送り直す（順序を逆にすると消える）
         send_keys(session.session_name, CLEAR_COMMAND)
         send_keys(session.session_name, agent_docs)
