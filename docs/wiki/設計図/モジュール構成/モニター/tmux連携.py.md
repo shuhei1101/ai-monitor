@@ -14,7 +14,6 @@ template_version: 1.1.0
 | --- | --- | --- | --- | --- | --- | --- |
 | 共通 | セッション操作 | `integrations/tmux/ops.py` | 関数 | [`create_session`](#セッション作成) | tmux セッションを detached で作成 | - |
 | 共通 | セッション操作 | `integrations/tmux/ops.py` | 関数 | [`send_keys`](#キー送信) | 既存セッションへ文字列を送信して実行 | - |
-| 共通 | セッション操作 | `integrations/tmux/ops.py` | 関数 | [`interrupt`](#中断) | 処理を中断して入力欄を空にする | 処理中のセッションへ入力を通すため |
 | 共通 | セッション操作 | `integrations/tmux/ops.py` | 関数 | [`has_session`](#生存確認) | セッションの存在確認 | heartbeat / 台帳修復に使用 |
 | 共通 | セッション操作 | `integrations/tmux/ops.py` | 関数 | [`kill_session`](#セッション-kill) | セッションを kill | - |
 | 共通 | 内部処理 | `integrations/tmux/ops.py` | 関数 | [`_run_tmux`](#tmux-実行入口) | tmux CLI 呼び出しの単一入口 | - |
@@ -169,62 +168,6 @@ send_keys("ai-monitor-myproj-35-epic-conductor", "状態が変化しました。
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_send_keys` | 正常 | 文字列の送信と実行 | 作成済みセッションへ `echo` コマンドを送信 | なし（実 tmux を操作） | `capture-pane` の出力に実行結果が現れる | - |
 | `test_send_keys_when_session_missing` | 異常 | セッション不存在 | 存在しないセッション名 | なし（実 tmux を操作） | `CalledProcessError` | 例外表「セッション不存在」に対応 |
-
----
-
-### 中断
-> 物理名: `interrupt`<br>
-> 種別: 関数
-
-既存セッションの処理を中断し、入力欄を空にする。
-
-処理中のセッションへ文字列を送っても、入力は queue に積まれるだけで実行されない。
-中断すると実行中だった入力が入力欄へ戻るため、続けて送る文字列が連結されないよう行を消す。
-[コンテキストリセット受信](./HTTP受信.py.md#コンテキストリセット受信)がコンパクト処理中の `/clear` を通すために使う。
-
-#### 引数
-
-| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
-| --- | --- | --- | --- | --- | --- | --- |
-| セッション名 | `name` | `str` | ✅ | - | 送信先のセッション名 | - |
-
-引数例:
-
-```python
-interrupt("ai-monitor-myproj-35-epic-conductor")
-```
-
-#### 戻り値
-
-| 型 | 説明 | 補足 |
-| --- | --- | --- |
-| `None` | なし | - |
-
-#### 処理
-
-1. `tmux send-keys -t {name} Escape` を実行する（[tmux 実行入口](#tmux-実行入口)）
-2. 中断が反映されるまで間を置く（直後に文字列を送ると処理中と判定されて queue に積まれるため）
-3. `tmux send-keys -t {name} C-u` を実行して入力欄の行を消す（[tmux 実行入口](#tmux-実行入口)）
-4. 反映されるまで間を置く
-
-#### 例外
-
-| 例外名 | 発生条件 | メッセージ | 補足 |
-| --- | --- | --- | --- |
-| `CalledProcessError` | tmux が非 0 で終了（セッション不存在 等） | tmux の stderr | - |
-
-#### 単体テスト
-
-セットアップ:
-
-| セットアップ | 説明 | 補足 |
-| --- | --- | --- |
-| 一時 tmux セッション | テスト用セッションを作成し、テスト後に残っていれば kill する | fixture 名 `tmp_tmux_session` |
-
-| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
-| --- | --- | --- | --- | --- | --- | --- |
-| `test_interrupt` | 正常 | 中断キーの送信 | 作成済みセッションへ送信 | なし（実 tmux を操作） | 例外を投げずに完了する | キーの並びは[コンテキストリセット](../../バックエンド結合/コンテキストリセット.py.md)の結合テストで確認する |
-| `test_interrupt_when_session_missing` | 異常 | セッション不存在 | 存在しないセッション名 | なし（実 tmux を操作） | `CalledProcessError` | 例外表「セッション不存在」に対応 |
 
 ---
 

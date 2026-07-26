@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "_description": "constants.env の定数と settings.yaml 由来の REPO_SLUG / WIKI_BASE を CLAUDE_ENV_FILE 経由でセッション内に展開",
+            "_description": "constants.env の定数と settings.yaml 由来の REPO_SLUG / WIKI_BASE / AI_MONITOR_WIKI_BASE を CLAUDE_ENV_FILE 経由でセッション内に展開",
             "type": "command",
             "command": "bash",
             "args": [
@@ -23,34 +23,6 @@
             "command": "python",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact/request_context_reset.py"
-            ]
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "_description": "マージ前に master 取り込み確認＋dry-run コンフリクトチェック",
-            "type": "command",
-            "command": "python",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/pre-merge-check.py"
-            ]
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|Read",
-        "hooks": [
-          {
-            "_description": "編集対象ファイルにマッチする開発ルールを注入",
-            "type": "command",
-            "command": "python",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/inject-rules/injector.py"
             ]
           }
         ]

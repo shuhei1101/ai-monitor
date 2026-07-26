@@ -63,6 +63,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | クローズ | MCP ツール | `mcp/server.py` | 関数 | [`close`](#クローズ) | Issue / PR をクローズ | - |
 | Issue 再オープン | MCP ツール | `mcp/server.py` | 関数 | [`reopen_issue`](#issue再オープン) | クローズ済み Issue を再オープン | バグ差し戻し用 |
 | 子 Issue 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_child_issue`](#子issue作成) | Sub-issue リンク付きで子 Issue を作成 | - |
+| 新規 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_intake_issue`](#新規issue起票) | 親を持たない intake Issue を作成 | 全エージェントが使う。ラベルは固定 |
 | Draft PR 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_draft_pr`](#draftpr作成) | base 明示で Draft PR を作成 | Stacked PR 対応 |
 | PR Ready 化 | MCP ツール | `mcp/server.py` | 関数 | [`mark_pr_ready`](#pr_ready化) | Draft を解除 | - |
 | PR マージ | MCP ツール | `mcp/server.py` | 関数 | [`merge_pr`](#prマージ) | 既定 squash + ブランチ削除でマージ | - |
@@ -1512,6 +1513,65 @@ CreatedIssueResult(issue_number=36, url="https://github.com/.../issues/36", pare
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
 | `test_ext_create_child_issue` | GitHub | Sub-issue リンク付き起票 | 子 Issue の REST ID での親リンク | 副作用: sandbox に Issue 作成（テスト後クローズ） |
+
+---
+
+### 新規Issue起票
+> 物理名: `create_intake_issue`<br>
+> 種別: 関数
+
+親を持たない intake Issue を作成する。
+
+会話から派生した要望をワークフローの入口へ流すためのもので、付与するラベルは固定にする。
+親へリンクする起票は[子Issue作成](#子issue作成)を使う。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| タイトル | `title` | `str` | ✅ | - | Issue のタイトル | 依頼内容を 1 行で表したもの |
+| 本文 | `body` | `str` | ✅ | - | Issue の本文 | 会話内容の要約 |
+
+引数例:
+
+```python
+create_intake_issue(title="タスク一覧に並び替えを追加したい", body="#42 の会話から派生。...")
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`CreatedIssueResult`](#issue-作成結果) | 作成した Issue の番号 / URL | `parent_issue_number` は `None` |
+
+戻り値例:
+
+```python
+CreatedIssueResult(issue_number=58, url="https://github.com/.../issues/58", parent_issue_number=None)
+```
+
+#### 処理
+
+1. REST でタイトル / 本文と固定ラベル（`layer:intake` + `確認:intake-issue-triager`）付きの Issue を作成する
+2. Sub-issue リンクを付けずに `CreatedIssueResult` を返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx（認証エラー・未定義ラベル 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_create_intake_issue` | 正常 | 固定ラベル付き起票 | タイトル + 本文 | githubkit | `layer:intake` + `確認:intake-issue-triager` 付きで起票され、Sub-issue リンクが呼ばれない | - |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_create_intake_issue` | GitHub | 親なし起票 | 固定ラベルの付与 | 副作用: sandbox に Issue 作成（テスト後クローズ） |
 
 ---
 

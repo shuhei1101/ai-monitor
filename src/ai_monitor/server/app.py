@@ -9,9 +9,8 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from ai_monitor.features.agents.docs import build_agent_docs
+from ai_monitor.features.agents.service import reset_session
 from ai_monitor.features.agents.types import Agent
-from ai_monitor.integrations.tmux.ops import interrupt, send_keys
 from ai_monitor.mcp.server import build_mcp_app
 from ai_monitor.shared.settings import Settings
 
@@ -19,9 +18,6 @@ if TYPE_CHECKING:
     from ai_monitor.features.sessions.registry import SessionRegistry
 
 logger = logging.getLogger(__name__)
-
-# 会話履歴を空にするスラッシュコマンド
-CLEAR_COMMAND = "/clear"
 
 
 class ContextResetRequest(BaseModel):
@@ -68,7 +64,7 @@ def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Ag
 
     @app.post("/context_reset")
     def receive_context_reset(body: ContextResetRequest) -> dict:
-        """リセット要求を受け、該当セッションを /clear してからドキュメントを送り直す。"""
+        """リセット要求を受け、該当セッションを作り直して起動プロンプトを送り直す。"""
         # 台帳からセッションを検索する
         session = registry.find(body.project, body.agent_name, body.number)
         if session is None:
@@ -80,22 +76,17 @@ def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Ag
                 body.number,
             )
             raise HTTPException(status_code=404)
-        # 設定から対象プロジェクトを引き、エージェントドキュメントを組み立てる
+        # 設定から対象プロジェクトとエージェント定義を引く
         project = next(p for p in settings.projects if p.name == body.project)
-        agent_docs = build_agent_docs(
-            body.agent_name, project, ai_monitor_wiki_base=settings.ai_monitor_wiki_base
-        )
-        # コンパクト処理を中断して入力欄を空にしてから /clear を打つ
-        # （処理中は入力が queue に積まれるだけで実行されず、中断で戻った文字列にも連結される）
-        interrupt(session.session_name)
-        # /clear で空にしてからドキュメントを送り直す（順序を逆にすると消える）
-        send_keys(session.session_name, CLEAR_COMMAND)
-        send_keys(session.session_name, agent_docs)
-        logger.info(
-            "コンテキストをリセットしてドキュメントを送り直しました: project=%s agent_name=%s number=%s",
-            body.project,
-            body.agent_name,
-            body.number,
+        agent = next(a for a in agents if a.name == body.agent_name)
+        # セッションを作り直して起動プロンプトを送り直す
+        reset_session(
+            session,
+            project,
+            agent,
+            telemetry=settings.telemetry,
+            port=settings.port,
+            ai_monitor_wiki_base=settings.ai_monitor_wiki_base,
         )
         return {"ok": True}
 

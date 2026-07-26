@@ -308,3 +308,44 @@ def test_build_launch_env_when_hook_variables(mon_project, agent):
     assert "AI_MONITOR_AGENT=intake-issue-triager" in env
     assert "AI_MONITOR_NUMBER=52" in env
     assert "AI_MONITOR_PORT=8765" in env
+
+
+def test_build_launch_command(agent, io_mocks, mon_project):
+    """起動コマンドの組み立てを確認する（正常系）。"""
+    # 実行
+    command = service.build_launch_command(
+        "ai-monitor-sandbox-52-intake-issue-triager",
+        agent,
+        52,
+        mon_project,
+        "Issue #52 [open]",
+        telemetry=None,
+        port=8765,
+        ai_monitor_wiki_base=WIKI_BASE,
+    )
+    # 検証: 環境変数で始まり、一時ファイルのコマンド置換で claude を起動する
+    assert command.startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager")
+    assert 'claude --model opus --dangerously-skip-permissions "$(cat ' in command
+
+
+def test_reset_session(agent, io_mocks, mon_project, monkeypatch):
+    """セッションの作り直しを確認する（正常系）。"""
+    # 準備
+    order = []
+    monkeypatch.setattr(service, "kill_session", lambda name: order.append(("kill", name)))
+    monkeypatch.setattr(service, "create_session", lambda name, cwd: order.append(("create", name)))
+    monkeypatch.setattr(service, "send_keys", lambda name, text: order.append(("send", name, text)))
+    session = AgentSession(
+        session_name="ai-monitor-sandbox-52-intake-issue-triager",
+        project="sandbox",
+        agent_name="intake-issue-triager",
+        primary_number=52,
+    )
+    # 実行
+    service.reset_session(
+        session, mon_project, agent, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE
+    )
+    # 検証: kill → 同名で create → 起動コマンドの送信の順
+    assert [step[0] for step in order] == ["kill", "create", "send"]
+    assert {step[1] for step in order} == {session.session_name}
+    assert "claude --model opus" in order[2][2]

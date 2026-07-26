@@ -43,32 +43,30 @@ def test_create_app_when_unknown_path(client):
 def test_receive_context_reset(client, mon_settings, session_factory, monkeypatch):
     """リセット要求の受理と /clear + 送信を確認する（正常系）。"""
     # 準備
-    sent = []
-    monkeypatch.setattr(app_mod, "interrupt", lambda name: sent.append((name, "<中断>")))
-    monkeypatch.setattr(app_mod, "send_keys", lambda name, text: sent.append((name, text)))
-    monkeypatch.setattr(app_mod, "build_agent_docs", lambda *a, **kw: "## フェーズ\n\n# 初期処理\n")
+    calls = []
+    monkeypatch.setattr(app_mod, "reset_session", lambda s, p, a, **kw: calls.append((s, p, a, kw)))
     session = session_factory("architect", 170)
     # 実行
     response = client.post(
         "/context_reset",
         json={"project": "sandbox", "agent_name": "architect", "number": 170},
     )
-    # 検証: 中断 → /clear → ドキュメントの順で該当セッションへ送信され受理される
+    # 検証: 該当セッションのリセットが 1 回呼ばれ受理される
     assert response.status_code == 200
     assert response.json() == {"ok": True}
-    assert len(sent) == 3
-    assert {name for name, _ in sent} == {session.session_name}
-    assert sent[0][1] == "<中断>"
-    assert sent[1][1] == "/clear"
-    assert "# 初期処理" in sent[2][1]
+    assert len(calls) == 1
+    reset_target, reset_project, reset_agent, kwargs = calls[0]
+    assert reset_target.session_name == session.session_name
+    assert reset_project.name == "sandbox"
+    assert reset_agent.name == "architect"
+    assert kwargs["port"] == mon_settings.port
 
 
 def test_receive_context_reset_when_session_missing(client, monkeypatch):
-    """台帳に無いセッションからの通知を拒否する（異常系）。"""
+    """台帳に無いセッションからの要求を拒否する（異常系）。"""
     # 準備
-    sent = []
-    monkeypatch.setattr(app_mod, "interrupt", lambda name: sent.append((name, "<中断>")))
-    monkeypatch.setattr(app_mod, "send_keys", lambda name, text: sent.append((name, text)))
+    calls = []
+    monkeypatch.setattr(app_mod, "reset_session", lambda s, p, a, **kw: calls.append(s))
     # 実行
     response = client.post(
         "/context_reset",
@@ -76,4 +74,4 @@ def test_receive_context_reset_when_session_missing(client, monkeypatch):
     )
     # 検証
     assert response.status_code == 404
-    assert sent == []
+    assert calls == []

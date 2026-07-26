@@ -10,7 +10,7 @@ from ai_monitor.features.agents.docs import build_agent_docs
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
 from ai_monitor.integrations.github.labels import add_label
-from ai_monitor.integrations.tmux.ops import create_session, send_keys
+from ai_monitor.integrations.tmux.ops import create_session, kill_session, send_keys
 from ai_monitor.shared.settings import MonitoredProject, TelemetrySettings
 from ai_monitor.shared.types import Issue, MonitorTarget, PullRequest
 
@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 RESUME_TEXT = "状態が変化しました。最新の Issue/PR 状態と自分宛の未解決コメントを取得し、起動判定からやり直してください。"
+
+RESET_SNAPSHOT = "コンテキスト上限に達したためセッションを作り直しました。最新の Issue/PR 状態は初期処理で取得してください。"
 
 _PRIORITY_RANKS = {"優先度:急ぎ": 0, "優先度:いつでも": 2}
 
@@ -74,6 +76,66 @@ def build_launch_prompt(
         f"{agent_docs}\n\n"
         f"## 対象の状態\n\n"
         f"{snapshot}\n"
+    )
+
+
+def build_launch_command(
+    session_name: str,
+    agent: Agent,
+    number: int,
+    project: MonitoredProject,
+    snapshot: str,
+    *,
+    telemetry: TelemetrySettings | None,
+    port: int,
+    ai_monitor_wiki_base: str,
+) -> str:
+    """claude を起動する shell コマンドを組み立てて返す。"""
+    # 起動プロンプトを一時ファイルへ書き出し、コマンド置換で claude に渡す
+    # （数万文字を send-keys の引数に直接埋めず、本文のバッククォート・$ の再展開も防ぐ）
+    launch_env = build_launch_env(telemetry, project, agent, number, port)
+    prompt = build_launch_prompt(
+        agent, number, project, snapshot, ai_monitor_wiki_base=ai_monitor_wiki_base
+    )
+    prompt_path = Path(tempfile.gettempdir()) / f"{session_name}.prompt"
+    prompt_path.write_text(prompt, encoding="utf-8")
+    return (
+        f"{launch_env}claude --model {agent.model} "
+        f'--dangerously-skip-permissions "$(cat {prompt_path})"'
+    )
+
+
+def reset_session(
+    session: AgentSession,
+    project: MonitoredProject,
+    agent: Agent,
+    *,
+    telemetry: TelemetrySettings | None,
+    port: int,
+    ai_monitor_wiki_base: str,
+) -> None:
+    """tmux セッションを作り直し、起動時と同じプロンプトで claude を立ち上げ直す。"""
+    # セッションごと落として同じ名前で作り直す（会話履歴が消え、起動直後と同じ状態になる）
+    kill_session(session.session_name)
+    create_session(session.session_name, project.local_path)
+    # 起動コマンドを送る（対象の最新状態はエージェントが初期処理で取得し直す）
+    text = build_launch_command(
+        session.session_name,
+        agent,
+        session.primary_number,
+        project,
+        RESET_SNAPSHOT,
+        telemetry=telemetry,
+        port=port,
+        ai_monitor_wiki_base=ai_monitor_wiki_base,
+    )
+    send_keys(session.session_name, text)
+    logger.info(
+        "セッションを作り直しました: project=%s agent_name=%s number=%s session_name=%s",
+        project.name,
+        agent.name,
+        session.primary_number,
+        session.session_name,
     )
 
 
@@ -160,17 +222,16 @@ def _process_one(
     # 送信文を組み立てて send-keys で送信する（スナップショットを添付）
     snapshot = build_context_snapshot(target, open_targets)
     if is_new:
-        # 新規セッションは起動プロンプトを一時ファイルへ書き出し、コマンド置換で claude に渡す
-        # （数万文字を send-keys の引数に直接埋めず、本文のバッククォート・$ の再展開も防ぐ）
-        launch_env = build_launch_env(telemetry, project, agent, target.number, port)
-        prompt = build_launch_prompt(
-            agent, target.number, project, snapshot, ai_monitor_wiki_base=ai_monitor_wiki_base
-        )
-        prompt_path = Path(tempfile.gettempdir()) / f"{session.session_name}.prompt"
-        prompt_path.write_text(prompt, encoding="utf-8")
-        text = (
-            f"{launch_env}claude --model {agent.model} "
-            f'--dangerously-skip-permissions "$(cat {prompt_path})"'
+        # 新規セッションは claude の起動コマンドを送る
+        text = build_launch_command(
+            session.session_name,
+            agent,
+            target.number,
+            project,
+            snapshot,
+            telemetry=telemetry,
+            port=port,
+            ai_monitor_wiki_base=ai_monitor_wiki_base,
         )
     else:
         # 既存セッションは稼働中の claude への入力として再開の定型文を送る

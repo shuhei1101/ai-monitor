@@ -1,6 +1,8 @@
 """「コンテキストリセット」の結合テスト。"""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -74,7 +76,7 @@ def client(mon_settings, mon_registry, label_settings, agent_models, monkeypatch
 
 
 def test_normal(client, tmux_calls, session_factory):
-    """要求の受理 → 該当セッションへの /clear + ドキュメント送信を確認する（正常系）。"""
+    """要求の受理 → セッション再作成 + 起動プロンプト送信を確認する（正常系）。"""
     # 準備
     session = session_factory("subsystem-conductor", 170)
     # 実行
@@ -82,21 +84,24 @@ def test_normal(client, tmux_calls, session_factory):
         "/context_reset",
         json={"project": "sandbox", "agent_name": "subsystem-conductor", "number": 170},
     )
-    # 検証: 200 + 該当セッションへ Escape → C-u → /clear → ドキュメントの順で送信
+    # 検証: 200 + セッションを kill して同じ名前で作り直している
     assert response.status_code == 200
     assert response.json() == {"ok": True}
-    # send_keys は本文と Enter で 2 回 tmux を呼ぶため、本文送信だけを数える
+    subcommands = [c[0] for c in tmux_calls.calls]
+    assert subcommands.index("kill-session") < subcommands.index("new-session")
+    assert ["kill-session", "-t", session.session_name] in tmux_calls.calls
+    assert ["new-session", "-d", "-s", session.session_name, "-c", "/tmp/sandbox"] in tmux_calls.calls
+    # 検証: 起動コマンドを送っている（send_keys は本文と Enter で 2 回呼ぶため本文だけを見る）
     sends = [c for c in tmux_calls.calls if c[0] == "send-keys" and c[3] != "Enter"]
-    assert len(sends) == 4
-    assert all(c[2] == session.session_name for c in sends)
-    assert sends[0][3] == "Escape"
-    assert sends[1][3] == "C-u"
-    assert sends[2][3] == "/clear"
-    # フェーズ + 参考資料 + Wiki 索引が載る
-    sent_text = sends[3][3]
-    assert "# 初期処理" in sent_text
-    assert "# 規約: コメント" in sent_text
-    assert "規約.md" in sent_text
+    assert len(sends) == 1
+    assert sends[0][2] == session.session_name
+    assert 'claude --model' in sends[0][3]
+    # 起動プロンプトにフェーズ + 参考資料 + Wiki 索引が載る
+    prompt_path = sends[0][3].split('"$(cat ')[1].rstrip(')"')
+    prompt = Path(prompt_path).read_text(encoding="utf-8")
+    assert "# 初期処理" in prompt
+    assert "# 規約: コメント" in prompt
+    assert "規約.md" in prompt
 
 
 def test_error_when_session_missing(client, tmux_calls):
@@ -106,6 +111,6 @@ def test_error_when_session_missing(client, tmux_calls):
         "/context_reset",
         json={"project": "sandbox", "agent_name": "subsystem-conductor", "number": 999},
     )
-    # 検証: 404 + tmux への送信なし
+    # 検証: 404 + tmux 操作なし
     assert response.status_code == 404
-    assert [c for c in tmux_calls.calls if c[0] == "send-keys"] == []
+    assert tmux_calls.calls == []

@@ -35,6 +35,25 @@ def _session_name(state_path: Path, epic_number: int) -> str | None:
     return None
 
 
+def _transcripts() -> set[Path]:
+    """sandbox の会話ログのパス集合を返す。"""
+    root = Path.home() / ".claude" / "projects"
+    return set(root.glob("*ai-monitor-e2e*/*.jsonl"))
+
+
+def _first_user_message(transcript: Path) -> str:
+    """会話ログの最初のユーザーメッセージ本文を返す。"""
+    for line in transcript.read_text(encoding="utf-8").splitlines():
+        record = json.loads(line)
+        if record.get("type") != "user":
+            continue
+        content = record.get("message", {}).get("content")
+        # 起動プロンプトは文字列 1 本で入る（ツール結果などは配列になる）
+        if isinstance(content, str):
+            return content
+    return ""
+
+
 def _count_compact_boundaries() -> int:
     """sandbox の全会話ログに含まれるコンパクト境界レコードの総数を返す。"""
     # 過去実行のログにも境界が残るため、実行前後の差分で判定する
@@ -85,26 +104,40 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, tmp_
     session_name = _session_name(tmp_path / "state.yaml", epic.number)
     assert session_name, "台帳に epic-conductor のセッションがない"
     boundaries_before = _count_compact_boundaries()
-    subprocess.run(["tmux", "send-keys", "-t", session_name, "/compact", "Enter"], check=True)
-
-    # フックのブロックとモニターの 中断 → /clear → ドキュメント送信を待つ
-    def _document_resent():
-        pane = subprocess.run(
-            ["tmux", "capture-pane", "-p", "-S", "-3000", "-t", session_name],
+    transcripts_before = _transcripts()
+    created_at = int(
+        subprocess.run(
+            ["tmux", "display-message", "-p", "-t", session_name, "#{session_created}"],
             capture_output=True, text=True, check=True,
         ).stdout
-        return pane if "## 参考資料" in pane else None
-
-    pane = wait_until(
-        _document_resent, timeout_sec=300, message="リセット後のエージェントドキュメント送信"
     )
+    subprocess.run(["tmux", "send-keys", "-t", session_name, "/compact", "Enter"], check=True)
 
-    # 検証: 送信内容にフェーズ本文・参考資料の見出しが含まれている
-    assert "## フェーズ" in pane, "送信内容にフェーズ見出しがない"
-    assert "## 参考資料" in pane, "送信内容に参考資料見出しがない"
+    # フックのブロックとモニターのセッション再作成を待つ
+    def _session_recreated():
+        created = subprocess.run(
+            ["tmux", "display-message", "-p", "-t", session_name, "#{session_created}"],
+            capture_output=True, text=True, check=False,
+        )
+        if created.returncode != 0 or not created.stdout.strip():
+            return None
+        return created.stdout.strip() if int(created.stdout) > created_at else None
 
-    # 検証: 中断で入力欄に戻った /compact が後続の送信文に連結されていない
-    assert "/compact /clear" not in pane, "入力欄がクリアされずコマンドが連結されている"
+    wait_until(_session_recreated, timeout_sec=300, message="リセットによるセッションの再作成")
+
+    # 検証: 作り直したセッションで claude が起動し直している
+    # （TUI は代替スクリーンを使うため、シェルのコマンド行は capture-pane に残らない）
+    def _relaunched():
+        added = _transcripts() - transcripts_before
+        return added if added else None
+
+    added = wait_until(_relaunched, timeout_sec=180, message="リセット後の claude の起動")
+
+    # 検証: 新しい会話ログの最初のユーザーメッセージが起動プロンプトになっている
+    first_message = _first_user_message(sorted(added)[0])
+    assert "## フェーズ" in first_message, "起動プロンプトにフェーズ本文が載っていない"
+    assert "## 参考資料" in first_message, "起動プロンプトに参考資料が載っていない"
+    assert f"- 対象番号: {epic.number}" in first_message, "起動プロンプトに対象番号が載っていない"
 
     # 検証: コンパクトが行われていない（会話履歴に要約の境界が増えていない）
     assert _count_compact_boundaries() == boundaries_before, "コンパクトがブロックされていない"

@@ -34,6 +34,7 @@ ai-monitor 自身のバックエンド 1 操作（MCP ツール / 注入 CLI）�
 | 本文・状態 | [Issue再オープン](./Issue再オープン.py.md) | クローズ済み Issue の再オープン（バグ差し戻し用） |
 | 本文・状態 | [PR_Ready化](./PR_Ready化.py.md) | Draft PR を Ready 化 |
 | Issue / PR 作成・マージ | [子Issue作成](./子Issue作成.py.md) | 子 Issue 作成 + Sub-issue リンク付与 |
+| Issue / PR 作成・マージ | [新規Issue起票](./新規Issue起票.py.md) | 親を持たない intake Issue の作成（会話から派生した要望の受け口） |
 | Issue / PR 作成・マージ | [DraftPR作成](./DraftPR作成.py.md) | Draft PR 作成（Stacked PR の base 明示） |
 | Issue / PR 作成・マージ | [PRマージ](./PRマージ.py.md) | PR マージ（既定 squash + ブランチ削除） |
 | worktree | [worktree作成](./worktree作成.py.md) | ブランチ + worktree 作成 |
