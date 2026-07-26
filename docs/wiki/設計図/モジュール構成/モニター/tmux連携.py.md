@@ -131,12 +131,12 @@ create_session("ai-monitor-myproj-35-epic-conductor", "/home/user/repo/myproj/.c
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | セッション名 | `name` | `str` | ✅ | - | 送信先のセッション名 | - |
-| 送信文 | `text` | `str` | ✅ | - | 送信する文字列 | スキル起動文字列 / 再開の定型文 |
+| 送信文 | `text` | `str` | ✅ | - | 送信する文字列 | 起動コマンド / 再開の定型文 |
 
 引数例:
 
 ```python
-send_keys("ai-monitor-myproj-35-epic-conductor", "/ai-monitor:epic-conductor 35")
+send_keys("ai-monitor-myproj-35-epic-conductor", "状態が変化しました。...")
 ```
 
 #### 戻り値

@@ -12,6 +12,8 @@ from ai_monitor.features.sessions.types import AgentSession
 from ai_monitor.shared.settings import TelemetrySettings
 from ai_monitor.shared.types import Issue, PullRequest
 
+WIKI_BASE = "/repo/ai-monitor/docs/wiki"
+
 
 @pytest.fixture
 def agent() -> Agent:
@@ -30,6 +32,8 @@ def io_mocks(monkeypatch):
     monkeypatch.setattr(service, "add_label", mocks.add_label)
     monkeypatch.setattr(service, "create_session", mocks.create_session)
     monkeypatch.setattr(service, "send_keys", mocks.send_keys)
+    mocks.build_agent_docs.return_value = "## フェーズ\n\n# 初期処理\n"
+    monkeypatch.setattr(service, "build_agent_docs", mocks.build_agent_docs)
     return mocks
 
 
@@ -52,7 +56,7 @@ def test_poll_when_mixed_targets(agent, io_mocks, registry, mon_project):
         _issue(37, labels=["layer:epic"]),
     ]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
     # 検証
     assert io_mocks.send_keys.call_count == 1
     assert "35" in io_mocks.send_keys.call_args.args[0]
@@ -63,16 +67,14 @@ def test_poll_when_new_target(agent, io_mocks, registry, mon_project):
     # 準備
     targets = [_issue(35, labels=["確認:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
     # 検証
     session_name = "ai-monitor-sandbox-35-intake-issue-triager"
     assert io_mocks.create_session.call_args.args[0] == session_name
     assert registry.find("sandbox", "intake-issue-triager", 35) is not None
     sent_text = io_mocks.send_keys.call_args.args[1]
-    assert sent_text.startswith(
-        'AI_MONITOR_PROJECT=sandbox claude --model opus'
-        ' --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
-    )
+    assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager")
+    assert 'claude --model opus --dangerously-skip-permissions "$(cat ' in sent_text
 
 
 def test_poll_when_existing_session(agent, io_mocks, registry, mon_project):
@@ -88,7 +90,7 @@ def test_poll_when_existing_session(agent, io_mocks, registry, mon_project):
     )
     targets = [_issue(35, labels=["確認:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
     # 検証
     io_mocks.create_session.assert_not_called()
     assert io_mocks.send_keys.call_args.args[0] == "ai-monitor-sandbox-35-intake-issue-triager"
@@ -100,7 +102,7 @@ def test_poll_when_processing_label(agent, io_mocks, registry, mon_project):
     # 準備
     targets = [_issue(35, labels=["確認:intake-issue-triager", "処理中:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
     # 検証
     io_mocks.send_keys.assert_not_called()
     io_mocks.add_label.assert_not_called()
@@ -114,7 +116,7 @@ def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
         _issue(36, labels=["確認:intake-issue-triager", "優先度:急ぎ"]),
     ]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
     # 検証
     sent_sessions = [c.args[0] for c in io_mocks.send_keys.call_args_list]
     assert sent_sessions == [
@@ -123,16 +125,17 @@ def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
     ]
 
 
-def test_build_skill_command():
-    """起動文字列の組み立てを確認する（正常系）。"""
-    # 準備
-    agent = Agent(
-        name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet"
-    )
+def test_build_launch_prompt(agent, io_mocks, mon_project):
+    """起動プロンプトの組み立てを確認する（正常系）。"""
     # 実行
-    command = service.build_skill_command(agent, 52)
-    # 検証
-    assert command == "/ai-monitor:architect 52"
+    prompt = service.build_launch_prompt(
+        agent, 52, mon_project, "Issue #52 [open]", ai_monitor_wiki_base=WIKI_BASE
+    )
+    # 検証: エージェント名・対象番号・ドキュメント・スナップショットが含まれる
+    assert "intake-issue-triager" in prompt
+    assert "52" in prompt
+    assert "# 初期処理" in prompt
+    assert "Issue #52 [open]" in prompt
 
 
 def test_process_one(agent, io_mocks, registry, mon_project):
@@ -141,16 +144,13 @@ def test_process_one(agent, io_mocks, registry, mon_project):
     target = _issue(35, labels=["確認:intake-issue-triager"])
     # 実行
     service._process_one(
-        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE
     )
     # 検証
     assert io_mocks.add_label.call_args.args[2] == "処理中:intake-issue-triager"
     sent_text = io_mocks.send_keys.call_args.args[1]
-    assert sent_text.startswith(
-        'AI_MONITOR_PROJECT=sandbox claude --model opus'
-        ' --dangerously-skip-permissions "/ai-monitor:intake-issue-triager 35'
-    )
-    assert "#35" in sent_text
+    assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox ")
+    assert 'claude --model opus --dangerously-skip-permissions "$(cat ' in sent_text
 
 
 def test_process_one_when_new_session(agent, io_mocks, registry, mon_project):
@@ -159,11 +159,13 @@ def test_process_one_when_new_session(agent, io_mocks, registry, mon_project):
     target = _issue(35, labels=["確認:intake-issue-triager"])
     # 実行
     service._process_one(
-        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE
     )
     # 検証
     assert io_mocks.create_session.call_args.args[0] == "ai-monitor-sandbox-35-intake-issue-triager"
     assert "claude --model opus " in io_mocks.send_keys.call_args.args[1]
+    # 起動プロンプトは一時ファイル経由で渡す（数万文字を send-keys の引数に直接埋めない）
+    assert '"$(cat ' in io_mocks.send_keys.call_args.args[1]
 
 
 def test_build_launch_env(mon_project, agent):
@@ -171,7 +173,7 @@ def test_build_launch_env(mon_project, agent):
     # 準備
     telemetry = TelemetrySettings(otlp_endpoint="http://localhost:14317")
     # 実行
-    env = service.build_launch_env(telemetry, mon_project, agent, 131)
+    env = service.build_launch_env(telemetry, mon_project, agent, 131, 8765)
     # 検証
     assert "AI_MONITOR_PROJECT=sandbox" in env
     assert "CLAUDE_CODE_ENABLE_TELEMETRY=1" in env
@@ -191,9 +193,12 @@ def test_build_launch_env(mon_project, agent):
 def test_build_launch_env_when_telemetry_unset(mon_project, agent):
     """テレメトリなしを確認する（正常系）。"""
     # 実行
-    env = service.build_launch_env(None, mon_project, agent, 131)
-    # 検証
-    assert env == "AI_MONITOR_PROJECT=sandbox "
+    env = service.build_launch_env(None, mon_project, agent, 131, 8765)
+    # 検証: フック向けの 4 変数だけが返る
+    assert env == (
+        "AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager "
+        "AI_MONITOR_NUMBER=131 AI_MONITOR_PORT=8765 "
+    )
     assert "OTEL_" not in env
 
 
@@ -202,7 +207,7 @@ def test_build_launch_env_when_resource_attributes(mon_project, agent):
     # 準備
     telemetry = TelemetrySettings(otlp_endpoint="http://localhost:4317")
     # 実行
-    env = service.build_launch_env(telemetry, mon_project, agent, 131)
+    env = service.build_launch_env(telemetry, mon_project, agent, 131, 8765)
     # 検証
     assert (
         "OTEL_RESOURCE_ATTRIBUTES="
@@ -219,11 +224,12 @@ def test_process_one_when_telemetry_set(agent, io_mocks, registry, mon_project):
     telemetry = TelemetrySettings(otlp_endpoint="http://localhost:4317")
     # 実行
     service._process_one(
-        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=telemetry
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=telemetry, port=8765, ai_monitor_wiki_base=WIKI_BASE
     )
     # 検証
     sent_text = io_mocks.send_keys.call_args.args[1]
-    assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox CLAUDE_CODE_ENABLE_TELEMETRY=1 ")
+    assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=")
+    assert "CLAUDE_CODE_ENABLE_TELEMETRY=1 " in sent_text
     assert "ai_monitor.number=35" in sent_text
     assert " claude --model opus " in sent_text
 
@@ -234,11 +240,11 @@ def test_process_one_when_telemetry_unset(agent, io_mocks, registry, mon_project
     target = _issue(35, labels=["確認:intake-issue-triager"])
     # 実行
     service._process_one(
-        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE
     )
     # 検証
     sent_text = io_mocks.send_keys.call_args.args[1]
-    assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox claude --model opus ")
+    assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=")
     assert "OTEL_" not in sent_text
 
 
@@ -290,3 +296,15 @@ def test_build_context_snapshot_when_linked_issue_not_open():
     # 検証
     assert "#52" in snapshot
     assert "#50" not in snapshot
+
+
+def test_build_launch_env_when_hook_variables(mon_project, agent):
+    """フック向け変数の埋め込みを確認する（正常系）。"""
+    # 準備
+    telemetry = TelemetrySettings(otlp_endpoint="http://localhost:4317")
+    # 実行
+    env = service.build_launch_env(telemetry, mon_project, agent, 52, 8765)
+    # 検証: コンパクト通知の宛先と素性が入る
+    assert "AI_MONITOR_AGENT=intake-issue-triager" in env
+    assert "AI_MONITOR_NUMBER=52" in env
+    assert "AI_MONITOR_PORT=8765" in env

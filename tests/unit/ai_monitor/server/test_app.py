@@ -38,3 +38,38 @@ def test_create_app_when_unknown_path(client):
     response = client.get("/unknown")
     # 検証
     assert response.status_code == 404
+
+
+def test_receive_compaction(client, mon_settings, session_factory, monkeypatch):
+    """コンパクト通知の受理と再送を確認する（正常系）。"""
+    # 準備
+    sent = []
+    monkeypatch.setattr(app_mod, "send_keys", lambda name, text: sent.append((name, text)))
+    monkeypatch.setattr(app_mod, "build_agent_docs", lambda *a, **kw: "## フェーズ\n\n# 初期処理\n")
+    session = session_factory("architect", 170)
+    # 実行
+    response = client.post(
+        "/compaction",
+        json={"project": "sandbox", "agent_name": "architect", "number": 170},
+    )
+    # 検証: 該当セッションへ 1 回送信され受理される
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert len(sent) == 1
+    assert sent[0][0] == session.session_name
+    assert "# 初期処理" in sent[0][1]
+
+
+def test_receive_compaction_when_session_missing(client, monkeypatch):
+    """台帳に無いセッションからの通知を拒否する（異常系）。"""
+    # 準備
+    sent = []
+    monkeypatch.setattr(app_mod, "send_keys", lambda name, text: sent.append((name, text)))
+    # 実行
+    response = client.post(
+        "/compaction",
+        json={"project": "sandbox", "agent_name": "architect", "number": 999},
+    )
+    # 検証
+    assert response.status_code == 404
+    assert sent == []

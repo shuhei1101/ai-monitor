@@ -17,7 +17,7 @@ complex-scenario-writer のトリアージを経て epic-conductor が該当 sto
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
 | sandbox リポ状態 | 全 story PR が epic ブランチへ merge 済み・全 story / subsystem Issue closed。epic PR 自体は未マージで統合テスト待機中 | メインフローの epic 統合テスト直前を想定 |
-| ai-monitor プラグイン | marketplace 経由でインストール済みかつ最新版に更新済み | tmux 内の `claude "/ai-monitor:{skill}"` が前提 |
+| ai-monitor プラグイン | marketplace 経由でインストール済みかつ最新版に更新済み | モニターが tmux 内で `claude` を起動するのが前提 |
 | バグ埋込 | 該当 subsystem の実装に意図的なバグを仕込む | 複合UC E2E が fail するように |
 | ai-monitor 起動 | モニターが polling 中 | - |
 | ラベル状態 | epic PR に `確認:complex-scenario-tester` + 実行指示コメント付与済み（テスト実装 + 統合テストレビュー済み） | fail を誘発する起点 |

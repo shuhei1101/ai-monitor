@@ -238,6 +238,7 @@ def mon_settings(mon_project):
         session_timeout_min=30,
         port=8765,
         telemetry=None,
+        ai_monitor_wiki_base="https://example.com/ai-monitor-wiki",
     )
 
 

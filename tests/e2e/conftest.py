@@ -78,6 +78,10 @@ def monitor(e2e_settings_path, tmp_path):
     env["AI_MONITOR_ENV"] = "e2e"
     env["STATE_PATH"] = str(tmp_path / "state.yaml")
     env["PYTHONPATH"] = str(REPO_ROOT / "src")
+    # 起動元セッションの環境変数が設定ファイルを上書きしないようにする
+    # （SessionStart フックが同名の変数をエージェント向けに展開している）
+    for name in ("AI_MONITOR_WIKI_BASE", "WIKI_BASE", "PORT"):
+        env.pop(name, None)
     proc = subprocess.Popen(
         ["uv", "run", "python", "-c", "from ai_monitor.main import main; main()"],
         cwd=REPO_ROOT,

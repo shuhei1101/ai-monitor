@@ -7,6 +7,7 @@ import urllib.parse
 import pytest
 
 import read_agent_docs
+from fetch import fetch_url
 
 BASE = "https://raw.example.com/owner/repo/master/docs/wiki"
 COMMON_BASE = "https://raw.example.com/owner/ai-monitor/master/docs/wiki"
@@ -86,7 +87,7 @@ def test_list_harness_pages(fake_wiki):
     # 準備
     fake_wiki.pages[f"{BASE}/Claudeハーネス/README.md"] = README
     # 実行
-    pages = read_agent_docs.list_harness_pages(BASE)
+    pages = read_agent_docs.list_harness_pages(BASE, read=fetch_url)
     # 検証
     assert pages == {
         "共通対応表": [
@@ -106,7 +107,7 @@ def test_list_harness_pages_when_empty(fake_wiki):
     # 準備
     fake_wiki.pages[f"{BASE}/Claudeハーネス/README.md"] = README_NO_PAGES
     # 実行
-    pages = read_agent_docs.list_harness_pages(BASE)
+    pages = read_agent_docs.list_harness_pages(BASE, read=fetch_url)
     # 検証
     assert pages == {"共通対応表": [], "対応表": [], "共通ルール": []}
 

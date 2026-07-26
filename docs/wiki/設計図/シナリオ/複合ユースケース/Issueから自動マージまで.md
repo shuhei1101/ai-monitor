@@ -19,7 +19,7 @@ ai-monitor のメインフロー: 監視対象プロジェクトに新規機能�
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
 | sandbox リポ存在 | `shuhei1101/ai-monitor-e2e` が存在し空プロジェクト状態 | Pages 有効 |
-| ai-monitor プラグイン | marketplace 経由でインストール済み（user scope）かつ **最新版に更新済み** | `/plugin marketplace update ai-monitor` → 未インストールなら `/plugin install ai-monitor@ai-monitor`。tmux 内の `claude "/ai-monitor:{skill}"` が前提 |
+| ai-monitor プラグイン | marketplace 経由でインストール済み（user scope）かつ **最新版に更新済み** | `/plugin marketplace update ai-monitor` → 未インストールなら `/plugin install ai-monitor@ai-monitor`。モニターが tmux 内で `claude` を起動するのが前提 |
 | ラベル定義 | `AI_MONITOR_LABEL_*` 全てが `gh label create` 済み | `plugins/ai-monitor/constants.env` から一括作成 |
 | Wiki 配置 | sandbox に `docs/wiki/` 一式が存在 | ai-monitor 本体からコピー |
 | ai-monitor 起動 | モニターが sandbox を polling 中 | `settings.yaml` に E2E プロジェクト宣言済み |

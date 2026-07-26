@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import logging
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ai_monitor.features.agents.docs import build_agent_docs
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
 from ai_monitor.integrations.github.labels import add_label
@@ -28,6 +31,8 @@ def poll(
     *,
     registry: SessionRegistry,
     telemetry: TelemetrySettings | None,
+    port: int,
+    ai_monitor_wiki_base: str,
 ) -> None:
     """対象の絞り込みから送信までのポーリング 1 周期を実行する。"""
     # 確認ラベルあり + assignee なしの対象を絞り込む
@@ -37,22 +42,58 @@ def poll(
     # 優先度順にソートして 1 件ずつ処理する
     for target in sorted(matched, key=_sort_key):
         _process_one(
-            project, agent, target, open_targets=targets, registry=registry, telemetry=telemetry
+            project,
+            agent,
+            target,
+            open_targets=targets,
+            registry=registry,
+            telemetry=telemetry,
+            port=port,
+            ai_monitor_wiki_base=ai_monitor_wiki_base,
         )
 
 
-def build_skill_command(agent: Agent, number: int) -> str:
-    """`/ai-monitor:{name} {number}` を組み立てて返す。"""
-    return f"/ai-monitor:{agent.name} {number}"
+def build_launch_prompt(
+    agent: Agent,
+    number: int,
+    project: MonitoredProject,
+    snapshot: str,
+    *,
+    ai_monitor_wiki_base: str,
+) -> str:
+    """新規セッションに渡す起動プロンプトを組み立てて返す。"""
+    # エージェントドキュメント（フェーズ + 参考資料 + Wiki 索引）を組み立てる
+    agent_docs = build_agent_docs(
+        agent.name, project, ai_monitor_wiki_base=ai_monitor_wiki_base
+    )
+    # 役割の宣言・入力・ドキュメント・スナップショットの順に連結する
+    return (
+        f"あなたは {agent.name} です。\n\n"
+        f"## 入力\n\n"
+        f"- 対象番号: {number}\n\n"
+        f"{agent_docs}\n\n"
+        f"## 対象の状態\n\n"
+        f"{snapshot}\n"
+    )
 
 
 def build_launch_env(
-    telemetry: TelemetrySettings | None, project: MonitoredProject, agent: Agent, number: int
+    telemetry: TelemetrySettings | None,
+    project: MonitoredProject,
+    agent: Agent,
+    number: int,
+    port: int,
 ) -> str:
     """claude 起動コマンドに前置する環境変数の並びを組み立てて返す。"""
-    # MCP がヘッダ経由で読む対象プロジェクトの識別子
-    project_env = f"AI_MONITOR_PROJECT={project.name}"
-    # telemetry の設定を持たない環境ではプロジェクト名だけを前置する
+    # フックとの共有変数（MCP のプロジェクト識別子 + フックが自分の素性と宛先を知る経路）
+    shared = (
+        f"AI_MONITOR_PROJECT={project.name}",
+        f"AI_MONITOR_AGENT={agent.name}",
+        f"AI_MONITOR_NUMBER={number}",
+        f"AI_MONITOR_PORT={port}",
+    )
+    project_env = " ".join(shared)
+    # telemetry の設定を持たない環境では共有変数だけを前置する
     if telemetry is None:
         return project_env + " "
     # どの対象のどのエージェントが出した telemetry かを後から引くための識別子
@@ -90,6 +131,8 @@ def _process_one(
     open_targets: list[MonitorTarget],
     registry: SessionRegistry,
     telemetry: TelemetrySettings | None,
+    port: int,
+    ai_monitor_wiki_base: str,
 ) -> None:
     """対象 1 件のセッション解決と send-keys 送信を行う。"""
     # セッションを解決する（無ければ新規作成して台帳へ登録）
@@ -117,9 +160,18 @@ def _process_one(
     # 送信文を組み立てて send-keys で送信する（スナップショットを添付）
     snapshot = build_context_snapshot(target, open_targets)
     if is_new:
-        # 新規セッションは shell に対して claude コマンドで skill を起動する
-        launch_env = build_launch_env(telemetry, project, agent, target.number)
-        text = f'{launch_env}claude --model {agent.model} --dangerously-skip-permissions "{build_skill_command(agent, target.number)}\n\n{snapshot}"'
+        # 新規セッションは起動プロンプトを一時ファイルへ書き出し、コマンド置換で claude に渡す
+        # （数万文字を send-keys の引数に直接埋めず、本文のバッククォート・$ の再展開も防ぐ）
+        launch_env = build_launch_env(telemetry, project, agent, target.number, port)
+        prompt = build_launch_prompt(
+            agent, target.number, project, snapshot, ai_monitor_wiki_base=ai_monitor_wiki_base
+        )
+        prompt_path = Path(tempfile.gettempdir()) / f"{session.session_name}.prompt"
+        prompt_path.write_text(prompt, encoding="utf-8")
+        text = (
+            f"{launch_env}claude --model {agent.model} "
+            f'--dangerously-skip-permissions "$(cat {prompt_path})"'
+        )
     else:
         # 既存セッションは稼働中の claude への入力として再開の定型文を送る
         text = f"{RESUME_TEXT}\n\n{snapshot}"

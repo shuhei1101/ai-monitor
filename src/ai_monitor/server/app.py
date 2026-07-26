@@ -6,9 +6,12 @@ import threading
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
+from ai_monitor.features.agents.docs import build_agent_docs
 from ai_monitor.features.agents.types import Agent
+from ai_monitor.integrations.tmux.ops import send_keys
 from ai_monitor.mcp.server import build_mcp_app
 from ai_monitor.shared.settings import Settings
 
@@ -16,6 +19,14 @@ if TYPE_CHECKING:
     from ai_monitor.features.sessions.registry import SessionRegistry
 
 logger = logging.getLogger(__name__)
+
+
+class CompactionRequest(BaseModel):
+    """`POST /compaction` のリクエストボディ。"""
+
+    project: str
+    agent_name: str
+    number: int
 
 
 def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Agent]) -> FastAPI:
@@ -49,7 +60,39 @@ def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Ag
             yield
             stop.set()
 
-    # FastAPI アプリを生成し、MCP の ASGI アプリをルートにマウントする（接続先は /mcp）
+    # FastAPI アプリを生成する
     app = FastAPI(lifespan=lifespan)
+
+    @app.post("/compaction")
+    def receive_compaction(body: CompactionRequest) -> dict:
+        """コンパクト通知を受け、該当セッションへエージェントドキュメントを再送する。"""
+        # 台帳からセッションを検索する
+        session = registry.find(body.project, body.agent_name, body.number)
+        if session is None:
+            logger.warning(
+                "台帳に無いセッションからのコンパクト通知を拒否しました: "
+                "project=%s agent_name=%s number=%s",
+                body.project,
+                body.agent_name,
+                body.number,
+            )
+            raise HTTPException(status_code=404)
+        # 設定から対象プロジェクトを引き、エージェントドキュメントを組み立てる
+        project = next(p for p in settings.projects if p.name == body.project)
+        agent_docs = build_agent_docs(
+            body.agent_name, project, ai_monitor_wiki_base=settings.ai_monitor_wiki_base
+        )
+        # 該当セッションへ送信する
+        send_keys(session.session_name, agent_docs)
+        logger.info(
+            "コンパクト後のドキュメントを再送しました: project=%s agent_name=%s number=%s",
+            body.project,
+            body.agent_name,
+            body.number,
+        )
+        return {"ok": True}
+
+    # MCP の ASGI アプリをルートにマウントする（接続先は /mcp）
+    # マウントは後続の全パスを引き受けるため、自前のルート登録より後に行う
     app.mount("/", mcp_app)
     return app

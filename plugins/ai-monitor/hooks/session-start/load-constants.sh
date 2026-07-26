@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
 # SessionStart フック: constants.env の静的定数と、settings.yaml から解決した
-# セッション固有値（REPO_SLUG / WIKI_BASE）を CLAUDE_ENV_FILE 経由で
+# セッション固有値（REPO_SLUG / WIKI_BASE / AI_MONITOR_WIKI_BASE）を CLAUDE_ENV_FILE 経由で
 # セッション環境変数として展開する
 #
 # 注意: フックは子プロセスとして実行されるため、単なる export ではセッションに残らない。
 # CLAUDE_ENV_FILE に `export KEY="value"` 形式で追記するのが公式の永続化手段。
 #
 # settings.yaml が無い・git remote が無い・対象プロジェクトが未登録の場合は、
-# 警告を出して REPO_SLUG / WIKI_BASE の展開だけをスキップする
+# 警告を出して REPO_SLUG / WIKI_BASE / AI_MONITOR_WIKI_BASE の展開だけをスキップする
 # （監視対象外のリポジトリでもセッション自体は開けるようにするため）。
 set -euo pipefail
 
@@ -25,7 +25,7 @@ fi
 grep -Ev '^[[:space:]]*(#|$)' "$ENV_FILE" | sed 's/^/export /' >> "$CLAUDE_ENV_FILE"
 
 skip() {
-  echo "load-constants.sh: WARN: $1（REPO_SLUG / WIKI_BASE の展開をスキップ）" >&2
+  echo "load-constants.sh: WARN: $1（REPO_SLUG / WIKI_BASE / AI_MONITOR_WIKI_BASE の展開をスキップ）" >&2
   exit 0
 }
 
@@ -35,8 +35,8 @@ skip() {
 REMOTE_URL=$(git remote get-url origin 2>/dev/null) || skip "git remote (origin) がありません"
 REPO_SLUG=$(echo "$REMOTE_URL" | sed -E 's#^(git@[^:]+:|ssh://[^/]+/|https?://[^/]+/)##; s#\.git$##')
 
-# settings.yaml の projects[] から一致するプロジェクトの wiki_base を解決する
-WIKI_BASE=$(python3 - "$SETTINGS_FILE" "$REPO_SLUG" <<'EOF'
+# settings.yaml から プロジェクトの wiki_base と ai_monitor_wiki_base を解決する
+BASES=$(python3 - "$SETTINGS_FILE" "$REPO_SLUG" <<'EOF'
 import sys
 
 import yaml
@@ -48,10 +48,15 @@ projects = [p for p in settings["projects"] if p["repo"] == repo_slug]
 if not projects:
     raise SystemExit(f"projects に {repo_slug} の定義がありません")
 print(projects[0]["wiki_base"])
+print(settings["ai_monitor_wiki_base"])
 EOF
-) || skip "settings.yaml から wiki_base を解決できません（repo=${REPO_SLUG}）"
+) || skip "settings.yaml から wiki_base / ai_monitor_wiki_base を解決できません（repo=${REPO_SLUG}）"
+
+WIKI_BASE=$(echo "$BASES" | sed -n 1p)
+AI_MONITOR_WIKI_BASE=$(echo "$BASES" | sed -n 2p)
 
 {
   echo "export REPO_SLUG=\"${REPO_SLUG}\""
   echo "export WIKI_BASE=\"${WIKI_BASE}\""
+  echo "export AI_MONITOR_WIKI_BASE=\"${AI_MONITOR_WIKI_BASE}\""
 } >> "$CLAUDE_ENV_FILE"

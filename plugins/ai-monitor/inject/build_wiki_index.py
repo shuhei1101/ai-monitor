@@ -9,7 +9,7 @@ import urllib.error
 
 from pydantic import BaseModel, ConfigDict
 
-from fetch import fetch_url
+from fetch import ReadDoc, select_reader
 
 
 class WikiPage(BaseModel):
@@ -32,10 +32,10 @@ _LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 _FENCE_RE = re.compile(r"^(`{3,})[^\n]*\n.*?^\1`*\s*$", re.MULTILINE | re.DOTALL)
 
 
-def parse_index_table(text: str, folder_path: str) -> list[WikiPage]:
-    """README 本文の `## 目次` 表を解析し、各リンクを raw URL 化した WikiPage 配列で返す。"""
-    # 環境変数 WIKI_BASE を読む（末尾スラッシュがあれば落とす）
-    wiki_base = os.environ["WIKI_BASE"].rstrip("/")
+def parse_index_table(text: str, folder_path: str, base: str) -> list[WikiPage]:
+    """README 本文の `## 目次` 表を解析し、各リンクを解決した WikiPage 配列で返す。"""
+    # ベースの末尾スラッシュがあれば落とす
+    wiki_base = base.rstrip("/")
 
     # 書式の記述例に含まれる ## 目次 を索引と誤認しないようコードブロックを取り除く
     text = _FENCE_RE.sub("", text)
@@ -72,26 +72,26 @@ def parse_index_table(text: str, folder_path: str) -> list[WikiPage]:
             link += "README.md"
         # folder_path を前置して Wiki ルート相対パスを組み立てる
         rel = f"{folder_path}/{link}" if folder_path else link
-        # {WIKI_BASE}/{rel} で raw URL 化して WikiPage を追加
+        # {base}/{rel} を連結して場所にした WikiPage を追加
         pages.append(WikiPage(raw_url=f"{wiki_base}/{rel}", summary=cells[summary_idx]))
     return pages
 
 
-def walk_wiki(folder_path: str = "") -> list[WikiPage]:
+def walk_wiki(base: str, folder_path: str = "", *, read: ReadDoc) -> list[WikiPage]:
     """ルート README から目次表を辿って全 md ページのエントリを平坦化する。"""
-    # 環境変数 WIKI_BASE を読む
-    wiki_base = os.environ["WIKI_BASE"].rstrip("/")
-    # {WIKI_BASE}/{folder_path}/README.md を取得（folder_path 空ならルート直下）
+    # ベースの末尾スラッシュがあれば落とす
+    wiki_base = base.rstrip("/")
+    # {base}/{folder_path}/README.md を取得（folder_path 空ならルート直下）
     readme_url = f"{wiki_base}/{folder_path}/README.md" if folder_path else f"{wiki_base}/README.md"
     # 取得失敗はそのフォルダ配下を空として返す（Wiki 整備途中の吸収）
     try:
-        body = fetch_url(readme_url)
-    except urllib.error.URLError:
+        body = read(readme_url)
+    except (urllib.error.URLError, FileNotFoundError, NotADirectoryError):
         return []
 
     # 目次表を WikiPage 配列に展開（書式違反はそのフォルダ配下を空として返す = 意図的な非公開運用）
     try:
-        pages = parse_index_table(body, folder_path)
+        pages = parse_index_table(body, folder_path, wiki_base)
     except ValueError:
         return []
 
@@ -106,19 +106,20 @@ def walk_wiki(folder_path: str = "") -> list[WikiPage]:
         if page.raw_url.endswith(readme_suffix):
             # {WIKI_BASE}/ と /README.md を落として folder_path を計算
             sub_folder = page.raw_url[len(prefix):-len(readme_suffix)]
-            result.extend(walk_wiki(sub_folder))
+            result.extend(walk_wiki(wiki_base, sub_folder, read=read))
     return result
 
 
 def main() -> int:
     """プロジェクト Wiki の全 md ページを「ページ / 概要」2 列表で標準出力に展開する。"""
     # 環境変数 WIKI_BASE を読む（未設定なら stderr にメッセージを出して 1 を返す）
-    if not os.environ.get("WIKI_BASE"):
+    wiki_base = os.environ.get("WIKI_BASE")
+    if not wiki_base:
         print("環境変数 WIKI_BASE が未設定です", file=sys.stderr)
         return 1
 
     # walk_wiki で全エントリを得る（書式違反 / 取得失敗は walk_wiki 側で吸収済み）
-    pages = walk_wiki()
+    pages = walk_wiki(wiki_base, read=select_reader(wiki_base))
 
     # ラベル行 + 空行 + md テーブルとして標準出力に出す
     print("**Wiki索引:**")

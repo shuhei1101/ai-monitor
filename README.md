@@ -4,7 +4,7 @@ GitHub Issue/PR を **tmux + Claude Code** で自動オーケストレーショ�
 1 リポジトリに **2 つの顔** を持つ:
 
 1. **Claude Code プラグインマーケットプレイス**（`.claude-plugin/marketplace.json`）
-   - 監視対象プロジェクトから利用する skill / agent / hook を配布
+   - 監視対象プロジェクトから利用する agent / hook / 注入スクリプトを配布
 2. **設計ドキュメント（`docs/wiki/`）**
    - ワークフロー全体設計・モニター（Python デーモン）・GitHub 操作 MCP サーバーの設計 SoT
    - 実装は仕様駆動（docs → 実装）で、この設計に沿って進める
@@ -20,11 +20,12 @@ ai-monitor/
 ├── plugins/
 │   └── ai-monitor/                          # 唯一のプラグイン
 │       ├── .claude-plugin/plugin.json       # プラグインマニフェスト
-│       ├── skills/                          # /ai-monitor:{agent} スキル群
 │       ├── agents/                          # サブエージェント定義
-│       ├── hooks/hooks.json                 # SessionStart / PreToolUse フック
+│       ├── hooks/hooks.json                 # SessionStart / PreToolUse / PostCompact フック
+│       ├── inject/                          # Wiki 取得・索引組み立て（モニターと共有）
 │       ├── scripts/                         # Wiki 取得等のヘルパースクリプト
 │       └── constants.env                    # ラベル等の静的定数（SoT・bash / python 両対応）
+├── config/agent_phases.yaml                 # エージェント名 → フェーズページ一覧
 ├── docs/wiki/                               # 設計ドキュメント（GitHub Pages 公開）
 ├── CLAUDE.md                                # ワークフロー全体設計（大元）
 └── settings.yaml.example                    # 共通設定サンプル（github_token + 監視対象プロジェクト宣言）
@@ -70,15 +71,11 @@ claude plugin install ai-monitor@ai-monitor --scope project
 
 インストール後 `/reload-plugins` で反映。
 
-### 2.4. skill 呼び出し
+### 2.4. エージェントの起動
 
-```bash
-/ai-monitor:intake-issue-triage 42
-/ai-monitor:epic-conductor 43
-/ai-monitor:story-conductor 44
-```
-
-skill 一覧は [`plugins/ai-monitor/skills/`](./plugins/ai-monitor/skills/) 配下参照。
+エージェントはモニターが tmux セッションとして起動する（手動でのスキル呼び出しは行わない）。
+起動プロンプトにはフェーズ・参考資料・Wiki 索引の全文が載る。
+どのフェーズページを載せるかは [`config/agent_phases.yaml`](./config/agent_phases.yaml) が持つ。
 
 ---
 
@@ -110,13 +107,15 @@ claude --plugin-dir ~/repo/ai-monitor/plugins/ai-monitor
 ### 4.2. Wiki の編集
 
 `docs/wiki/` 配下は GitHub Pages で公開されている（`https://shuhei1101.github.io/ai-monitor/`）。
-skill の SKILL.md は raw URL 経由で Wiki を参照するため、master push で自動反映。
+モニターの Wiki 読み元は設定（`ai_monitor_wiki_base` / `projects[].wiki_base`）で決まり、
+ローカル絶対パスなら push 不要でそのまま反映、raw URL なら master push で反映される。
 
 ### 4.3. コンポーネント間の呼び出し
 
-- Wiki → skill: raw URL fetch（`${WIKI_BASE}/...`）
-- skill → 定数: `${AI_MONITOR_LABEL_*}` 環境変数（SessionStart フックの `load-constants.sh` が `constants.env` と settings.yaml を `CLAUDE_ENV_FILE` 経由で展開）
-- skill → ヘルパースクリプト: `${CLAUDE_PLUGIN_ROOT}/scripts/gh/read_urls.py` / `${CLAUDE_PLUGIN_ROOT}/scripts/read_agent_docs.py`
+- Wiki → 起動プロンプト: モニターが設定のベースから取得して全文を載せる
+- エージェント → 定数: `${AI_MONITOR_LABEL_*}` 環境変数（SessionStart フックの `load-constants.sh` が `constants.env` と settings.yaml を `CLAUDE_ENV_FILE` 経由で展開）
+- エージェント → モニター: `AI_MONITOR_PORT` の HTTP（作業完了報告・コンパクト通知）
+- モニター → 注入スクリプト: `plugins/ai-monitor/inject/` の関数を直接呼ぶ（`fetch.py` / `build_wiki_index.py` / `read_agent_docs.py`）
 
 ---
 

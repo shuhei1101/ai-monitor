@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     session_timeout_min: int = 30
     heartbeat_interval_sec: int = 60
     state_path: str = "data/state.yaml"
+    ai_monitor_wiki_base: str
     projects: list[MonitoredProject] = []
     agents: dict[str, AgentModel]
     telemetry: TelemetrySettings | None = None

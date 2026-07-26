@@ -6,7 +6,8 @@ template_version: 1.0.0
 
 CLI: `python plugins/ai-monitor/inject/build_wiki_index.py`
 
-SKILL.md の `## 参考資料` から動的コンテキスト注入で呼ばれ、監視対象プロジェクトの Wiki を再帰的に辿って README `## 目次` 表を統合したフラット索引を標準出力に展開する。
+監視対象プロジェクトの Wiki を再帰的に辿り、README `## 目次` 表を統合したフラット索引を標準出力に展開する。
+モニターは同じ関数を直接呼んで起動プロンプトの索引部を組み立てる。
 出力は `**Wiki索引:**` ラベル + ページの raw URL を「ページ」列にそのまま入れた 2 列表で、エージェントは索引だけで任意の Wiki ページを直接読める（追加の CLI や MCP 呼び出しは不要）。
 
 - 対応テストファイル: `tests/integration/inject/test_build_wiki_index.py`

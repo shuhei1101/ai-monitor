@@ -53,3 +53,20 @@ def test_normal_when_partial_failure(api, fake_wiki):
     assert [page.url for page in result.pages] == [f"{RAW_BASE}/規約/コメント.md"]
     assert [failure.url for failure in result.failures] == [f"{RAW_BASE}/設計図/README.md"]
     assert result.failures[0].reason
+
+
+def test_normal_when_local_path(api, fake_wiki, tmp_path):
+    """ローカル絶対パスをファイルとして読むことを確認する（正常系・ローカルパス）。"""
+    # 準備: 索引がローカルベースのときに渡ってくる形
+    path = tmp_path / "テンプレート" / "シナリオ.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("---\ntemplate_version: 1.0.0\n---\n\n# シナリオ\n", encoding="utf-8")
+    # 実行
+    result = api.read_wiki_pages([str(path)])
+    # 検証
+    assert [page.url for page in result.pages] == [str(path)]
+    assert "template_version" not in result.pages[0].body
+    assert "# シナリオ" in result.pages[0].body
+    assert result.failures == []
+    # ネットワークアクセスが発生していない
+    assert fake_wiki.calls == []

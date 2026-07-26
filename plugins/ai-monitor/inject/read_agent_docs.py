@@ -6,16 +6,16 @@ import os
 import re
 import sys
 
-from fetch import fetch_url
+from fetch import ReadDoc, select_reader
 
 HARNESS_README = "Claudeハーネス/README.md"
 CATEGORIES = ("共通対応表", "対応表", "共通ルール")
 
 
-def list_harness_pages(base_url: str) -> dict[str, list[tuple[str, str]]]:
+def list_harness_pages(base_url: str, *, read: ReadDoc) -> dict[str, list[tuple[str, str]]]:
     """`Claudeハーネス/README.md` の目次を分類フォルダごとに列挙する。"""
     # Claudeハーネス/README.md を取得する
-    text = fetch_url(f"{base_url}/{HARNESS_README}")
+    text = read(f"{base_url}/{HARNESS_README}")
     # 目次のリンクをパスの分類フォルダごとに振り分ける（分類フォルダ外のリンクは無視する）
     pages: dict[str, list[tuple[str, str]]] = {category: [] for category in CATEGORIES}
     for display, target in re.findall(r"\[([^\]]+)\]\(([^)]+?\.md)\)", text):
@@ -74,18 +74,23 @@ def main() -> int:
         print("環境変数 AI_MONITOR_WIKI_BASE が未設定です", file=sys.stderr)
         return 1
     # 共通側 README から共通対応表と共通ルールのページ一覧を得る
-    common_pages = list_harness_pages(common_base)
+    common_read = select_reader(common_base)
+    common_pages = list_harness_pages(common_base, read=common_read)
     # プロジェクト側 README から対応表のページ一覧を得る（同一ベースなら README が同一ファイルのため取得結果を使い回す）
-    project_pages = common_pages if project_base == common_base else list_harness_pages(project_base)
+    project_read = select_reader(project_base)
+    if project_base == common_base:
+        project_pages = common_pages
+    else:
+        project_pages = list_harness_pages(project_base, read=project_read)
     # 対応表（共通対応表 → 対応表の順）を取得・解析してエージェントごとの対応をマージする
     merged: dict[str, list[tuple[str, str]]] = {}
     matrix_sources = [
-        (common_base, common_pages["共通対応表"]),
-        (project_base, project_pages["対応表"]),
+        (common_base, common_read, common_pages["共通対応表"]),
+        (project_base, project_read, project_pages["対応表"]),
     ]
-    for base, entries in matrix_sources:
+    for base, read, entries in matrix_sources:
         for _display, path in entries:
-            matrix = parse_matrix(fetch_url(f"{base}/{path}"), base)
+            matrix = parse_matrix(read(f"{base}/{path}"), base)
             for agent, docs in matrix.items():
                 merged.setdefault(agent, []).extend(docs)
     # agent_name の対応を確定する
@@ -97,7 +102,8 @@ def main() -> int:
     outputs = [(display, f"{common_base}/{path}") for display, path in common_pages["共通ルール"]]
     outputs += merged[agent_name]
     for display, url in outputs:
-        body = fetch_url(url)
+        # 対応表の行は絶対 URL を指せるため、場所ごとに取得手段を選ぶ
+        body = select_reader(url)(url)
         print(f"**{display}:**")
         print("`````md")
         print(body.rstrip("\n"))

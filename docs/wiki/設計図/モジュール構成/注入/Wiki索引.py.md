@@ -158,11 +158,12 @@ parse_index_table(text, "設計図", "/home/user/repo/ai-monitor-e2e/docs/wiki")
 | --- | --- | --- | --- | --- | --- | --- |
 | ベース | `base` | `str` | ✅ | - | Wiki ルートの raw URL またはローカル絶対パス | 再帰呼び出しでそのまま引き継ぐ |
 | フォルダパス | `folder_path` | `str` | - | `""` | 現在辿っているフォルダの Wiki ルートからの相対パス | 再帰呼び出しで積み上がる。初回は省略（ルート直下） |
+| 読み取り | `read` | [`ReadDoc`](./URLドキュメント.py.md#ドキュメント読み取り型) | ✅ | - | README の取得手段 | キーワード引数。ベースで選ぶ |
 
 引数例:
 
 ```python
-walk_wiki("/home/user/repo/ai-monitor-e2e/docs/wiki")
+walk_wiki("/home/user/repo/ai-monitor-e2e/docs/wiki", read=read_local)
 ```
 
 #### 戻り値
@@ -202,6 +203,7 @@ walk_wiki("/home/user/repo/ai-monitor-e2e/docs/wiki")
 | `test_walk_wiki_when_format_violation` | 正常 | 書式違反フォルダのサイレントスキップ | サブディレクトリ README に `## 目次` が無い | なし（一時ディレクトリに Wiki を作成） | そのフォルダ配下だけが結果から抜け、他のフォルダは通常通り含まれる | 意図的な非公開運用 |
 | `test_walk_wiki_when_fetch_failed` | 正常 | 取得失敗フォルダのサイレントスキップ | サブディレクトリ README が 404 | なし（一時ディレクトリに Wiki を作成） | そのフォルダ配下だけが結果から抜け、他のフォルダは通常通り含まれる（`URLError` は伝播しない）| Wiki 整備途中の吸収 |
 | `test_walk_wiki_when_root_missing` | 正常 | ルート README 取得失敗 | ルート README が 404 | なし（一時ディレクトリに Wiki を作成） | 空配列を返す（`URLError` は伝播しない）| Wiki 整備途中の吸収 |
+| `test_walk_wiki_when_remote_base` | 正常 | リモートベースの探索 | `https://` 始まりのベース | urllib | HTTP 経由で目次を辿り [`WikiPage`](#wiki-ページ) 配列が返る | モニターがリモート指定のとき |
 
 ---
 
