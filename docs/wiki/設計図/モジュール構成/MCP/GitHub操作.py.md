@@ -36,7 +36,6 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | git 実行入口 | `mcp/server.py` | 関数 | [`_run_git`](#git-実行入口) | git CLI 呼び出しの単一入口 | 失敗時 `CalledProcessError` |
 | 共通 | リポジトリルート解決 | `mcp/server.py` | 関数 | [`_repo_root`](#リポジトリルート解決) | 共通 `.git` からメインリポジトリのルートを解決 | worktree 内からの呼び出しに対応 |
 | 共通 | worktree パス解決 | `mcp/server.py` | 関数 | [`_worktree_path`](#worktree-パス解決) | `.claude/worktrees/` 配下の絶対パスを求める | `/` を `-` に置換 |
-| 共通 | base ref 解決 | `mcp/server.py` | 関数 | [`_resolve_base_ref`](#base-ref-解決) | `origin/{current}` or `HEAD` を返す | - |
 | 共通 | 質問 DTO | `mcp/models.py` | データモデル | [`Question`](#質問) / [`Choice`](#選択肢) | ask_questions の質問・選択肢 | - |
 | 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`AddressedComment`](#宛先コメント) | `---` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
@@ -245,7 +244,8 @@ classDiagram
 
 FastMCP でツールを定義するファイル。
 各ツール関数が githubkit / git CLI を直接呼ぶ（委譲層は持たない）。
-GitHub 系の全ツールは[クライアント生成](#クライアント生成)と[プロジェクト解決](#プロジェクト解決)を、worktree 系の全ツールは [git 実行入口](#git-実行入口)を共通で通る。
+GitHub 系の全ツールは[クライアント生成](#クライアント生成)と[プロジェクト解決](#プロジェクト解決)を、worktree 系の全ツールは[プロジェクト解決](#プロジェクト解決)と [git 実行入口](#git-実行入口)を共通で通る。
+worktree 系が[プロジェクト解決](#プロジェクト解決)を通るのは、操作対象のリポジトリをプロセスの作業ディレクトリではなく監視対象プロジェクトの `local_path` に固定するため。
 全ツールは[ツール呼び出しログ](#ツール呼び出しログ)でラップし、ログ出力を個々のツールに書かない。
 各ツールのインターフェース（リクエスト / レスポンス / 制約）は [バックエンド結合](../../バックエンド結合/README.md) の詳細ファイルが SoT。
 疎通テストは sandbox（`shuhei1101/ai-monitor-e2e`）を対象に手動実行する（[プロジェクト解決](#プロジェクト解決)が読むヘッダに sandbox を指定する。手順は `テスト/テスト実行方法.md`）。
@@ -1690,11 +1690,12 @@ EmptyResult()
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ブランチ名 | `branch` | `str` | ✅ | - | 作成するフルブランチ名 | 命名は `規約/ブランチ戦略.md` |
+| 分岐元 | `base_ref` | `str` | ✅ | - | ブランチを生やす起点の ref | 作成する PR の base と同じブランチを指定する |
 
 引数例:
 
 ```python
-worktree_create("feat/backend/profile/edit/edit-api")
+worktree_create("feat/backend/profile/edit/edit-api", "origin/feat/story/profile/edit")
 ```
 
 #### 戻り値
@@ -1706,21 +1707,22 @@ worktree_create("feat/backend/profile/edit/edit-api")
 戻り値例:
 
 ```python
-WorktreeCreateResult(branch="feat/backend/profile/edit/edit-api", worktree_path="/home/user/repo/ai-monitor/.claude/worktrees/feat-backend-profile-edit-edit-api", base_ref="origin/feat/story/profile/edit")
+WorktreeCreateResult(branch="feat/backend/profile/edit/edit-api", worktree_path="/home/user/repo/monitored-project/.claude/worktrees/feat-backend-profile-edit-edit-api", base_ref="origin/feat/story/profile/edit")
 ```
 
 #### 処理
 
-1. 分岐元（`origin/{current}` or `HEAD`）を求める（[base ref 解決](#base-ref-解決)）
+1. 対象プロジェクトを解決する（[プロジェクト解決](#プロジェクト解決)）
 2. 配置先の worktree パスを求める（[worktree パス解決](#worktree-パス解決)）。
    `.claude/worktrees/` が無ければパスごと作成する
-3. base ref からブランチと worktree を作成し、`WorktreeCreateResult` を返す（[git 実行入口](#git-実行入口)）
+3. `base_ref` からブランチと worktree を作成し、`WorktreeCreateResult` を返す（[git 実行入口](#git-実行入口)）
 
 #### 例外
 
 | 例外名 | 発生条件 | メッセージ | 補足 |
 | --- | --- | --- | --- |
-| `CalledProcessError` | git が非 0 で終了（既存ブランチ名 / worktree 不存在 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す |
+| `ProjectNotFoundError` | ヘッダのプロジェクトが設定に無い | プロジェクト名 | git を実行する前に落とす |
+| `CalledProcessError` | git が非 0 で終了（既存ブランチ名 / base ref 不存在 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す |
 
 #### 単体テスト
 
@@ -1729,14 +1731,15 @@ WorktreeCreateResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | 一時 git リポジトリ | 一時フォルダに git init + 初期 commit した使い捨てリポジトリ | fixture 名 `tmp_git_repo` |
+| 監視対象プロジェクト | `tmp_git_repo` を `local_path` に持つ設定 | プロセスの作業ディレクトリとは別の場所 |
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_worktree_create` | 正常 | ブランチ + worktree の作成 | 未使用のフルブランチ名 | なし | ブランチと `.claude/worktrees/` 配下の worktree が作られ、戻り値が実体と一致 | - |
 | `test_worktree_create_when_dirs_missing` | 正常 | worktree フォルダ未作成時のパス作成 | `.claude/worktrees/` が存在しない | なし | パスが作成されてから worktree が作られる | - |
-| `test_worktree_create_when_remote_branch_exists` | 正常 | base ref の解決 | origin に現在ブランチが存在 | なし | `base_ref` が `origin/{current}` | 無ければ `HEAD` |
-| `test_worktree_create_when_remote_branch_missing` | 正常 | base ref の HEAD フォールバック | origin に現在ブランチが無い | なし | `base_ref` が `HEAD` | - |
+| `test_worktree_create_when_project_repo_differs` | 正常 | 対象リポジトリの選択 | プロセスの作業ディレクトリとは別の `local_path` を持つプロジェクト | なし | `local_path` 側にブランチと worktree が作られ、作業ディレクトリ側には作られない | 常駐プロセス化で壊れた前提の回帰確認 |
 | `test_worktree_create_when_branch_exists` | 異常 | 既存ブランチ名 | 既存のブランチ名を指定 | なし | `CalledProcessError` | 例外表「git が非 0 で終了」に対応 |
+| `test_worktree_create_when_project_unknown` | 異常 | プロジェクト不明 | 設定に無いプロジェクト名をヘッダに指定 | なし | `ProjectNotFoundError`・git 実行なし | 例外表「ヘッダのプロジェクトが設定に無い」に対応 |
 
 ---
 
@@ -1767,20 +1770,22 @@ worktree_remove("feat/backend/profile/edit/edit-api")
 戻り値例:
 
 ```python
-WorktreeRemoveResult(branch="feat/backend/profile/edit/edit-api", worktree_path="/home/user/repo/ai-monitor/.claude/worktrees/feat-backend-profile-edit-edit-api")
+WorktreeRemoveResult(branch="feat/backend/profile/edit/edit-api", worktree_path="/home/user/repo/monitored-project/.claude/worktrees/feat-backend-profile-edit-edit-api")
 ```
 
 #### 処理
 
-1. 対象の worktree パスを求める（[worktree パス解決](#worktree-パス解決)）
-2. worktree を削除し、ローカルブランチを強制削除（`-D`）する（[git 実行入口](#git-実行入口)）
-3. `WorktreeRemoveResult` を返す
+1. 対象プロジェクトを解決する（[プロジェクト解決](#プロジェクト解決)）
+2. 対象の worktree パスを求める（[worktree パス解決](#worktree-パス解決)）
+3. worktree を削除し、ローカルブランチを強制削除（`-D`）する（[git 実行入口](#git-実行入口)）
+4. `WorktreeRemoveResult` を返す
 
 #### 例外
 
 | 例外名 | 発生条件 | メッセージ | 補足 |
 | --- | --- | --- | --- |
-| `CalledProcessError` | git が非 0 で終了（既存ブランチ名 / worktree 不存在 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す |
+| `ProjectNotFoundError` | ヘッダのプロジェクトが設定に無い | プロジェクト名 | git を実行する前に落とす |
+| `CalledProcessError` | git が非 0 で終了（worktree 不存在 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す |
 
 #### 単体テスト
 
@@ -1789,11 +1794,14 @@ WorktreeRemoveResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | 一時 git リポジトリ | 一時フォルダに git init + 初期 commit した使い捨てリポジトリ | fixture 名 `tmp_git_repo` |
+| 監視対象プロジェクト | `tmp_git_repo` を `local_path` に持つ設定 | プロセスの作業ディレクトリとは別の場所 |
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_worktree_remove` | 正常 | worktree + ブランチの強制削除 | 未マージ commit を持つブランチと worktree | なし | 両方削除され、戻り値が実体と一致 | squash マージ運用の再現 |
+| `test_worktree_remove_when_project_repo_differs` | 正常 | 対象リポジトリの選択 | プロセスの作業ディレクトリとは別の `local_path` を持つプロジェクト | なし | `local_path` 側の worktree とブランチが削除される | 常駐プロセス化で壊れた前提の回帰確認 |
 | `test_worktree_remove_when_worktree_missing` | 異常 | worktree 不存在 | worktree が無いブランチ名 | なし | `CalledProcessError` | 例外表「git が非 0 で終了」に対応 |
+| `test_worktree_remove_when_project_unknown` | 異常 | プロジェクト不明 | 設定に無いプロジェクト名をヘッダに指定 | なし | `ProjectNotFoundError`・git 実行なし | 例外表「ヘッダのプロジェクトが設定に無い」に対応 |
 
 ---
 
@@ -2401,19 +2409,23 @@ _ensure_at("architect")
 > 物理名: `_run_git`<br>
 > 種別: 関数
 
-`git` を `check=True` で実行する。
+指定したリポジトリで `git` を `check=True` で実行する。
 worktree 系ツールは全てここを通る。
+
+MCP はモニターと同一プロセスに常駐するため、プロセスの作業ディレクトリは ai-monitor のクローンで固定される。
+操作対象は呼び出しごとに異なるので、リポジトリを引数で受けて `git -C` に渡す（プロセスの作業ディレクトリには依存しない）。
 
 #### 引数
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | コマンド引数 | `args` | `list[str]` | ✅ | - | git に渡す引数列 | - |
+| 対象リポジトリ | `cwd` | `str` | ✅ | - | git を実行するリポジトリの絶対パス | 監視対象プロジェクトの `local_path` |
 
 引数例:
 
 ```python
-_run_git(["branch", "-D", "feat/backend/profile/edit/edit-api"])
+_run_git(["branch", "-D", "feat/backend/profile/edit/edit-api"], cwd="/home/user/repo/monitored-project")
 ```
 
 #### 戻り値
@@ -2430,7 +2442,7 @@ CompletedProcess(returncode=0, stdout="")
 
 #### 処理
 
-1. `git` を `check=True` で実行し、`CompletedProcess` を返す
+1. `cwd` のリポジトリを対象に `git -C` を `check=True` で実行し、`CompletedProcess` を返す
 
 #### 例外
 
@@ -2448,7 +2460,8 @@ CompletedProcess(returncode=0, stdout="")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_run_git` | 正常 | git の実行 | tmp の git リポジトリで実行 | なし | 正常終了の `CompletedProcess` が返る | - |
+| `test_run_git` | 正常 | git の実行 | tmp の git リポジトリを `cwd` に指定 | なし | 正常終了の `CompletedProcess` が返る | - |
+| `test_run_git_when_cwd_differs_from_process` | 正常 | プロセスの作業ディレクトリからの独立 | プロセスの作業ディレクトリとは別の git リポジトリを `cwd` に指定 | なし | `cwd` 側のリポジトリの状態が返る | 常駐プロセス化で壊れた前提の回帰確認 |
 
 ---
 
@@ -2456,16 +2469,18 @@ CompletedProcess(returncode=0, stdout="")
 > 物理名: `_repo_root`<br>
 > 種別: 関数
 
-共通 `.git` からメインリポジトリのルートを解決する（worktree 内からの呼び出しに対応）。
+対象リポジトリの共通 `.git` からメインリポジトリのルートを解決する（worktree 内からの呼び出しに対応）。
 
 #### 引数
 
-なし
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 対象リポジトリ | `cwd` | `str` | ✅ | - | 解決の起点となるリポジトリの絶対パス | 監視対象プロジェクトの `local_path` |
 
 引数例:
 
 ```python
-_repo_root()
+_repo_root(cwd="/home/user/repo/monitored-project")
 ```
 
 #### 戻り値
@@ -2477,12 +2492,12 @@ _repo_root()
 戻り値例:
 
 ```python
-Path("/home/user/repo/ai-monitor")
+Path("/home/user/repo/monitored-project")
 ```
 
 #### 処理
 
-1. 共通 `.git` の場所を git から取得し、その親ディレクトリをメインリポジトリのルートとして返す
+1. `cwd` のリポジトリで共通 `.git` の場所を git から取得し、その親ディレクトリをメインリポジトリのルートとして返す（[git 実行入口](#git-実行入口)）
 
 #### 例外
 
@@ -2500,7 +2515,7 @@ Path("/home/user/repo/ai-monitor")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_repo_root_when_in_worktree` | 正常 | worktree 内からのルート解決 | tmp リポジトリの worktree 内で実行 | なし | メインリポジトリのルートを返す | - |
+| `test_repo_root_when_in_worktree` | 正常 | worktree 内からのルート解決 | tmp リポジトリの worktree を `cwd` に指定 | なし | メインリポジトリのルートを返す | - |
 
 ---
 
@@ -2515,11 +2530,12 @@ Path("/home/user/repo/ai-monitor")
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | ブランチ名 | `branch` | `str` | ✅ | - | フルブランチ名 | - |
+| 対象リポジトリ | `cwd` | `str` | ✅ | - | 解決の起点となるリポジトリの絶対パス | 監視対象プロジェクトの `local_path` |
 
 引数例:
 
 ```python
-_worktree_path("feat/backend/profile/edit/edit-api")
+_worktree_path("feat/backend/profile/edit/edit-api", cwd="/home/user/repo/monitored-project")
 ```
 
 #### 戻り値
@@ -2531,7 +2547,7 @@ _worktree_path("feat/backend/profile/edit/edit-api")
 戻り値例:
 
 ```python
-Path("/home/user/repo/ai-monitor/.claude/worktrees/feat-backend-profile-edit-edit-api")
+Path("/home/user/repo/monitored-project/.claude/worktrees/feat-backend-profile-edit-edit-api")
 ```
 
 #### 処理
@@ -2549,62 +2565,7 @@ Path("/home/user/repo/ai-monitor/.claude/worktrees/feat-backend-profile-edit-edi
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_worktree_path` | 正常 | パス変換 | スラッシュ入りのブランチ名 | なし | `/` が `-` に置換された `.claude/worktrees/` 配下の絶対パス | - |
-
----
-
-### base ref 解決
-> 物理名: `_resolve_base_ref`<br>
-> 種別: 関数
-
-リモートに現在ブランチがあれば `origin/{current}`、なければ `HEAD` を返す。
-
-#### 引数
-
-なし
-
-引数例:
-
-```python
-_resolve_base_ref()
-```
-
-#### 戻り値
-
-| 型 | 説明 | 補足 |
-| --- | --- | --- |
-| `str` | 分岐元の base ref | - |
-
-戻り値例:
-
-```python
-"origin/feat/story/profile/edit"
-```
-
-#### 処理
-
-1. リモートに現在ブランチと同名のブランチがあるか確認する
-2. base ref を確定して返す
-   - リモートにある場合、`origin/{current}` を返す
-   - 無い場合、`HEAD` を返す
-
-#### 例外
-
-| 例外名 | 発生条件 | メッセージ | 補足 |
-| --- | --- | --- | --- |
-| `CalledProcessError` | git が非 0 で終了 | git の stderr | - |
-
-#### 単体テスト
-
-セットアップ:
-
-| セットアップ | 説明 | 補足 |
-| --- | --- | --- |
-| 一時 git リポジトリ | 一時フォルダに git init + 初期 commit した使い捨てリポジトリ | fixture 名 `tmp_git_repo` |
-
-| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
-| --- | --- | --- | --- | --- | --- | --- |
-| `test_resolve_base_ref` | 正常 | リモート優先の解決 | origin に現在ブランチが存在する tmp リポジトリ | なし | `origin/{current}` を返す | - |
+| `test_worktree_path` | 正常 | パス変換 | スラッシュ入りのブランチ名と tmp リポジトリの `cwd` | なし | `cwd` のリポジトリ配下で `/` が `-` に置換された `.claude/worktrees/` の絶対パス | - |
 
 ---
 

@@ -255,38 +255,25 @@ def _ensure_at(name: str) -> str:
     return name if name.startswith("@") else f"@{name}"
 
 
-def _run_git(args: list[str]) -> subprocess.CompletedProcess[str]:
-    """git CLI 呼び出しの単一入口。"""
-    # git を check=True で実行し、CompletedProcess を返す
-    return subprocess.run(["git", *args], check=True, capture_output=True, text=True)
+def _run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str]:
+    """指定リポジトリで git CLI を実行する単一入口。"""
+    # MCP は常駐プロセスでプロセスの CWD が対象と一致しないため、-C で対象リポジトリを明示する
+    return subprocess.run(["git", "-C", cwd, *args], check=True, capture_output=True, text=True)
 
 
-def _repo_root() -> Path:
-    """共通 .git からメインリポジトリのルートを解決する。"""
+def _repo_root(*, cwd: str) -> Path:
+    """対象リポジトリの共通 .git からメインリポジトリのルートを解決する。"""
     # 共通 .git の場所を取得し、その親をメインリポジトリのルートとして返す
-    common = _run_git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).stdout.strip()
+    common = _run_git(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=cwd).stdout.strip()
     return Path(common).parent
 
 
-def _worktree_path(branch: str) -> Path:
+def _worktree_path(branch: str, *, cwd: str) -> Path:
     """ブランチ名から .claude/worktrees/ 配下の絶対パスを求める。"""
     # メインリポジトリのルートを求める
-    root = _repo_root()
+    root = _repo_root(cwd=cwd)
     # ブランチ名の / を - に置換した絶対パスを返す
     return root / ".claude" / "worktrees" / branch.replace("/", "-")
-
-
-def _resolve_base_ref() -> str:
-    """origin/{current} or HEAD の分岐元 base ref を返す。"""
-    # リモートに現在ブランチと同名のブランチがあるか確認する
-    current = _run_git(["branch", "--show-current"]).stdout.strip()
-    try:
-        _run_git(["rev-parse", "--verify", f"origin/{current}"])
-    except subprocess.CalledProcessError:
-        # 無い場合、HEAD を返す
-        return "HEAD"
-    # リモートにある場合、origin/{current} を返す
-    return f"origin/{current}"
 
 
 def _is_minimized(node_id: str) -> bool:
@@ -884,29 +871,33 @@ def merge_pr(
 
 
 @_log_tool_call
-def worktree_create(branch: str) -> WorktreeCreateResult:
+def worktree_create(
+    branch: str, base_ref: str, *, ctx: Context, settings: Settings
+) -> WorktreeCreateResult:
     """ブランチと worktree を .claude/worktrees/ 配下に作成し、Draft PR 用の空 commit を push する。"""
-    # 分岐元（origin/{current} or HEAD）を求める
-    base_ref = _resolve_base_ref()
+    # 対象プロジェクトを解決する
+    project = _resolve_project(ctx, projects=settings.projects)
     # 配置先の worktree パスを求める（.claude/worktrees/ が無ければパスごと作成する）
-    path = _worktree_path(branch)
+    path = _worktree_path(branch, cwd=project.local_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # base ref からブランチと worktree を作成する
-    _run_git(["worktree", "add", "-b", branch, str(path), base_ref])
+    # base_ref からブランチと worktree を作成する
+    _run_git(["worktree", "add", "-b", branch, str(path), base_ref], cwd=project.local_path)
     # Draft PR は head と base が同一 commit だと 422 になるため、空 commit を作って push する
-    _run_git(["-C", str(path), "commit", "--allow-empty", "-m", "chore: Draft PR 用の空 commit"])
-    _run_git(["-C", str(path), "push", "-u", "origin", branch])
+    _run_git(["commit", "--allow-empty", "-m", "chore: Draft PR 用の空 commit"], cwd=str(path))
+    _run_git(["push", "-u", "origin", branch], cwd=str(path))
     return WorktreeCreateResult(branch=branch, worktree_path=str(path), base_ref=base_ref)
 
 
 @_log_tool_call
-def worktree_remove(branch: str) -> WorktreeRemoveResult:
+def worktree_remove(branch: str, *, ctx: Context, settings: Settings) -> WorktreeRemoveResult:
     """worktree とローカルブランチを削除する。"""
+    # 対象プロジェクトを解決する
+    project = _resolve_project(ctx, projects=settings.projects)
     # 対象の worktree パスを求める
-    path = _worktree_path(branch)
+    path = _worktree_path(branch, cwd=project.local_path)
     # worktree を削除し、ローカルブランチを強制削除（-D）する
-    _run_git(["worktree", "remove", "--force", str(path)])
-    _run_git(["branch", "-D", branch])
+    _run_git(["worktree", "remove", "--force", str(path)], cwd=project.local_path)
+    _run_git(["branch", "-D", branch], cwd=project.local_path)
     # WorktreeRemoveResult を返す
     return WorktreeRemoveResult(branch=branch, worktree_path=str(path))
 

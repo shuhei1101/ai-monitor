@@ -450,8 +450,8 @@ def otel_stub(monkeypatch):
 
 
 @pytest.fixture
-def tmp_git_repo(tmp_path, monkeypatch):
-    """origin 付きの一時 git リポジトリを作成して CWD にする。"""
+def tmp_git_repo(tmp_path, monkeypatch, mon_project):
+    """origin 付きの一時 git リポジトリを作成し、監視対象プロジェクトの local_path に設定する。"""
     origin = tmp_path / "origin.git"
     origin.mkdir()
     _git(origin, "init", "--bare", "-b", "master")
@@ -466,5 +466,8 @@ def tmp_git_repo(tmp_path, monkeypatch):
     _git(clone, "commit", "-m", "init")
     _git(clone, "push", "-u", "origin", "master")
 
-    monkeypatch.chdir(clone)
+    # 対象リポジトリは設定の local_path で指定する（MCP は常駐プロセスで CWD を対象に使えない）
+    mon_project.local_path = str(clone)
+    # プロセスの CWD はリポジトリの外に置き、対象リポジトリの取り違えを検出できるようにする
+    monkeypatch.chdir(tmp_path)
     return clone

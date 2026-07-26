@@ -761,12 +761,13 @@ def test_merge_pr_when_strategy_given(gh, api):
 def test_worktree_create(tmp_git_repo, api):
     """ブランチ + worktree の作成を確認する（正常系）。"""
     # 実行
-    res = api.worktree_create("feat/backend/profile/edit/edit-api")
+    res = api.worktree_create("feat/backend/profile/edit/edit-api", "origin/master")
     # 検証
     worktree = Path(res.worktree_path)
     assert worktree == tmp_git_repo / ".claude" / "worktrees" / "feat-backend-profile-edit-edit-api"
     assert worktree.is_dir()
     assert res.branch == "feat/backend/profile/edit/edit-api"
+    assert res.base_ref == "origin/master"
     branches = subprocess.run(
         ["git", "branch", "--list", res.branch], cwd=tmp_git_repo, capture_output=True, text=True
     ).stdout
@@ -778,42 +779,45 @@ def test_worktree_create_when_dirs_missing(tmp_git_repo, api):
     # 準備
     assert not (tmp_git_repo / ".claude").exists()
     # 実行
-    res = api.worktree_create("feat/a")
+    res = api.worktree_create("feat/a", "origin/master")
     # 検証
     assert Path(res.worktree_path).is_dir()
 
 
-def test_worktree_create_when_remote_branch_exists(tmp_git_repo, api):
-    """リモートに現在ブランチがある場合の base ref 解決を確認する（正常系）。"""
+def test_worktree_create_when_project_repo_differs(tmp_git_repo, api, tmp_path):
+    """プロセスの CWD ではなく local_path 側に作成されることを確認する（正常系）。"""
+    # 準備: CWD はリポジトリ外（tmp_git_repo fixture が設定済み）
+    assert Path.cwd() != tmp_git_repo
     # 実行
-    res = api.worktree_create("feat/b")
+    res = api.worktree_create("feat/elsewhere", "origin/master")
     # 検証
-    assert res.base_ref == "origin/master"
-
-
-def test_worktree_create_when_remote_branch_missing(tmp_git_repo, api):
-    """リモートに現在ブランチが無い場合の HEAD フォールバックを確認する（正常系）。"""
-    # 準備
-    subprocess.run(["git", "checkout", "-b", "local-only"], cwd=tmp_git_repo, check=True, capture_output=True)
-    # 実行
-    res = api.worktree_create("feat/c")
-    # 検証
-    assert res.base_ref == "HEAD"
+    assert Path(res.worktree_path).is_relative_to(tmp_git_repo)
+    assert not (tmp_path / ".claude").exists()
 
 
 def test_worktree_create_when_branch_exists(tmp_git_repo, api):
     """既存ブランチ名の指定によるエラーを確認する（異常系）。"""
     # 準備
-    api.worktree_create("feat/dup")
+    api.worktree_create("feat/dup", "origin/master")
     # 実行・検証
     with pytest.raises(subprocess.CalledProcessError):
-        api.worktree_create("feat/dup")
+        api.worktree_create("feat/dup", "origin/master")
+
+
+def test_worktree_create_when_project_unknown(tmp_git_repo, mon_settings, mcp_ctx_factory):
+    """未登録プロジェクトの拒否を確認する（異常系）。"""
+    # 準備
+    tool = server._bind(server.worktree_create, ctx=mcp_ctx_factory("unknown"), settings=mon_settings)
+    # 実行・検証
+    with pytest.raises(server.ProjectNotFoundError):
+        tool("feat/x", "origin/master")
+    assert not (tmp_git_repo / ".claude").exists()
 
 
 def test_worktree_remove(tmp_git_repo, api):
     """未マージ commit を持つ worktree + ブランチの強制削除を確認する（正常系）。"""
     # 準備
-    created = api.worktree_create("feat/rm")
+    created = api.worktree_create("feat/rm", "origin/master")
     worktree = Path(created.worktree_path)
     (worktree / "new.txt").write_text("wip", encoding="utf-8")
     subprocess.run(["git", "add", "new.txt"], cwd=worktree, check=True, capture_output=True)
@@ -829,11 +833,31 @@ def test_worktree_remove(tmp_git_repo, api):
     assert res == WorktreeRemoveResult(branch="feat/rm", worktree_path=str(worktree))
 
 
+def test_worktree_remove_when_project_repo_differs(tmp_git_repo, api):
+    """プロセスの CWD ではなく local_path 側が削除されることを確認する（正常系）。"""
+    # 準備
+    created = api.worktree_create("feat/rm-elsewhere", "origin/master")
+    # 実行
+    res = api.worktree_remove("feat/rm-elsewhere")
+    # 検証
+    assert Path(res.worktree_path).is_relative_to(tmp_git_repo)
+    assert not Path(created.worktree_path).exists()
+
+
 def test_worktree_remove_when_worktree_missing(tmp_git_repo, api):
     """worktree 不存在時のエラーを確認する（異常系）。"""
     # 実行・検証
     with pytest.raises(subprocess.CalledProcessError):
         api.worktree_remove("feat/none")
+
+
+def test_worktree_remove_when_project_unknown(tmp_git_repo, mon_settings, mcp_ctx_factory):
+    """未登録プロジェクトの拒否を確認する（異常系）。"""
+    # 準備
+    tool = server._bind(server.worktree_remove, ctx=mcp_ctx_factory("unknown"), settings=mon_settings)
+    # 実行・検証
+    with pytest.raises(server.ProjectNotFoundError):
+        tool("feat/x")
 
 
 # ---- 内部ヘルパー ----
@@ -992,12 +1016,22 @@ def test_ensure_at_when_already_prefixed():
 def test_run_git(tmp_git_repo):
     """git コマンドの実行を確認する（正常系）。"""
     # 実行
-    res = server._run_git(["status", "--short"])
+    res = server._run_git(["status", "--short"], cwd=str(tmp_git_repo))
     # 検証
     assert res.returncode == 0
 
 
-def test_repo_root_when_in_worktree(tmp_git_repo, monkeypatch):
+def test_run_git_when_cwd_differs_from_process(tmp_git_repo, tmp_path):
+    """プロセスの CWD ではなく cwd 側のリポジトリで実行されることを確認する（正常系）。"""
+    # 準備: プロセスの CWD はリポジトリ外（tmp_git_repo fixture が設定済み）
+    assert Path.cwd() == tmp_path
+    # 実行
+    res = server._run_git(["rev-parse", "--show-toplevel"], cwd=str(tmp_git_repo))
+    # 検証
+    assert Path(res.stdout.strip()).resolve() == tmp_git_repo.resolve()
+
+
+def test_repo_root_when_in_worktree(tmp_git_repo):
     """worktree 内からのメインリポジトリルート解決を確認する（正常系）。"""
     # 準備
     worktree = tmp_git_repo.parent / "wt"
@@ -1007,21 +1041,17 @@ def test_repo_root_when_in_worktree(tmp_git_repo, monkeypatch):
         check=True,
         capture_output=True,
     )
-    monkeypatch.chdir(worktree)
     # 実行・検証
-    assert server._repo_root() == tmp_git_repo
+    assert server._repo_root(cwd=str(worktree)) == tmp_git_repo
 
 
 def test_worktree_path(tmp_git_repo):
     """ブランチ名のスラッシュ置換によるパス変換を確認する（正常系）。"""
     # 実行・検証
-    assert server._worktree_path("feat/a/b") == tmp_git_repo / ".claude" / "worktrees" / "feat-a-b"
-
-
-def test_resolve_base_ref(tmp_git_repo):
-    """リモート優先の base ref 解決を確認する（正常系）。"""
-    # 実行・検証
-    assert server._resolve_base_ref() == "origin/master"
+    assert (
+        server._worktree_path("feat/a/b", cwd=str(tmp_git_repo))
+        == tmp_git_repo / ".claude" / "worktrees" / "feat-a-b"
+    )
 
 
 # ---- モニター連絡 ----
