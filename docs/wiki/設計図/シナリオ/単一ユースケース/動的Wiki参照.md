@@ -20,7 +20,8 @@ template_version: 1.0.0
 | Mock | なし（実環境で実行） | - |
 | intake Issue | 分解判定応答ループの待機中（`議論中` + `assignee=ユーザー`） | サブ Issue 案 + 確認事項 投稿済み |
 | Wiki（sandbox 側） | 検証用フレーズを含む対象ページを Wiki 配下に配置し、対応 README の目次にも登録済み | 動的探索の目印 |
-| Wiki 索引 | エージェント起動時に注入済み（対象ページの raw URL を含む） | |
+| Wiki ベース | sandbox のローカルクローンの `docs/wiki` を指す | E2E はローカル読みで統一する |
+| Wiki 索引 | エージェント起動時に注入済み（対象ページのローカルパスを含む） | |
 | ユーザーフィードバック | 具体的な Wiki パスを伝えず「関連 Wiki を参照して分解案を修正してほしい」とだけコメント + assignee 外し | 事前注入外のページを索引経由で見つけに行かせる |
 
 ### フロー
@@ -34,9 +35,10 @@ sequenceDiagram
   ORC-->>GH: polling（ユーザー返信 + assignee なし を検知）
   create participant MON as intake-issue-triager
   ORC->>MON: 既存セッションへ送信
+  participant WIKI as sandbox のローカルクローン
   activate MON
   MON->>MON: 注入済み Wiki 索引から<br>対象ページを特定
-  MON-->>GH: 対象ページの raw URL を直接取得
+  MON-->>WIKI: 対象ページを直接取得
   MON->>GH: 該当コメントに返信追記<br>（本文を反映した修正案）
   MON->>GH: assignee=ユーザー 再設定
   deactivate MON

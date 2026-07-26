@@ -21,12 +21,18 @@ heartbeat_interval_sec: 60
 # セッション台帳の永続化先
 state_path: data/state.yaml
 
+# ai-monitor 自身の Wiki の場所（フェーズページ・共通対応表・共通ルールの取得元）
+# raw URL（https:// 始まり）またはローカル絶対パスのどちらでもよい
+# ローカルを指す場合は worktree ではなくメインリポジトリを指定する
+ai_monitor_wiki_base: /mnt/c/Users/shuhe/repo/ai-monitor/docs/wiki
+
 # 監視対象プロジェクト（複数可）
+# wiki_base は ai_monitor_wiki_base と同じく raw URL / ローカル絶対パスの両対応
 projects:
   - name: myapp
     repo: owner/myapp
     local_path: /mnt/c/Users/shuhe/repo/myapp
-    wiki_base: https://raw.githubusercontent.com/owner/myapp/master/docs/wiki
+    wiki_base: /mnt/c/Users/shuhe/repo/myapp/docs/wiki
 
 # エージェント別モデル（全 17 エージェント分のエントリ必須・欠落 / 空値は起動エラー）
 # 推奨は「頭を使う工程は claude-opus-4-7 / 機械的な工程は sonnet」

@@ -18,7 +18,7 @@ CLI はプラグインのインストール先から起動されて `src/` を�
 | URLドキュメント注入 | URL 取得 | `inject/fetch.py` | 関数 | [`fetch_url`](#url-取得) | URL からテキストを取得する | エージェントドキュメント注入・[Wiki参照](../MCP/Wiki参照.py.md)と共有 |
 | URLドキュメント注入 | ドキュメント読み取り型 | `inject/fetch.py` | 関数型 | [`ReadDoc`](#ドキュメント読み取り型) | 場所を受けて本文を返す関数のシグネチャ | 取得手段の差し替え口 |
 | URLドキュメント注入 | ローカル取得 | `inject/fetch.py` | 関数 | [`read_local`](#ローカル取得) | ローカルファイルからテキストを読む | [`ReadDoc`](#ドキュメント読み取り型) の実装 |
-| URLドキュメント注入 | ソース読み取り選択 | `inject/fetch.py` | 関数 | [`select_reader`](#ソース読み取り選択) | ベースの形から [`ReadDoc`](#ドキュメント読み取り型) の実装を選ぶ | 判定はここ 1 箇所に集約する |
+| URLドキュメント注入 | ソース読み取り選択 | `inject/fetch.py` | 関数 | [`select_reader`](#ソース読み取り選択) | 場所の形から [`ReadDoc`](#ドキュメント読み取り型) の実装を選ぶ | 判定はここ 1 箇所に集約する |
 | URLドキュメント注入 | URL 正規化 | `inject/read_urls.py` | 関数 | [`normalize_github_url`](#url-正規化) | GitHub blob URL を raw URL に変換する | - |
 | URLドキュメント注入 | front matter 除去 | `inject/read_urls.py` | 関数 | [`strip_frontmatter`](#front-matter-除去) | 本文先頭の YAML front matter を除去する | - |
 | URLドキュメント注入 | CLI | `inject/read_urls.py` | 関数 | [`main`](#cli) | URL 一覧を受けて本文一式を出力する | - |
@@ -172,19 +172,22 @@ read_local("/home/user/repo/ai-monitor/docs/wiki/規約/コメント.md")
 > 物理名: `select_reader`<br>
 > 種別: 関数
 
-ベースの形から [`ReadDoc`](#ドキュメント読み取り型) の実装を選ぶ。
+場所の形から [`ReadDoc`](#ドキュメント読み取り型) の実装を選ぶ。
 ローカルかネットワークかの判定を本関数 1 箇所に集約し、呼び出し側は選ばれた関数を使うだけにする。
+
+判定はベース単位ではなく場所単位で行う。
+ローカルのベースで組んだ索引や対応表でも、行のリンクが絶対 URL ならその 1 件だけネットワーク経由で読む必要があるため。
 
 #### 引数
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| ベース | `base` | `str` | ✅ | - | Wiki ルートの raw URL またはローカル絶対パス | 設定の `wiki_base` / `ai_monitor_wiki_base` の値 |
+| 場所 | `location` | `str` | ✅ | - | 読み取り対象の raw URL またはローカル絶対パス | ベースと相対パスを連結した完全な場所 |
 
 引数例:
 
 ```python
-select_reader("/home/user/repo/ai-monitor/docs/wiki")
+select_reader("/home/user/repo/ai-monitor/docs/wiki/規約/コメント.md")
 ```
 
 #### 戻り値
@@ -201,7 +204,7 @@ read_local
 
 #### 処理
 
-1. `base` が `http://` または `https://` で始まる場合、[URL 取得](#url-取得)を返す
+1. `location` が `http://` または `https://` で始まる場合、[URL 取得](#url-取得)を返す
 2. それ以外の場合、[ローカル取得](#ローカル取得)を返す
 
 #### 例外
@@ -212,8 +215,8 @@ read_local
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_select_reader_when_https` | 正常 | リモートの選択 | `https://` で始まるベース | なし | [URL 取得](#url-取得)が返る | - |
-| `test_select_reader_when_local_path` | 正常 | ローカルの選択 | 絶対パスのベース | なし | [ローカル取得](#ローカル取得)が返る | - |
+| `test_select_reader_when_https` | 正常 | リモートの選択 | `https://` で始まる場所 | なし | [URL 取得](#url-取得)が返る | - |
+| `test_select_reader_when_local_path` | 正常 | ローカルの選択 | 絶対パスの場所 | なし | [ローカル取得](#ローカル取得)が返る | - |
 
 ---
 
@@ -222,7 +225,7 @@ read_local
 > 種別: 関数型
 
 場所（URL / ローカルパス）から本文を返す関数のシグネチャ。
-呼び出し側はキーワード引数 `read` でこの型を受け取り、取得手段を知らずに本文を得る。
+呼び出し側は [ソース読み取り選択](#ソース読み取り選択) で得たこの型の関数を使い、取得手段を知らずに本文を得る。
 
 #### 引数
 
@@ -240,8 +243,8 @@ read_local
 
 | 実装 | 補足 |
 | --- | --- |
-| [URL 取得](#url-取得) | ベースが `http://` / `https://` で始まるとき |
-| [ローカル取得](#ローカル取得) | ベースがそれ以外（絶対パス）のとき |
+| [URL 取得](#url-取得) | 場所が `http://` / `https://` で始まるとき |
+| [ローカル取得](#ローカル取得) | 場所がそれ以外（絶対パス）のとき |
 
 ## `inject/read_urls.py`
 > 種別: ファイル
