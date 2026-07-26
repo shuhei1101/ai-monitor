@@ -96,12 +96,12 @@ def test_normal(client, tmux_calls, session_factory):
     assert len(sends) == 1
     assert sends[0][2] == session.session_name
     assert 'claude --model' in sends[0][3]
-    # 起動プロンプトにフェーズ + 参考資料 + Wiki 索引が載る
-    prompt_path = sends[0][3].split('"$(cat ')[1].rstrip(')"')
-    prompt = Path(prompt_path).read_text(encoding="utf-8")
-    assert "# 初期処理" in prompt
-    assert "# 規約: コメント" in prompt
-    assert "規約.md" in prompt
+    # 追記システムプロンプトのファイルにフェーズ + 参考資料 + Wiki 索引が載る
+    docs_path = sends[0][3].split("--append-system-prompt-file ")[1].split(" ")[0]
+    docs = Path(docs_path).read_text(encoding="utf-8")
+    assert "# 初期処理" in docs
+    assert "# 規約: コメント" in docs
+    assert "規約.md" in docs
 
 
 def test_error_when_session_missing(client, tmux_calls):

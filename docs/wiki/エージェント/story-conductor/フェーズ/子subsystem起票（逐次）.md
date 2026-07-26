@@ -6,7 +6,9 @@ subsystem-conductor のインターフェース確定報告を受けて、依存
 
 ### 次の未起票 subsystem の特定
 
-story Issue 本文の `## 実装分担` から、次に起票する `未起票` の subsystem を 1 件特定する。
+story ブランチの単一 UC シナリオから subsystem を洗い出し、初期処理で取得した `sub_issues` と突き合わせて、依存順で次に来る未起票の subsystem を 1 件特定する。
+
+- 未起票の subsystem が残っていない場合、「インターフェース確定報告の Resolve」と「ラベル除去」「作業完了報告」だけを実行する（「subsystem Issue の起票」は実行しない）
 
 ### インターフェース確定報告の Resolve
 
@@ -16,20 +18,12 @@ MCP `resolve_comments` で subsystem-conductor のインターフェース確定
 
 MCP `create_child_issue` を呼ぶ:
 - `parent_issue_number`: $issue_number
-- `title`: 次の subsystem 名
+- `title`: 次の subsystem 名（`{UC名} {対象システム}` 形式）
 - `body`: 空文字
 - `labels`:
   - `$AI_MONITOR_LABEL_LAYER_SUBSYSTEM` の値
+  - 対象システムの `scope:*` ラベル
   - `$AI_MONITOR_LABEL_CONFIRM_SUBSYSTEM_CONDUCTOR` の値
-
-### 本文の更新
-
-story Issue 本文の `## 実装分担` の該当行の `未起票` を子 subsystem リンクに置き換える。
-
-MCP `update_body` を呼ぶ:
-- `number`: $issue_number
-- `is_pr`: false
-- `body`: 更新後本文
 
 ### ラベル除去
 

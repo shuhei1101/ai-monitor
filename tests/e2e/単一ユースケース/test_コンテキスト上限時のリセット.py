@@ -135,9 +135,12 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, tmp_
 
     # 検証: 新しい会話ログの最初のユーザーメッセージが起動プロンプトになっている
     first_message = _first_user_message(sorted(added)[0])
-    assert "## フェーズ" in first_message, "起動プロンプトにフェーズ本文が載っていない"
-    assert "## 参考資料" in first_message, "起動プロンプトに参考資料が載っていない"
     assert f"- 対象番号: {epic.number}" in first_message, "起動プロンプトに対象番号が載っていない"
+    assert "## 対象の状態" in first_message, "起動プロンプトに対象の状態が載っていない"
+    # 手順書は追記システムプロンプトのファイルで渡すため、そのファイルに全文が載る
+    docs = Path(f"/tmp/{session_name}.docs").read_text(encoding="utf-8")
+    assert "## フェーズ" in docs, "追記システムプロンプトにフェーズ本文が載っていない"
+    assert "## 参考資料" in docs, "追記システムプロンプトに参考資料が載っていない"
 
     # 検証: コンパクトが行われていない（会話履歴に要約の境界が増えていない）
     assert _count_compact_boundaries() == boundaries_before, "コンパクトがブロックされていない"

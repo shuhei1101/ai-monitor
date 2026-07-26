@@ -8,28 +8,21 @@ single-scenario-writer の完了報告を受けて、単一シナリオを元に
 
 epic ブランチ配下の worktree に切り替えて（story ブランチの worktree）、single-scenario-writer が commit した `docs/wiki/設計図/シナリオ/単一ユースケース/{UC名}.md` を読む。
 
-### 実装分担の分解と依存順の決定
+### subsystem の洗い出しと依存順の決定
 
 シナリオの結合フローから subsystem（FE / BE / 外部連携 等）を洗い出し、依存順（例: BE → FE）を決める。
+洗い出した subsystem は起票する子 Issue のタイトルと `scope:*` ラベルで表し、どこまで起票済みかは初期処理で取得した `sub_issues` で追う。
 
 ### 先頭グループの起票
 
 依存のない先頭グループの subsystem について、`create_child_issue` を呼ぶ:
 - `parent_issue_number`: $issue_number
-- `title`: subsystem 名
+- `title`: subsystem 名（`{UC名} {対象システム}` 形式）
 - `body`: 空文字（本文整形は subsystem-conductor が行う）
 - `labels`:
   - `$AI_MONITOR_LABEL_LAYER_SUBSYSTEM` の値
+  - 対象システムの `scope:*` ラベル
   - `$AI_MONITOR_LABEL_CONFIRM_SUBSYSTEM_CONDUCTOR` の値
-
-### 本文の更新
-
-story Issue 本文に `## 実装分担` セクションを追記して、全 subsystem の依存順と子リンクを反映する（未起票の subsystem は `未起票` と明記）。
-
-MCP `update_body` を呼ぶ:
-- `number`: $issue_number
-- `is_pr`: false
-- `body`: `## 実装分担` を含む更新後本文
 
 ### 完了報告の Resolve と起票結果の記録
 

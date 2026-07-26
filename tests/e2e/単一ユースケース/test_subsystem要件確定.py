@@ -56,13 +56,6 @@ STORY_BODY_TEMPLATE = """## 前提条件
 | タスクの内容を編集して保存できる | - |
 | 保存時にバリデーションエラーをインライン表示 | フィールド直下に表示 |
 | 保存成功時にトーストで通知 | 3 秒表示 |
-
-## 実装分担
-
-| 順序 | 対象システム | 担当範囲 | 子 subsystem |
-| --- | --- | --- | --- |
-| 1 | バックエンド | タスク更新 API とバリデーション | 起票済み |
-| 2 | フロントエンド | 編集画面と保存導線 | 未起票 |
 """
 
 SCENARIO_PATH = "docs/wiki/設計図/シナリオ/単一ユースケース/タスク編集.md"
@@ -131,7 +124,7 @@ sequenceDiagram
 """
 
 SUBSYSTEM_TITLE = "タスク編集 バックエンド"
-CURRENT_SUBSECTIONS = ["### 関連実装コード", "### 関連テスト", "### 関連 Issue/PR", "### 関連ドキュメント"]
+CURRENT_SUBSECTIONS = ["### 関連 Issue/PR", "### 関連ドキュメント"]
 SA_SUBSECTIONS = ["### 機能要件", "### 非機能要件", "### スコープ外"]
 
 
@@ -192,7 +185,7 @@ def test_normal(
 
     data = wait_until(_first_turn_done, timeout_sec=1800, message="要件確定（初回）の完了（議論中 + assignee）")
 
-    # 検証: 本文に 現状 4 サブセクションと システム要件（SA）3 サブセクションが揃っている
+    # 検証: 本文に 現状 2 サブセクションと システム要件（SA）3 サブセクションが揃っている
     body = (data.body or "").replace("\r\n", "\n")
     assert "## 現状" in body, "本文に ## 現状 がない"
     assert "## システム要件（SA）" in body, "本文に ## システム要件（SA） がない"

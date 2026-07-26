@@ -6,12 +6,14 @@ template_version: 1.0.0
 
 architect が設計 Wiki（インターフェース → ER図 → 画面構成 → バックエンド結合 / フロントエンド結合（フロー）→ モジュール構成）をタスク一覧の上流順に 1 ページずつ作成し、応答ループでユーザーと確定させる単一ユースケース。
 BE / FE の設計 Wiki とも architect が担当する（画面ありの subsystem は epic の全体UI設計で確定した画面方向性を前提にフロントエンド結合を書く）。
-後続 subsystem が本 subsystem のインターフェースに依存する場合は、インターフェース確定時に subsystem-conductor へインターフェース確定報告を投稿する（待機なし・設計は継続）。
+インターフェースのページを確定した時点で subsystem-conductor へインターフェース確定報告を投稿する（待機なし・設計は継続。後続 subsystem を起票するかの判断は story-conductor が行う）。
 ライブラリ選定で必要なら PoC（カテゴリ A〜E）も本 UC 内で実施する。
 全 Wiki 確定後は内部パイプラインの指揮役として tester にタスクを割り当てる。
 配下 worker（tester / implementer）から設計の差し戻しを受けた場合も本 UC で設計 Wiki を修正して差し戻し元に返す。
 
 対応エージェント: `architect`
+
+- 対応テストファイル: `tests/e2e/単一ユースケース/test_SS設計.py`
 
 ## 正常シナリオ
 
@@ -80,15 +82,15 @@ sequenceDiagram
 - subsystem PR に `確認:tester` が付与され、`確認:architect` が除去されている
 - 自分宛コメントが全て Resolve 済み
 
-## 正常シナリオ（後続 subsystem へのインターフェース確定報告）
+## 正常シナリオ（インターフェース確定報告）
 
 ### セットアップ
 
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| subsystem Draft PR | `確認:architect` 付与済み・`## タスク一覧` 承認済み | 先行 subsystem（例: BE） |
-| 親 story Issue | 本文の依存順に `未起票` の後続 subsystem（例: FE）あり | 報告を誘発 |
+| subsystem Draft PR | `確認:architect` 付与済み・`## タスク一覧` 承認済み | - |
+| タスク一覧 | 設計タスクにバックエンド結合が含まれる | 報告を誘発 |
 | assignee | PR に未設定 | エージェント起動条件 |
 
 ### フロー

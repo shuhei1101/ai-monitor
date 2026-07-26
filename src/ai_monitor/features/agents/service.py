@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ai_monitor.features.agents.docs import build_agent_docs
+from ai_monitor.features.agents.docs import build_agent_docs, load_phase_config
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
 from ai_monitor.integrations.github.labels import add_label
@@ -42,6 +42,16 @@ def poll(
     matched = [t for t in targets if agent.confirm_label in t.labels and not t.assignees]
     # 処理中ラベルが付いた対象を除外する（send-keys 済みで報告待ち）
     matched = [t for t in matched if agent.processing_label not in t.labels]
+    # フェーズページが未登録のエージェントは起動できないので周期を打ち切る
+    # （セッション作成・ラベル付与の前に判定するため副作用が残らない。対象が無い周期では設定を読まない）
+    if matched and agent.name not in load_phase_config().phases:
+        logger.error(
+            "フェーズページが未登録のため起動を見送りました: project=%s agent_name=%s numbers=%s",
+            project.name,
+            agent.name,
+            [t.number for t in matched],
+        )
+        return
     # 優先度順にソートして 1 件ずつ処理する
     ranks = {priority_urgent: 0, priority_low: 2}
     for target in sorted(matched, key=lambda t: _sort_key(t, ranks)):
@@ -57,25 +67,13 @@ def poll(
         )
 
 
-def build_launch_prompt(
-    agent: Agent,
-    number: int,
-    project: MonitoredProject,
-    snapshot: str,
-    *,
-    ai_monitor_wiki_base: str,
-) -> str:
+def build_launch_prompt(agent: Agent, number: int, snapshot: str) -> str:
     """新規セッションに渡す起動プロンプトを組み立てて返す。"""
-    # エージェントドキュメント（フェーズ + 参考資料 + Wiki 索引）を組み立てる
-    agent_docs = build_agent_docs(
-        agent.name, project, ai_monitor_wiki_base=ai_monitor_wiki_base
-    )
-    # 役割の宣言・入力・ドキュメント・スナップショットの順に連結する
+    # 役割の宣言・入力・スナップショットを連結する（手順書は追記システムプロンプト側）
     return (
         f"あなたは {agent.name} です。\n\n"
         f"## 入力\n\n"
         f"- 対象番号: {number}\n\n"
-        f"{agent_docs}\n\n"
         f"## 対象の状態\n\n"
         f"{snapshot}\n"
     )
@@ -93,17 +91,21 @@ def build_launch_command(
     ai_monitor_wiki_base: str,
 ) -> str:
     """claude を起動する shell コマンドを組み立てて返す。"""
-    # 起動プロンプトを一時ファイルへ書き出し、コマンド置換で claude に渡す
-    # （数万文字を send-keys の引数に直接埋めず、本文のバッククォート・$ の再展開も防ぐ）
     launch_env = build_launch_env(telemetry, project, agent, number, port)
-    prompt = build_launch_prompt(
-        agent, number, project, snapshot, ai_monitor_wiki_base=ai_monitor_wiki_base
+    tmp_dir = Path(tempfile.gettempdir())
+    # エージェントドキュメント（フェーズ + 参考資料 + Wiki 索引）は追記システムプロンプトのファイルで渡す
+    # （数十万バイトになり、1 引数の上限 128 KiB を超えるため argv には載せられない）
+    docs_path = tmp_dir / f"{session_name}.docs"
+    docs_path.write_text(
+        build_agent_docs(agent.name, project, ai_monitor_wiki_base=ai_monitor_wiki_base),
+        encoding="utf-8",
     )
-    prompt_path = Path(tempfile.gettempdir()) / f"{session_name}.prompt"
-    prompt_path.write_text(prompt, encoding="utf-8")
+    # 起動プロンプトも一時ファイルへ書き出してコマンド置換で渡す（本文のバッククォート・$ の再展開を防ぐ）
+    prompt_path = tmp_dir / f"{session_name}.prompt"
+    prompt_path.write_text(build_launch_prompt(agent, number, snapshot), encoding="utf-8")
     return (
-        f"{launch_env}claude --model {agent.model} "
-        f'--dangerously-skip-permissions "$(cat {prompt_path})"'
+        f"{launch_env}claude --model {agent.model} --dangerously-skip-permissions "
+        f'--append-system-prompt-file {docs_path} "$(cat {prompt_path})"'
     )
 
 

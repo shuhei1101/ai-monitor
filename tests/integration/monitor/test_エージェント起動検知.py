@@ -125,13 +125,15 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
     assert gh_mon.rest.issues.add_labels.call_args.kwargs["labels"] == ["処理中:intake-issue-triager"]
     send = next(c for c in tmux_calls.calls if c[0] == "send-keys")
     assert send[3].startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager")
-    assert 'claude --model sonnet --dangerously-skip-permissions "$(cat ' in send[3]
-    # 起動プロンプトの中身にフェーズ本文・参考資料・Wiki 索引・対象番号・スナップショットが載る
-    prompt_path = send[3].split('"$(cat ')[1].rstrip(')"')
-    prompt = Path(prompt_path).read_text(encoding="utf-8")
-    assert "# 初期処理" in prompt
-    assert "# 規約: コメント" in prompt
-    assert "規約.md" in prompt
+    assert "claude --model sonnet --dangerously-skip-permissions" in send[3]
+    # 追記システムプロンプトのファイルにフェーズ本文・参考資料・Wiki 索引が載る
+    docs_path = send[3].split("--append-system-prompt-file ")[1].split(" ")[0]
+    docs = Path(docs_path).read_text(encoding="utf-8")
+    assert "# 初期処理" in docs
+    assert "# 規約: コメント" in docs
+    assert "規約.md" in docs
+    # 起動プロンプトには対象番号とスナップショットが載る
+    prompt = Path(send[3].split('"$(cat ')[1].rstrip(')"')).read_text(encoding="utf-8")
     assert "- 対象番号: 35" in prompt
     assert "#35" in prompt
     # ローカル読みなのでネットワークアクセスは発生しない
@@ -197,9 +199,9 @@ def test_normal_when_remote_base(gh_mon, tmux_calls, mon_settings, label_setting
     assert remote_wiki.calls
     assert any("%E3%82%A8" in call for call in remote_wiki.calls)
     assert all(call.startswith("https://raw.example.com/") for call in remote_wiki.calls)
-    # 送信文にフェーズ本文・参考資料・Wiki 索引が載る
+    # 追記システムプロンプトのファイルにフェーズ本文・参考資料・Wiki 索引が載る
     send = next(c for c in tmux_calls.calls if c[0] == "send-keys")
-    prompt = Path(send[3].split('"$(cat ')[1].rstrip(')"')).read_text(encoding="utf-8")
-    assert "# 初期処理" in prompt
-    assert "# 規約: コメント" in prompt
-    assert "規約.md" in prompt
+    docs = Path(send[3].split("--append-system-prompt-file ")[1].split(" ")[0]).read_text(encoding="utf-8")
+    assert "# 初期処理" in docs
+    assert "# 規約: コメント" in docs
+    assert "規約.md" in docs

@@ -1,12 +1,15 @@
 """`src/ai_monitor/features/agents/service.py` の単体テスト。"""
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 import ai_monitor.features.agents.service as service
 import ai_monitor.features.sessions.registry as registry_mod
+from ai_monitor.features.agents.docs import PhaseConfig
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
 from ai_monitor.shared.settings import TelemetrySettings
@@ -34,6 +37,10 @@ def io_mocks(monkeypatch):
     monkeypatch.setattr(service, "send_keys", mocks.send_keys)
     mocks.build_agent_docs.return_value = "## フェーズ\n\n# 初期処理\n"
     monkeypatch.setattr(service, "build_agent_docs", mocks.build_agent_docs)
+    mocks.load_phase_config.return_value = PhaseConfig(
+        phases={"intake-issue-triager": ["エージェント/intake-issue-triager/フェーズ/初期処理.md"]}
+    )
+    monkeypatch.setattr(service, "load_phase_config", mocks.load_phase_config)
     return mocks
 
 
@@ -74,7 +81,8 @@ def test_poll_when_new_target(agent, io_mocks, registry, mon_project):
     assert registry.find("sandbox", "intake-issue-triager", 35) is not None
     sent_text = io_mocks.send_keys.call_args.args[1]
     assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager")
-    assert 'claude --model opus --dangerously-skip-permissions "$(cat ' in sent_text
+    assert "claude --model opus --dangerously-skip-permissions" in sent_text
+    assert "--append-system-prompt-file " in sent_text
 
 
 def test_poll_when_existing_session(agent, io_mocks, registry, mon_project):
@@ -125,17 +133,49 @@ def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
     ]
 
 
-def test_build_launch_prompt(agent, io_mocks, mon_project):
+def test_poll_when_phases_unregistered(io_mocks, registry, mon_project):
+    """フェーズ設定に無いエージェントの見送りを確認する（正常系）。"""
+    # 準備
+    unregistered = Agent(
+        name="tester",
+        confirm_label="確認:tester",
+        processing_label="処理中:tester",
+        model="sonnet",
+    )
+    targets = [_issue(35, labels=["確認:tester"])]
+    # 実行
+    service.poll(mon_project, unregistered, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    # 検証: 副作用を起こさずに周期を終える
+    io_mocks.create_session.assert_not_called()
+    io_mocks.add_label.assert_not_called()
+    io_mocks.send_keys.assert_not_called()
+
+
+def test_poll_when_phases_unregistered_and_no_target(io_mocks, registry, mon_project):
+    """条件一致の対象が無い未登録エージェントでフェーズ設定を読まないことを確認する（正常系）。"""
+    # 準備
+    unregistered = Agent(
+        name="tester",
+        confirm_label="確認:tester",
+        processing_label="処理中:tester",
+        model="sonnet",
+    )
+    targets = [_issue(35, labels=["確認:tester"], assignees=["shuhei1101"])]
+    # 実行
+    service.poll(mon_project, unregistered, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    # 検証: 毎周期のログ出力を避けるため設定の読み込み自体を行わない
+    io_mocks.load_phase_config.assert_not_called()
+
+
+def test_build_launch_prompt(agent):
     """起動プロンプトの組み立てを確認する（正常系）。"""
     # 実行
-    prompt = service.build_launch_prompt(
-        agent, 52, mon_project, "Issue #52 [open]", ai_monitor_wiki_base=WIKI_BASE
-    )
-    # 検証: エージェント名・対象番号・ドキュメント・スナップショットが含まれる
+    prompt = service.build_launch_prompt(agent, 52, "Issue #52 [open]")
+    # 検証: エージェント名・対象番号・スナップショットが含まれ、手順書は含まれない
     assert "intake-issue-triager" in prompt
-    assert "52" in prompt
-    assert "# 初期処理" in prompt
+    assert "- 対象番号: 52" in prompt
     assert "Issue #52 [open]" in prompt
+    assert "# 初期処理" not in prompt
 
 
 def test_process_one(agent, io_mocks, registry, mon_project):
@@ -150,7 +190,8 @@ def test_process_one(agent, io_mocks, registry, mon_project):
     assert io_mocks.add_label.call_args.args[2] == "処理中:intake-issue-triager"
     sent_text = io_mocks.send_keys.call_args.args[1]
     assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox ")
-    assert 'claude --model opus --dangerously-skip-permissions "$(cat ' in sent_text
+    assert "claude --model opus --dangerously-skip-permissions" in sent_text
+    assert "--append-system-prompt-file " in sent_text
 
 
 def test_process_one_when_new_session(agent, io_mocks, registry, mon_project):
@@ -324,9 +365,31 @@ def test_build_launch_command(agent, io_mocks, mon_project):
         port=8765,
         ai_monitor_wiki_base=WIKI_BASE,
     )
-    # 検証: 環境変数で始まり、一時ファイルのコマンド置換で claude を起動する
+    # 検証: 環境変数で始まり、手順書は追記システムプロンプトのファイル・起動プロンプトはコマンド置換で渡す
     assert command.startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager")
-    assert 'claude --model opus --dangerously-skip-permissions "$(cat ' in command
+    assert "claude --model opus --dangerously-skip-permissions" in command
+    assert "--append-system-prompt-file " in command
+    assert '"$(cat ' in command
+    docs_path = Path(tempfile.gettempdir()) / "ai-monitor-sandbox-52-intake-issue-triager.docs"
+    assert str(docs_path) in command
+    assert "# 初期処理" in docs_path.read_text(encoding="utf-8")
+
+
+def test_build_launch_command_when_docs_exceed_arg_limit(agent, io_mocks, mon_project, monkeypatch):
+    """手順書が 1 引数の上限を超えても起動コマンドに埋め込まれないことを確認する（正常系）。"""
+    # 準備: 128 KiB を超えるエージェントドキュメントを返させる
+    huge = "あ" * 200_000
+    monkeypatch.setattr(service, "build_agent_docs", lambda *a, **k: huge)
+    # 実行
+    command = service.build_launch_command(
+        "ai-monitor-sandbox-52-intake-issue-triager", agent, 52, mon_project, "Issue #52 [open]",
+        telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE,
+    )
+    # 検証: コマンド長は上限未満で、本文はファイル側にある
+    assert len(command.encode()) < 131072
+    assert huge not in command
+    docs_path = Path(tempfile.gettempdir()) / "ai-monitor-sandbox-52-intake-issue-triager.docs"
+    assert docs_path.read_text(encoding="utf-8") == huge
 
 
 def test_reset_session(agent, io_mocks, mon_project, monkeypatch):

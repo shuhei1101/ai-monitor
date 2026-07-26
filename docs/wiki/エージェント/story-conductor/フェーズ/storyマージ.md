@@ -36,7 +36,7 @@ MCP `add_labels` を呼ぶ:
 - `is_pr`: false
 - `sender`: `story-conductor`
 - `receiver`: `epic-conductor`
-- `body`: story のマージ完了報告（対象 story Issue 番号 + 実装分担のサマリ）
+- `body`: story のマージ完了報告（対象 story Issue 番号 + マージ済み subsystem のサマリ）
 
 ### ラベル除去
 
