@@ -14,15 +14,15 @@
         ]
       }
     ],
-    "PostCompact": [
+    "PreCompact": [
       {
         "hooks": [
           {
-            "_description": "コンパクトの発生をモニターへ通知し、エージェントドキュメントを再送させる",
+            "_description": "コンパクトをブロックし、モニターへコンテキストリセット（/clear + ドキュメント送信）を要求する",
             "type": "command",
             "command": "python",
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/post-compact/notify_compaction.py"
+              "${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact/request_context_reset.py"
             ]
           }
         ]

@@ -20,9 +20,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# 会話履歴を空にするスラッシュコマンド
+CLEAR_COMMAND = "/clear"
 
-class CompactionRequest(BaseModel):
-    """`POST /compaction` のリクエストボディ。"""
+
+class ContextResetRequest(BaseModel):
+    """`POST /context_reset` のリクエストボディ。"""
 
     project: str
     agent_name: str
@@ -63,14 +66,14 @@ def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Ag
     # FastAPI アプリを生成する
     app = FastAPI(lifespan=lifespan)
 
-    @app.post("/compaction")
-    def receive_compaction(body: CompactionRequest) -> dict:
-        """コンパクト通知を受け、該当セッションへエージェントドキュメントを再送する。"""
+    @app.post("/context_reset")
+    def receive_context_reset(body: ContextResetRequest) -> dict:
+        """リセット要求を受け、該当セッションを /clear してからドキュメントを送り直す。"""
         # 台帳からセッションを検索する
         session = registry.find(body.project, body.agent_name, body.number)
         if session is None:
             logger.warning(
-                "台帳に無いセッションからのコンパクト通知を拒否しました: "
+                "台帳に無いセッションからのリセット要求を拒否しました: "
                 "project=%s agent_name=%s number=%s",
                 body.project,
                 body.agent_name,
@@ -82,10 +85,11 @@ def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Ag
         agent_docs = build_agent_docs(
             body.agent_name, project, ai_monitor_wiki_base=settings.ai_monitor_wiki_base
         )
-        # 該当セッションへ送信する
+        # 該当セッションを /clear で空にしてからドキュメントを送り直す（順序を逆にすると消える）
+        send_keys(session.session_name, CLEAR_COMMAND)
         send_keys(session.session_name, agent_docs)
         logger.info(
-            "コンパクト後のドキュメントを再送しました: project=%s agent_name=%s number=%s",
+            "コンテキストをリセットしてドキュメントを送り直しました: project=%s agent_name=%s number=%s",
             body.project,
             body.agent_name,
             body.number,

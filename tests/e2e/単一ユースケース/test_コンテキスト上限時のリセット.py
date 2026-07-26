@@ -1,9 +1,10 @@
-"""「コンパクト後の手順復元」の E2E テスト。"""
+"""「コンテキスト上限時のリセット」の E2E テスト。"""
 from __future__ import annotations
 
 import socket
 import subprocess
 import time
+from pathlib import Path
 
 import yaml
 
@@ -69,6 +70,16 @@ FEEDBACK = """非機能要件に「並び順の更新は 1 リクエストで完
 FEEDBACK_MARKER = "1 リクエストで完結"
 
 
+def _count_compact_boundaries() -> int:
+    """sandbox の全会話ログに含まれるコンパクト境界レコードの総数を返す。"""
+    # 過去実行のログにも境界が残るため、実行前後の差分で判定する
+    root = Path.home() / ".claude" / "projects"
+    return sum(
+        path.read_text(encoding="utf-8", errors="ignore").count("compact_boundary")
+        for path in root.glob("*ai-monitor-e2e*/*.jsonl")
+    )
+
+
 def _session_name(state_path, subsystem_number: int) -> str | None:
     """モニター台帳から subsystem-conductor セッション名を返す。"""
     if not state_path.exists():
@@ -80,15 +91,15 @@ def _session_name(state_path, subsystem_number: int) -> str | None:
     return None
 
 
-def _post_compaction(port: int, project: str, agent_name: str, number: int) -> int:
-    """モニターへコンパクト通知を送り、ステータスコードを返す。"""
+def _post_context_reset(port: int, project: str, agent_name: str, number: int) -> int:
+    """モニターへリセット要求を送り、ステータスコードを返す。"""
     import json
     import urllib.error
     import urllib.request
 
     body = json.dumps({"project": project, "agent_name": agent_name, "number": number}).encode()
     request = urllib.request.Request(
-        f"http://127.0.0.1:{port}/compaction",
+        f"http://127.0.0.1:{port}/context_reset",
         data=body,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -113,7 +124,7 @@ def test_normal(
     wait_until,
     tmp_path,
 ):
-    """コンパクト後にモニターがドキュメントを再送し、手順どおりに応答することを実環境で確認する（正常系）。"""
+    """コンパクトをブロックしてリセットし、手順どおりに応答することを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
     def _get(number):
@@ -146,12 +157,13 @@ def test_normal(
         _first_turn_done, timeout_sec=1800, message="要件確定（初回）の完了（議論中 + assignee）"
     )
 
-    # 実行: 稼働中セッションへ /compact を送ってコンテキストを圧縮する
+    # 実行: 稼働中セッションへ /compact を送って PreCompact を発火させる
     session_name = _session_name(tmp_path / "state.yaml", subsystem.number)
     assert session_name, "台帳に subsystem-conductor のセッションがない"
+    boundaries_before = _count_compact_boundaries()
     subprocess.run(["tmux", "send-keys", "-t", session_name, "/compact", "Enter"], check=True)
 
-    # PostCompact フックの発火とモニターの再送を待つ（フックはエージェントのプロセス内で走る）
+    # フックのブロックとモニターの /clear + ドキュメント送信を待つ
     def _document_resent():
         pane = subprocess.run(
             ["tmux", "capture-pane", "-p", "-S", "-3000", "-t", session_name],
@@ -160,16 +172,19 @@ def test_normal(
         return pane if "## 参考資料" in pane else None
 
     pane = wait_until(
-        _document_resent, timeout_sec=900, message="コンパクト後のエージェントドキュメント再送"
+        _document_resent, timeout_sec=300, message="リセット後のエージェントドキュメント送信"
     )
 
-    # 検証: 再送内容にフェーズ本文・参考資料の見出しが含まれている
-    assert "## フェーズ" in pane, "再送内容にフェーズ見出しがない"
-    assert "## 参考資料" in pane, "再送内容に参考資料見出しがない"
+    # 検証: 送信内容にフェーズ本文・参考資料の見出しが含まれている
+    assert "## フェーズ" in pane, "送信内容にフェーズ見出しがない"
+    assert "## 参考資料" in pane, "送信内容に参考資料見出しがない"
 
-    # 検証: 議論中 が保持されたまま（コンパクトが承認扱いにならない）
+    # 検証: コンパクトが行われていない（会話履歴に要約の境界が増えていない）
+    assert _count_compact_boundaries() == boundaries_before, "コンパクトがブロックされていない"
+
+    # 検証: 議論中 が保持されたまま（リセットが承認扱いにならない）
     labels = {label.name for label in _get(subsystem.number).labels}
-    assert "議論中" in labels, "コンパクトで 議論中 が失われている"
+    assert "議論中" in labels, "リセットで 議論中 が失われている"
 
     # 実行: コンパクト後にフィードバックを返す（コメント + assignee 外し）
     gh_live.rest.issues.create_comment(
@@ -186,7 +201,7 @@ def test_normal(
         return data if data.assignees else None
 
     data = wait_until(
-        _reply_turn_done, timeout_sec=1800, message="コンパクト後の応答ループの完了（assignee 再設定）"
+        _reply_turn_done, timeout_sec=1800, message="リセット後の応答ループの完了（assignee 再設定）"
     )
 
     # 検証: 手順どおりにフィードバックが本文へ反映されている
@@ -198,12 +213,12 @@ def test_normal(
 
 
 def test_error_when_session_released(monitor, e2e_settings_path, sandbox):
-    """解放済みセッションからのコンパクト通知を拒否することを実環境で確認する（異常系）。"""
+    """解放済みセッションからのリセット要求を拒否することを実環境で確認する（異常系）。"""
     # 準備: 台帳に無いエージェント名 + 番号（epic 完了などで解放された後を再現）
     port = yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8")).get("port", 8765)
     socket.create_connection(("127.0.0.1", port), timeout=5).close()
     # 実行
-    status = _post_compaction(port, sandbox["name"], "subsystem-conductor", 999999)
+    status = _post_context_reset(port, sandbox["name"], "subsystem-conductor", 999999)
     # 検証: 404 が返り、モニターが落ちていない
     assert status == 404
     time.sleep(1)

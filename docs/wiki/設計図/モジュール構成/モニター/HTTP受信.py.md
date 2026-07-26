@@ -15,7 +15,7 @@ MCP は同一プロセスに同居するため、ツールがセッション台�
 | ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 共通 | アプリ生成 | `server/app.py` | 関数 | [`create_app`](#アプリ生成) | FastAPI アプリの生成（MCP マウント + lifespan） | composition root から呼ぶ |
-| コンパクト通知 | コンパクト通知受信 | `server/app.py` | 関数 | [`receive_compaction`](#コンパクト通知受信) | `POST /compaction` を受けてドキュメントを再送する | MCP のルートマウントより先に登録 |
+| コンテキストリセット | コンテキストリセット受信 | `server/app.py` | 関数 | [`receive_context_reset`](#コンテキストリセット受信) | `POST /context_reset` を受けて `/clear` + ドキュメント送信を行う | MCP のルートマウントより先に登録 |
 
 ## ディレクトリ構成
 
@@ -62,7 +62,7 @@ create_app(settings, registry=registry, agents=agents)
 
 1. MCP サーバーの ASGI アプリを組み立てる（[アプリ組み立て](../MCP/GitHub操作.py.md#アプリ組み立て)）
 2. lifespan で MCP のセッション管理を開始し、その内側でポーリングループをバックグラウンドスレッドとして起動する（[周期駆動](./エージェント管理.py.md#周期駆動)を `poll_interval_sec` 間隔で繰り返し、アプリ終了時にスレッドを停止する）
-3. FastAPI アプリを生成し、[コンパクト通知受信](#コンパクト通知受信)を登録してから MCP の ASGI アプリをルートにマウントする（エージェントの接続先は `/mcp`）。
+3. FastAPI アプリを生成し、[コンテキストリセット受信](#コンテキストリセット受信)を登録してから MCP の ASGI アプリをルートにマウントする（エージェントの接続先は `/mcp`）。
    マウントより先に登録するのは、ルートマウントが後続の全パスを引き受けるため
 
 #### 例外
@@ -83,11 +83,11 @@ create_app(settings, registry=registry, agents=agents)
 
 ---
 
-### コンパクト通知受信
-> 物理名: `receive_compaction`<br>
+### コンテキストリセット受信
+> 物理名: `receive_context_reset`<br>
 > 種別: 関数
 
-`POST /compaction` を受け、該当セッションへエージェントドキュメントを再送する。
+`POST /context_reset` を受け、該当セッションへエージェントドキュメントを再送する。
 
 #### 引数
 
@@ -100,7 +100,7 @@ create_app(settings, registry=registry, agents=agents)
 引数例:
 
 ```python
-receive_compaction(project="sandbox", agent_name="subsystem-conductor", number=170)
+receive_context_reset(project="sandbox", agent_name="subsystem-conductor", number=170)
 ```
 
 #### 戻り値
@@ -119,20 +119,21 @@ receive_compaction(project="sandbox", agent_name="subsystem-conductor", number=1
 
 1. `project` / `agent_name` / `number` でセッションを検索する（[検索](./エージェント管理.py.md#検索)）
    - 見つからない場合、`404` を返す
-   - `[WARNING]` 台帳に無いセッションからのコンパクト通知を拒否した（`project` / `agent_name` / `number`）
+   - `[WARNING]` 台帳に無いセッションからのリセット要求を拒否した（`project` / `agent_name` / `number`）
 2. 設定から対象プロジェクトを引き、エージェントドキュメントを組み立てる（[エージェントドキュメント組み立て](./エージェントドキュメント.py.md#エージェントドキュメント組み立て)）
-3. 該当セッションへ送信して受理結果を返す（[キー送信](./tmux連携.py.md#キー送信)）
-   - `[INFO]` コンパクト後のドキュメントを再送した（`project` / `agent_name` / `number`）
+3. 該当セッションへ `/clear` を送る（[キー送信](./tmux連携.py.md#キー送信)）
+4. 続けて該当セッションへドキュメントを送り、受理結果を返す（[キー送信](./tmux連携.py.md#キー送信)）
+   - `[INFO]` コンテキストをリセットしてドキュメントを送り直した（`project` / `agent_name` / `number`）
 
 #### 例外
 
 | 例外名 | 発生条件 | メッセージ | 補足 |
 | --- | --- | --- | --- |
-| `HTTPException` | 台帳に該当セッションが無い | `404` | 解放済みセッションからの通知 |
+| `HTTPException` | 台帳に該当セッションが無い | `404` | 解放済みセッションからの要求 |
 
 #### 単体テスト
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_receive_compaction` | 正常 | 再送 | 台帳に該当セッションあり | tmux / エージェントドキュメント組み立て | 該当セッションへ 1 回送信され `{"ok": true}` が返る | - |
-| `test_receive_compaction_when_session_missing` | 異常 | セッション不明 | 台帳に該当なし | tmux | `404` が返り送信が発生しない | 例外表「台帳に該当セッションが無い」に対応 |
+| `test_receive_context_reset` | 正常 | リセットと送信 | 台帳に該当セッションあり | tmux / エージェントドキュメント組み立て | 該当セッションへ `/clear` → ドキュメントの順に送信され `{"ok": true}` が返る | - |
+| `test_receive_context_reset_when_session_missing` | 異常 | セッション不明 | 台帳に該当なし | tmux | `404` が返り送信が発生しない | 例外表「台帳に該当セッションが無い」に対応 |

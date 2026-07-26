@@ -1,4 +1,4 @@
-"""「コンパクト通知」の結合テスト。"""
+"""「コンテキストリセット」の結合テスト。"""
 from __future__ import annotations
 
 import pytest
@@ -60,7 +60,7 @@ def wiki(tmp_path, monkeypatch, mon_settings, mon_project):
 
 @pytest.fixture
 def client(mon_settings, mon_registry, label_settings, agent_models, monkeypatch, wiki):
-    """コンパクト通知を受けるアプリのテストクライアントを返す。"""
+    """リセット要求を受けるアプリのテストクライアントを返す。"""
     import ai_monitor.main as main_mod
 
     # lifespan が起動するポーリングループを空回しにする
@@ -74,33 +74,34 @@ def client(mon_settings, mon_registry, label_settings, agent_models, monkeypatch
 
 
 def test_normal(client, tmux_calls, session_factory):
-    """通知の受理 → 該当セッションへのドキュメント再送を確認する（正常系）。"""
+    """要求の受理 → 該当セッションへの /clear + ドキュメント送信を確認する（正常系）。"""
     # 準備
     session = session_factory("subsystem-conductor", 170)
     # 実行
     response = client.post(
-        "/compaction",
+        "/context_reset",
         json={"project": "sandbox", "agent_name": "subsystem-conductor", "number": 170},
     )
-    # 検証: 200 + 該当セッションへ 1 回送信
+    # 検証: 200 + 該当セッションへ /clear → ドキュメントの順で送信
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     # send_keys は本文と Enter で 2 回 tmux を呼ぶため、本文送信だけを数える
     sends = [c for c in tmux_calls.calls if c[0] == "send-keys" and c[3] != "Enter"]
-    assert len(sends) == 1
-    assert sends[0][2] == session.session_name
+    assert len(sends) == 2
+    assert all(c[2] == session.session_name for c in sends)
+    assert sends[0][3] == "/clear"
     # フェーズ + 参考資料 + Wiki 索引が載る
-    sent_text = sends[0][3]
+    sent_text = sends[1][3]
     assert "# 初期処理" in sent_text
     assert "# 規約: コメント" in sent_text
     assert "規約.md" in sent_text
 
 
 def test_error_when_session_missing(client, tmux_calls):
-    """台帳に無いセッションからの通知を拒否することを確認する（異常系）。"""
+    """台帳に無いセッションからの要求を拒否することを確認する（異常系）。"""
     # 実行
     response = client.post(
-        "/compaction",
+        "/context_reset",
         json={"project": "sandbox", "agent_name": "subsystem-conductor", "number": 999},
     )
     # 検証: 404 + tmux への送信なし

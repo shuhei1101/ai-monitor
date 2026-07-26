@@ -288,16 +288,28 @@ grep -oE 'InputValidationError[^"]*' "$latest" | head -3      # 引数不足・�
 
 ## E2E テスト実行前の必須確認（メモ）
 
-E2E は Wiki をローカル読みで回す（`settings.e2e.yaml` の `ai_monitor_wiki_base` / `projects[].wiki_base` が両方ローカルクローンを指す）。
-push とキャッシュ待ちなしで最新のフェーズページが反映されるので、実行前の push は不要。
+反映経路が 3 つあり、必要な手順が違う。
+
+| 変更対象 | 反映経路 | push / プラグイン更新 |
+| --- | --- | --- |
+| `docs/wiki/` のフェーズ・規約 | モニターがローカルクローンから直読み | 不要 |
+| `src/` のモニター実装 | E2E が `PYTHONPATH=src` で直接起動 | 不要 |
+| `plugins/` のフック・注入スクリプト・定数 | エージェントセッションがプラグインキャッシュから読む | **必要** |
+
+`plugins/` を触ったときは、エージェント側に届かない。
+マーケットプレイスは GitHub リポジトリを取得元にしているため、次の順で反映する。
+
+1. `plugins/` の変更をコミットして master へ push する（**コミット / push はユーザーが行う**）
+2. `.claude-plugin/marketplace.json` と `plugins/ai-monitor/.claude-plugin/plugin.json` のバージョンを同じ値に上げておく（同一バージョンのままではキャッシュが作り直されない）
+3. ユーザーが `/plugin` でマーケットプレイスを更新し、`/reload-plugins` を実行する
+4. `~/.claude/plugins/cache/ai-monitor/ai-monitor/{新バージョン}/` が作られたことを確認する
 
 実行前に確認する:
 
-- 両クローン（ai-monitor / sandbox）の作業ツリーが、読ませたい内容になっていること（コミット済みである必要はない）
+- 両クローン（ai-monitor / sandbox）の作業ツリーが、読ませたい内容になっていること
+- `plugins/` を変更した場合、上記の反映が済んでいること
 - `config/agent_phases.yaml` に載っている全フェーズページが実在すること
 - ポート 8765 が空き・tmux セッションなし・ai-monitor に余分なブランチなし
-
-読み元をリモート（raw URL）に切り替えて回す場合だけ、master への push とその反映確認が要る。
 
 ## プラグイン更新時のバージョン同期（メモ）
 

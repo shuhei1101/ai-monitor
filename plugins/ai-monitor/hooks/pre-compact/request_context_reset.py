@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""コンパクト発生をモニターへ通知する PostCompact フック。"""
+"""コンパクトをブロックし、モニターへコンテキストリセットを要求する PreCompact フック。"""
 from __future__ import annotations
 
 import json
@@ -12,13 +12,13 @@ _REQUIRED_ENV = ("AI_MONITOR_PROJECT", "AI_MONITOR_AGENT", "AI_MONITOR_NUMBER", 
 
 
 def main() -> int:
-    """環境変数から自セッションの素性を組み立て、モニターへ POST する。"""
-    # 4 変数を読む（欠けていればモニター起動でないセッションなので何もしない）
+    """モニターへリセットを要求し、コンパクトをブロックする指示を標準出力に書く。"""
+    # 4 変数を読む（欠けていればモニター起動でないセッションなのでコンパクトを通常どおり行わせる）
     values = {name: os.environ.get(name) for name in _REQUIRED_ENV}
     if not all(values.values()):
         return 0
 
-    # モニターのコンパクト通知エンドポイントへ POST する
+    # モニターのコンテキストリセットエンドポイントへ POST する
     body = json.dumps(
         {
             "project": values["AI_MONITOR_PROJECT"],
@@ -27,17 +27,20 @@ def main() -> int:
         }
     ).encode("utf-8")
     request = urllib.request.Request(
-        f"http://127.0.0.1:{values['AI_MONITOR_PORT']}/compaction",
+        f"http://127.0.0.1:{values['AI_MONITOR_PORT']}/context_reset",
         data=body,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    # 通信に失敗しても握りつぶす（再送が届かないだけで、次の状態変化で再開できる）
     try:
         with urllib.request.urlopen(request):
             pass
     except Exception:
+        # リセットが届かないのにコンパクトも止めると、コンテキストが溢れたまま進んでしまう
         return 0
+
+    # 要求が届いたのでコンパクトをブロックする（モニターが /clear + ドキュメント送信で復元する）
+    print(json.dumps({"decision": "block", "reason": "モニターがコンテキストをリセットします"}))
     return 0
 
 
