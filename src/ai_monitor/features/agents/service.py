@@ -23,7 +23,6 @@ RESUME_TEXT = "状態が変化しました。最新の Issue/PR 状態と自分�
 
 RESET_SNAPSHOT = "コンテキスト上限に達したためセッションを作り直しました。最新の Issue/PR 状態は初期処理で取得してください。"
 
-_PRIORITY_RANKS = {"優先度:急ぎ": 0, "優先度:いつでも": 2}
 
 
 def poll(
@@ -35,6 +34,8 @@ def poll(
     telemetry: TelemetrySettings | None,
     port: int,
     ai_monitor_wiki_base: str,
+    priority_urgent: str,
+    priority_low: str,
 ) -> None:
     """対象の絞り込みから送信までのポーリング 1 周期を実行する。"""
     # 確認ラベルあり + assignee なしの対象を絞り込む
@@ -42,7 +43,8 @@ def poll(
     # 処理中ラベルが付いた対象を除外する（send-keys 済みで報告待ち）
     matched = [t for t in matched if agent.processing_label not in t.labels]
     # 優先度順にソートして 1 件ずつ処理する
-    for target in sorted(matched, key=_sort_key):
+    ranks = {priority_urgent: 0, priority_low: 2}
+    for target in sorted(matched, key=lambda t: _sort_key(t, ranks)):
         _process_one(
             project,
             agent,
@@ -247,13 +249,13 @@ def _process_one(
     )
 
 
-def _sort_key(target: MonitorTarget) -> tuple[int, int]:
+def _sort_key(target: MonitorTarget, ranks: dict[str, int]) -> tuple[int, int]:
     """優先度ソートのキーを求める。"""
     # 優先度ラベルをランクに変換する（急ぎ = 0 / なし = 1 / いつでも = 2）
     rank = 1
     for label in target.labels:
-        if label in _PRIORITY_RANKS:
-            rank = _PRIORITY_RANKS[label]
+        if label in ranks:
+            rank = ranks[label]
     # タプルの辞書順比較でランク昇順 → 同ランクは番号昇順になる
     return (rank, target.number)
 

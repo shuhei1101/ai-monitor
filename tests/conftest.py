@@ -199,10 +199,17 @@ def label_settings():
         # フィールド名からラベル値を機械生成する（confirm_epic_conductor → 確認:epic-conductor）
         if field == "in_discussion":
             values[field] = "議論中"
+        elif field == "confirm_prefix":
+            values[field] = "確認:"
+        elif field.startswith("layer_"):
+            values[field] = "layer:" + field.removeprefix("layer_").replace("_", "-")
         elif field.startswith("confirm_"):
             values[field] = "確認:" + field.removeprefix("confirm_").replace("_", "-")
         elif field.startswith("processing_"):
             values[field] = "処理中:" + field.removeprefix("processing_").replace("_", "-")
+    # 優先度は機械生成できないため実値を明示する
+    values["priority_urgent"] = "優先度:急ぎ"
+    values["priority_low"] = "優先度:いつでも"
     return LabelSettings(**values)
 
 
@@ -277,10 +284,14 @@ def mcp_agents():
 
 
 @pytest.fixture
-def api(mon_settings, mon_registry, mcp_agents, mcp_ctx_factory):
-    """設定・台帳・エージェント一覧・コンテキストを束ねた MCP ツール呼び出し口を返す。"""
+def api(mon_settings, mon_registry, mcp_agents, mcp_ctx_factory, label_settings):
+    """設定・台帳・エージェント一覧・ラベル設定・コンテキストを束ねた MCP ツール呼び出し口を返す。"""
     deps = dict(
-        ctx=mcp_ctx_factory(), settings=mon_settings, registry=mon_registry, agents=mcp_agents
+        ctx=mcp_ctx_factory(),
+        settings=mon_settings,
+        registry=mon_registry,
+        agents=mcp_agents,
+        label_settings=label_settings,
     )
 
     class _Tools:

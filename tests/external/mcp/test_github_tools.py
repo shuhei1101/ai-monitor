@@ -189,6 +189,7 @@ def test_ext_list_review_threads(pr_factory, api):
     assert threads[0].start_line == 1
     assert threads[0].line == 3
     assert threads[0].is_resolved is False
+    assert threads[0].comments[0].diff_hunk is not None
 
 
 def test_ext_resolve_review_threads(pr_factory, api):
@@ -350,6 +351,21 @@ def test_ext_create_child_issue(issue_factory, gh_live, repo_ctx, api):
     # 検証
     linked_parent = gh_live.rest.issues.get_parent(owner=owner, repo=repo, issue_number=res.issue_number).parsed_data
     assert linked_parent.number == parent.number
+    gh_live.rest.issues.update(
+        owner=owner, repo=repo, issue_number=res.issue_number, state="closed", state_reason="not_planned"
+    )
+
+
+def test_ext_create_intake_issue(gh_live, repo_ctx, api):
+    """親なし + 固定ラベルでの起票を確認する（正常系）。"""
+    # 準備
+    owner, repo = repo_ctx
+    # 実行
+    res = api.create_intake_issue(title="外部疎通テスト intake 起票", body="自動クローズ予定")
+    # 検証: 固定ラベルが付き、親を持たない
+    created = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=res.issue_number).parsed_data
+    assert {label.name for label in created.labels} == {"layer:intake", "確認:intake-issue-triager"}
+    assert res.parent_issue_number is None
     gh_live.rest.issues.update(
         owner=owner, repo=repo, issue_number=res.issue_number, state="closed", state_reason="not_planned"
     )

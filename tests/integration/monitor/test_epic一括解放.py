@@ -48,7 +48,7 @@ def _prev_targets():
 def _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, current_items):
     agents = build_agents(label_settings, agent_models=agent_models)
     return run_cycle(
-        mon_settings, agents, registry=mon_registry, prev_targets=prev, last_heartbeat_at=FUTURE
+        mon_settings, agents, registry=mon_registry, prev_targets=prev, last_heartbeat_at=FUTURE, labels=label_settings
     )
 
 

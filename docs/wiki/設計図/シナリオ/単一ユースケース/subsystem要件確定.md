@@ -4,7 +4,8 @@ template_version: 1.0.0
 
 # subsystem要件確定
 
-subsystem-conductor が subsystem Issue の本文整形 + 現状調査（既存コード・関連テスト・関連 Issue/PR・再現ログ）+ システム要件（機能 / 非機能 / スコープ外）確定を行い、完了時に subsystem Draft PR を作成して architect に設計を引き渡す単一ユースケース。
+subsystem-conductor が subsystem Issue の本文整形 + 現状調査（関連 Issue/PR・関連ドキュメント）+ システム要件（機能 / 非機能 / スコープ外）確定を行い、完了時に subsystem Draft PR を作成して architect に設計を引き渡す単一ユースケース。
+要件の判断材料は親 story と設計 Wiki に閉じる（実装コードの調査は architect の SS設計 が担う）。
 
 対応エージェント: `subsystem-conductor`
 
@@ -35,7 +36,7 @@ sequenceDiagram
   ORC->>MON: tmux セッション作成 + skill 起動
   participant REPO as リポジトリ
   activate MON
-  MON->>REPO: 設計図 Wiki を起点に既存コードを調査<br>（関連 Issue / PR 収集のみサブエージェント並列）
+  MON->>REPO: 親 story のシナリオと<br>設計図 Wiki を調査<br>（関連 Issue / PR 収集のみサブエージェント並列）
   MON->>GH: 概要 / 背景 + 現状 セクションを<br>subsystem Issue 本文に反映
   MON->>GH: 機能・非機能要件の観点を洗い出し<br>→システム要件 SA セクションを<br>subsystem Issue 本文に反映
   MON->>GH: subsystem Issue に完了報告 +<br>確認事項を投稿
@@ -84,8 +85,9 @@ sequenceDiagram
 
 ### 期待値
 
-- 本文に `## 現状`（関連実装コード / 関連テスト / 関連 Issue/PR / 関連ドキュメント）と `## システム要件（SA）`（機能要件 / 非機能要件 / スコープ外）が揃っている
-- バグ Issue の場合は `### 再現手順` と `### 既存テスト実行結果` も記録されている
+- 本文に `## 現状`（関連 Issue/PR / 関連ドキュメント）と `## システム要件（SA）`（機能要件 / 非機能要件 / スコープ外）が揃っている
+- バグ Issue の場合は `### 再現手順` も記録されている
+- 実装コード・テストコードを読み出した記録がない（要件の判断材料は親 story と設計 Wiki に閉じる）
 - subsystem Draft PR（base=親 story ブランチ）が作成され、本文に `## 紐づく Issue` と `## タスク一覧`（Wiki 修正・実装・テスト実行の To Do）が記入されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - タスク一覧の確認コメントが投稿されている
@@ -93,7 +95,7 @@ sequenceDiagram
 
 ### 補足
 
-- 関連 Issue / PR の収集は `related-issue-finder` / `related-pr-finder` サブエージェントを並列起動（コードベース調査・要件観点の洗い出しはメインエージェントが直接実施）
+- 関連 Issue / PR の収集は `related-issue-finder` / `related-pr-finder` サブエージェントを並列起動（設計 Wiki の調査・要件観点の洗い出しはメインエージェントが直接実施）
 
 ## 異常シナリオ
 

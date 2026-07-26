@@ -29,7 +29,7 @@ def _intake_ns(number, total, completed):
 
 def _cycle(mon_settings, label_settings, agent_models, mon_registry):
     agents = build_agents(label_settings, agent_models=agent_models)
-    return run_cycle(mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=FUTURE)
+    return run_cycle(mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=FUTURE, labels=label_settings)
 
 
 def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry):

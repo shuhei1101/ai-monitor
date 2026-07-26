@@ -70,7 +70,7 @@ def client(mon_settings, mon_registry, label_settings, agent_models, monkeypatch
         main_mod, "run_cycle", lambda *args, **kwargs: ({}, "1970-01-01T00:00:00+00:00")
     )
     agents = build_agents(label_settings, agent_models=agent_models)
-    app = app_mod.create_app(mon_settings, registry=mon_registry, agents=agents)
+    app = app_mod.create_app(mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings)
     with TestClient(app, base_url="http://localhost:8765") as client:
         yield client
 

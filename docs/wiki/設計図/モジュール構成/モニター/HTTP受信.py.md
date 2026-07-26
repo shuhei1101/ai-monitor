@@ -45,11 +45,12 @@ FastAPI アプリを生成し、MCP サーバーのマウントと lifespan（�
 | 全体設定 | `settings` | [`Settings`](./エージェント管理.py.md#全体設定) | ✅ | - | 周期・閾値の出所 | - |
 | セッション台帳 | `registry` | [`SessionRegistry`](./エージェント管理.py.md#セッション台帳) | ✅ | - | MCP ツールとポーリングが共有する台帳 | キーワード引数 |
 | エージェント一覧 | `agents` | [`list[Agent]`](./エージェント管理.py.md#エージェント定義) | ✅ | - | 処理中ラベルの解決・ポーリングに使う | キーワード引数 |
+| ラベル設定 | `label_settings` | [`LabelSettings`](./エージェント管理.py.md#ラベル設定) | ✅ | - | ラベル値の出所 | キーワード引数。MCP と周期駆動へ渡す |
 
 引数例:
 
 ```python
-create_app(settings, registry=registry, agents=agents)
+create_app(settings, registry=registry, agents=agents, label_settings=labels)
 ```
 
 #### 戻り値

@@ -44,7 +44,7 @@ from ai_monitor.mcp.models import (
     WorktreeRemoveResult,
 )
 from ai_monitor.mcp.wiki import read_wiki_pages
-from ai_monitor.shared.settings import MonitoredProject, Settings
+from ai_monitor.shared.settings import LabelSettings, MonitoredProject, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +53,6 @@ SETTINGS_PATH = Path.home() / ".config" / "ai-monitor" / "settings.yaml"
 # 呼び出し元が対象プロジェクトを名乗るリクエストヘッダ
 PROJECT_HEADER = "X-Project"
 
-# ユーザー専用ラベル（エージェントからの除去を拒否する）
-IN_DISCUSSION_LABEL = "議論中"
 
 # 選択肢の記号（A. B. C. ...）
 CHOICE_LETTERS = "ABCDEFGHIJ"
@@ -77,7 +75,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       reviewThreads(first: 100) {
-        nodes { id isResolved path startLine line comments(first: 50) { nodes { id body author { login } createdAt url } } }
+        nodes { id isResolved path startLine line comments(first: 50) { nodes { id body diffHunk author { login } createdAt url } } }
       }
     }
   }
@@ -640,6 +638,7 @@ def list_review_threads(
                 created_at=c.get("createdAt"),
                 author=UserRef(login=c["author"]["login"]) if c.get("author") else None,
                 url=c.get("url"),
+                diff_hunk=c.get("diffHunk"),
             )
             for c in node["comments"]["nodes"]
         ]
@@ -681,12 +680,20 @@ def add_labels(
 
 @_log_tool_call
 def remove_labels(
-    number: int, is_pr: bool, labels: list[str], *, ctx: Context, settings: Settings
+    number: int,
+    is_pr: bool,
+    labels: list[str],
+    *,
+    ctx: Context,
+    settings: Settings,
+    label_settings: LabelSettings,
 ) -> LabelsResult:
     """ラベルを除去して除去後の一覧を返す（議論中は対象外）。"""
     # labels に議論中が含まれていれば ValueError を投げる（API は呼ばない）
-    if IN_DISCUSSION_LABEL in labels:
-        raise ValueError(f"{IN_DISCUSSION_LABEL} ラベルは除去対象外です（外せるのはユーザーのみ）")
+    if label_settings.in_discussion in labels:
+        raise ValueError(
+            f"{label_settings.in_discussion} ラベルは除去対象外です（外せるのはユーザーのみ）"
+        )
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     client = _get_client()
     # REST でラベルを 1 件ずつ除去する（付与されていないラベルは無視）
@@ -709,11 +716,14 @@ def transition_phase(
     *,
     ctx: Context,
     settings: Settings,
+    label_settings: LabelSettings,
 ) -> LabelsResult:
     """ラベルの除去 + 追加を 1 呼び出しで実行する。"""
     # remove_labels_ に議論中が含まれていれば ValueError を投げる（API は呼ばない）
-    if remove_labels_ and IN_DISCUSSION_LABEL in remove_labels_:
-        raise ValueError(f"{IN_DISCUSSION_LABEL} ラベルは除去対象外です（外せるのはユーザーのみ）")
+    if remove_labels_ and label_settings.in_discussion in remove_labels_:
+        raise ValueError(
+            f"{label_settings.in_discussion} ラベルは除去対象外です（外せるのはユーザーのみ）"
+        )
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     client = _get_client()
     # remove_labels_ の除去 → add_labels_ の追加の順で実行する
@@ -832,6 +842,30 @@ def create_child_issue(
     return CreatedIssueResult(
         issue_number=created.number, url=created.html_url, parent_issue_number=parent_issue_number
     )
+
+
+def create_intake_issue(
+    title: str,
+    body: str,
+    *,
+    ctx: Context,
+    settings: Settings,
+    label_settings: LabelSettings,
+) -> CreatedIssueResult:
+    """親を持たない intake Issue を作成する。"""
+    client = _get_client()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
+    # REST でタイトル / 本文と固定ラベル付きの Issue を作成する
+    # （呼び出し側に選ばせず、レイヤー判定を必ず intake-issue-triager に通す）
+    created = client.rest.issues.create(
+        owner=owner,
+        repo=repo,
+        title=title,
+        body=body,
+        labels=[label_settings.layer_intake, label_settings.confirm_intake_issue_triager],
+    ).parsed_data
+    # Sub-issue リンクは付けずに CreatedIssueResult を返す
+    return CreatedIssueResult(issue_number=created.number, url=created.html_url)
 
 
 @_log_tool_call
@@ -1023,11 +1057,13 @@ def remove_watch_targets(
     return MonitorAck(ok=True)
 
 
-def build_mcp_app(settings: Settings, *, registry: SessionRegistry, agents: list[Agent]) -> Any:
+def build_mcp_app(
+    settings: Settings, *, registry: SessionRegistry, agents: list[Agent], label_settings: LabelSettings
+) -> Any:
     """全ツールを登録した Streamable HTTP の ASGI アプリを返す。"""
     # MCP サーバーのインスタンスを作る
     mcp = FastMCP("ai-monitor-tools")
-    # 全ツールに設定・台帳・エージェント一覧を束ねて登録する（束ねた引数は公開シグネチャから隠す）
+    # 全ツールに設定・台帳・エージェント一覧・ラベル設定を束ねて登録する（束ねた引数は公開シグネチャから隠す）
     for tool, title, tool_annotations in (
         (get_issue_or_pr, "Issue・PR情報取得", _READ_ONLY),
         (comment, "コメント投稿", None),
@@ -1050,6 +1086,7 @@ def build_mcp_app(settings: Settings, *, registry: SessionRegistry, agents: list
         (close, "クローズ", _DESTRUCTIVE),
         (reopen_issue, "Issue再オープン", None),
         (create_child_issue, "子Issue作成", None),
+        (create_intake_issue, "新規Issue起票", None),
         (create_draft_pr, "DraftPR作成", None),
         (mark_pr_ready, "PR_Ready化", None),
         (merge_pr, "PRマージ", _DESTRUCTIVE),
@@ -1060,7 +1097,7 @@ def build_mcp_app(settings: Settings, *, registry: SessionRegistry, agents: list
         (remove_watch_targets, "監視対象除去", _DESTRUCTIVE),
     ):
         mcp.add_tool(
-            _bind(tool, settings=settings, registry=registry, agents=agents),
+            _bind(tool, settings=settings, registry=registry, agents=agents, label_settings=label_settings),
             title=title,
             annotations=tool_annotations,
         )

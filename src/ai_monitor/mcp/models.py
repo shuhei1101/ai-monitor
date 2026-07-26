@@ -56,6 +56,8 @@ class IssueCommentEntry(BaseModel):
     author: UserRef | None = None
     url: str | None = None
     is_minimized: bool = False
+    # 指摘箇所の周辺 diff（インラインコメントのみ設定される）
+    diff_hunk: str | None = None
 
 
 class ReviewThread(BaseModel):
@@ -109,11 +111,12 @@ class EmptyResult(BaseModel):
 
 
 class CreatedIssueResult(BaseModel):
-    """子 Issue 作成の結果。"""
+    """Issue 作成の結果。"""
 
     issue_number: int
     url: str
-    parent_issue_number: int
+    # 親へ Sub-issue リンクした場合のみ入る（intake 起票は親を持たない）
+    parent_issue_number: int | None = None
 
 
 class CreatedPRResult(BaseModel):

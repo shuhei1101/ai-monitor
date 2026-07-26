@@ -26,6 +26,7 @@ poll_interval_sec: 5
 session_timeout_min: 10
 heartbeat_interval_sec: 20
 state_path: data/state.yaml
+ai_monitor_wiki_base: /tmp/ai-monitor/docs/wiki
 projects:
   - name: sandbox
     repo: shuhei1101/ai-monitor-e2e
@@ -40,6 +41,7 @@ def tmp_config_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(settings_mod, "CONFIG_DIR", tmp_path)
     monkeypatch.delenv("AI_MONITOR_ENV", raising=False)
     monkeypatch.delenv("PORT", raising=False)
+    monkeypatch.delenv("AI_MONITOR_WIKI_BASE", raising=False)
     (tmp_path / "settings.yaml").write_text(BASE_YAML, encoding="utf-8")
     return tmp_path
 
@@ -55,6 +57,7 @@ def test_settings(tmp_config_dir):
     assert settings.session_timeout_min == 10
     assert settings.heartbeat_interval_sec == 20
     assert settings.state_path == "data/state.yaml"
+    assert settings.ai_monitor_wiki_base == "/tmp/ai-monitor/docs/wiki"
     assert settings.projects[0].name == "sandbox"
     assert settings.projects[0].repo == "shuhei1101/ai-monitor-e2e"
 

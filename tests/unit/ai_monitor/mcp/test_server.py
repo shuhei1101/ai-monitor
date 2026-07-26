@@ -50,6 +50,7 @@ EXPECTED_TOOLS = {
     "reopen_issue",
     "mark_pr_ready",
     "create_child_issue",
+    "create_intake_issue",
     "create_draft_pr",
     "merge_pr",
     "worktree_create",
@@ -107,20 +108,20 @@ def _list_tools(app):
 # ---- ツール定義群 ----
 
 
-def test_registered_tools(mon_settings, mon_registry, mcp_agents):
+def test_registered_tools(mon_settings, mon_registry, mcp_agents, label_settings):
     """全ツールの登録を確認する（正常系）。"""
     # 準備
-    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents)
+    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents, label_settings=label_settings)
     # 実行
     names = {t.name for t in _list_tools(app)}
     # 検証
     assert names == EXPECTED_TOOLS
 
 
-def test_tool_annotations(mon_settings, mon_registry, mcp_agents):
+def test_tool_annotations(mon_settings, mon_registry, mcp_agents, label_settings):
     """読み取り専用 / 破壊的操作のヒント宣言を確認する（正常系）。"""
     # 準備
-    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents)
+    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents, label_settings=label_settings)
     # 実行
     tools = {t.name: t for t in _list_tools(app)}
     # 検証
@@ -508,24 +509,24 @@ def _threads_payload(nodes):
     return {"repository": {"pullRequest": {"reviewThreads": {"nodes": nodes}}}}
 
 
-def _thread_node(node_id, resolved=False, start_line=None, line=48):
+def _thread_node(node_id, resolved=False, start_line=None, line=48, diff_hunk="@@ -40,3 +40,4 @@\n+added"):
+    comment = {
+        "id": f"{node_id}-c1",
+        "body": "指摘",
+        "author": {"login": "shuhei1101"},
+        "createdAt": "2026-07-20T00:00:00Z",
+        "url": "http://r/1",
+    }
+    # diffHunk が None のときは GraphQL 応答からキーごと欠落させる
+    if diff_hunk is not None:
+        comment["diffHunk"] = diff_hunk
     return {
         "id": node_id,
         "isResolved": resolved,
         "path": "src/a.py",
         "startLine": start_line,
         "line": line,
-        "comments": {
-            "nodes": [
-                {
-                    "id": f"{node_id}-c1",
-                    "body": "指摘",
-                    "author": {"login": "shuhei1101"},
-                    "createdAt": "2026-07-20T00:00:00Z",
-                    "url": "http://r/1",
-                }
-            ]
-        },
+        "comments": {"nodes": [comment]},
     }
 
 
@@ -543,6 +544,17 @@ def test_list_review_threads(gh, api):
     assert res[1].start_line == 42 and res[1].line == 48
     assert res[0].path == "src/a.py"
     assert res[0].comments[0].body == "指摘"
+    assert res[0].comments[0].diff_hunk == "@@ -40,3 +40,4 @@\n+added"
+
+
+def test_list_review_threads_when_diff_hunk_missing(gh, api):
+    """diffHunk 欠落時の既定を確認する（正常系）。"""
+    # 準備
+    gh.graphql.return_value = _threads_payload([_thread_node("PRRT_1", diff_hunk=None)])
+    # 実行
+    res = api.list_review_threads(52)
+    # 検証
+    assert res[0].comments[0].diff_hunk is None
 
 
 def test_list_review_threads_when_resolved_mixed(gh, api):
@@ -733,6 +745,21 @@ def test_create_child_issue(gh, api):
     assert gh.rest.issues.add_sub_issue.call_args.kwargs["issue_number"] == 35
     assert gh.rest.issues.add_sub_issue.call_args.kwargs["sub_issue_id"] == 999
     assert res == CreatedIssueResult(issue_number=36, url="http://i/36", parent_issue_number=35)
+
+
+def test_create_intake_issue(gh, api):
+    """固定ラベル付きの intake Issue 起票を確認する（正常系）。"""
+    # 準備
+    gh.rest.issues.create.return_value = _resp(NS(number=58, id=1001, html_url="http://i/58"))
+    # 実行
+    res = api.create_intake_issue(title="並び替えを追加したい", body="#42 の会話から派生。")
+    # 検証: ラベルは呼び出し側に選ばせず固定・親リンクは付けない
+    assert gh.rest.issues.create.call_args.kwargs["labels"] == [
+        "layer:intake",
+        "確認:intake-issue-triager",
+    ]
+    gh.rest.issues.add_sub_issue.assert_not_called()
+    assert res == CreatedIssueResult(issue_number=58, url="http://i/58", parent_issue_number=None)
 
 
 def test_create_draft_pr(gh, api):
@@ -1174,20 +1201,20 @@ def test_resolve_project_when_unknown_name(mon_settings, mcp_ctx_factory):
 # ---- アプリ組み立て ----
 
 
-def test_build_mcp_app(mon_settings, mon_registry, mcp_agents):
+def test_build_mcp_app(mon_settings, mon_registry, mcp_agents, label_settings):
     """ツールの登録を確認する（正常系）。"""
     # 実行
-    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents)
+    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents, label_settings=label_settings)
     # 検証
     tools = _list_tools(app)
     assert {t.name for t in tools} == EXPECTED_TOOLS
     assert len(tools) == len(EXPECTED_TOOLS)
 
 
-def test_build_mcp_app_when_signature(mon_settings, mon_registry, mcp_agents):
+def test_build_mcp_app_when_signature(mon_settings, mon_registry, mcp_agents, label_settings):
     """内部引数の除去を確認する（正常系）。"""
     # 実行
-    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents)
+    app = server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents, label_settings=label_settings)
     # 検証
     schemas = {t.name: t.inputSchema.get("properties", {}) for t in _list_tools(app)}
     for name, properties in schemas.items():

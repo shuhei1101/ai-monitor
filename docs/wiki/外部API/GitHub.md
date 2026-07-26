@@ -870,7 +870,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       reviewThreads(first: 100) {
-        nodes { id isResolved path startLine line comments(first: 50) { nodes { id body author { login } createdAt url } } }
+        nodes { id isResolved path startLine line comments(first: 50) { nodes { id body diffHunk author { login } createdAt url } } }
       }
     }
   }

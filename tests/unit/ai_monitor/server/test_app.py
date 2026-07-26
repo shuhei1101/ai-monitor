@@ -14,12 +14,12 @@ def agents() -> list[Agent]:
 
 
 @pytest.fixture
-def client(mon_settings, mon_registry, agents, monkeypatch):
+def client(mon_settings, mon_registry, agents, monkeypatch, label_settings):
     import ai_monitor.main as main_mod
 
     # lifespan が起動するポーリングループを空回しにする
     monkeypatch.setattr(main_mod, "run_cycle", lambda *args, **kwargs: ({}, "1970-01-01T00:00:00+00:00"))
-    app = app_mod.create_app(mon_settings, registry=mon_registry, agents=agents)
+    app = app_mod.create_app(mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings)
     with TestClient(app, base_url="http://localhost:8765") as client:
         yield client
 

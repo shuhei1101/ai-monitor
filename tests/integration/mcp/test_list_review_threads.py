@@ -17,7 +17,18 @@ def _node(node_id, resolved=False):
         "path": "src/a.py",
         "startLine": None,
         "line": 42,
-        "comments": {"nodes": [{"id": f"{node_id}-c1", "body": "指摘", "author": {"login": "x"}, "createdAt": "t", "url": "u"}]},
+        "comments": {
+            "nodes": [
+                {
+                    "id": f"{node_id}-c1",
+                    "body": "指摘",
+                    "diffHunk": "@@ -40,3 +40,4 @@\n+added",
+                    "author": {"login": "x"},
+                    "createdAt": "t",
+                    "url": "u",
+                }
+            ]
+        },
     }
 
 
@@ -30,6 +41,7 @@ def test_normal(gh, api):
     # 検証
     assert [t.node_id for t in res] == ["PRRT_1"]
     assert res[0].comments[0].body == "指摘"
+    assert res[0].comments[0].diff_hunk == "@@ -40,3 +40,4 @@\n+added"
 
 
 def test_normal_when_include_resolved(gh, api):

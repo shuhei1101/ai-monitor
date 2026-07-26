@@ -827,7 +827,7 @@ CommentResult(node_id="PRRC_kwDO...", url="https://github.com/.../pull/52#discus
 > 物理名: `list_review_threads`<br>
 > 種別: 関数
 
-PR のレビュースレッド（インライン指摘のスレッド）を取得する。
+PR のレビュースレッド（インライン指摘のスレッド）を、各コメントの指摘箇所の周辺 diff 付きで取得する。
 
 #### 引数
 
@@ -856,7 +856,7 @@ list_review_threads(52)
 
 #### 処理
 
-1. GraphQL で PR のレビュースレッド一覧（path / startLine / line / isResolved / コメント群）を取得する
+1. GraphQL で PR のレビュースレッド一覧（path / startLine / line / isResolved / コメント群 + diffHunk）を取得する
 2. `include_resolved` が `False` の場合、解決済みスレッドを除外する
 3. [レビュースレッド](#レビュースレッド)の配列に変換して返す
 
@@ -870,15 +870,16 @@ list_review_threads(52)
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_list_review_threads` | 正常 | スレッドの変換 | 単一行 + 範囲コメントが混在する GraphQL 応答 | githubkit | `node_id` / `path` / `start_line` / `line` / コメント群（投稿順）が対応する | - |
+| `test_list_review_threads` | 正常 | スレッドの変換 | 単一行 + 範囲コメントが混在する GraphQL 応答 | githubkit | `node_id` / `path` / `start_line` / `line` / コメント群（投稿順）/ `diff_hunk` が対応する | - |
 | `test_list_review_threads_when_resolved_mixed` | 正常 | 解決済みの除外 | 未解決 + 解決済みが混在する応答 | githubkit | 未解決スレッドだけが返る | - |
 | `test_list_review_threads_when_include_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` | githubkit | 解決済みも `is_resolved=True` で返る | - |
+| `test_list_review_threads_when_diff_hunk_missing` | 正常 | diffHunk 欠落時の既定 | `diffHunk` を含まない GraphQL 応答 | githubkit | コメントの `diff_hunk` が `None` になる | - |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_list_review_threads` | GitHub | レビュースレッドの取得 | `startLine` / `line` / `isResolved` / コメント群 | 副作用: なし（読み取りのみ） |
+| `test_ext_list_review_threads` | GitHub | レビュースレッドの取得 | `startLine` / `line` / `isResolved` / コメント群 / `diffHunk` | 副作用: なし（読み取りのみ） |
 
 ---
 
@@ -1531,6 +1532,7 @@ CreatedIssueResult(issue_number=36, url="https://github.com/.../issues/36", pare
 | --- | --- | --- | --- | --- | --- | --- |
 | タイトル | `title` | `str` | ✅ | - | Issue のタイトル | 依頼内容を 1 行で表したもの |
 | 本文 | `body` | `str` | ✅ | - | Issue の本文 | 会話内容の要約 |
+| ラベル設定 | `label_settings` | [`LabelSettings`](../モニター/エージェント管理.py.md#ラベル設定) | ✅ | - | 付与するラベルの値 | キーワード引数。[アプリ組み立て](#アプリ組み立て)が束ねるため公開シグネチャには出ない |
 
 引数例:
 
@@ -1552,7 +1554,8 @@ CreatedIssueResult(issue_number=58, url="https://github.com/.../issues/58", pare
 
 #### 処理
 
-1. REST でタイトル / 本文と固定ラベル（`layer:intake` + `確認:intake-issue-triager`）付きの Issue を作成する
+1. REST でタイトル / 本文と固定ラベル（[ラベル設定](../モニター/エージェント管理.py.md#ラベル設定)の `layer_intake` + `confirm_intake_issue_triager`）付きの Issue を作成する
+   - ラベル値は `constants.env` が SoT。呼び出し側には選ばせない
 2. Sub-issue リンクを付けずに `CreatedIssueResult` を返す
 
 #### 例外
@@ -1942,6 +1945,7 @@ GitHub(auth="github_pat_...")
 | 全体設定 | `settings` | [`Settings`](../モニター/エージェント管理.py.md#全体設定) | ✅ | - | GitHub Token・プロジェクト一覧の出所 | - |
 | セッション台帳 | `registry` | [`SessionRegistry`](../モニター/エージェント管理.py.md#セッション台帳) | ✅ | - | [モニター連絡](./モニター連絡.py.md)のツールが操作する台帳 | キーワード引数 |
 | エージェント一覧 | `agents` | [`list[Agent]`](../モニター/エージェント管理.py.md#エージェント定義) | ✅ | - | 処理中ラベルの解決に使う | キーワード引数 |
+| ラベル設定 | `label_settings` | [`LabelSettings`](../モニター/エージェント管理.py.md#ラベル設定) | ✅ | - | ラベル値の出所 | キーワード引数。各ツールへ束ねる |
 
 引数例:
 
@@ -2897,7 +2901,8 @@ assignee 設定・除去の結果（Pydantic `BaseModel`）。
 > 種別: データモデル<br>
 > コンテナ: `mcp/models.py`
 
-子 Issue 作成の結果（Pydantic `BaseModel`）。
+Issue 作成の結果（Pydantic `BaseModel`）。
+[子Issue作成](#子issue作成)と[新規Issue起票](#新規issue起票)で共有する。
 
 ### プロパティ
 
@@ -2905,7 +2910,7 @@ assignee 設定・除去の結果（Pydantic `BaseModel`）。
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Issue 番号 | `issue_number` | `int` | 公開 | - | 作成した Issue 番号 | `36` | - |
 | URL | `url` | `str` | 公開 | - | Issue の html URL | - | - |
-| 親 Issue 番号 | `parent_issue_number` | `int` | 公開 | - | Sub-issue リンクの親 Issue 番号 | `35` | 参照用 |
+| 親 Issue 番号 | `parent_issue_number` | `int \| None` | 公開 | `None` | Sub-issue リンクの親 Issue 番号 | `35` | 参照用。親を持たない起票では `None` |
 
 ### メソッド
 
@@ -3107,6 +3112,7 @@ get_issue_or_pr が返す Issue / PR のスナップショット（Pydantic `Bas
 | 投稿者 | `author` | `UserRef \| None` | 公開 | `None` | 投稿者 | - | - |
 | URL | `url` | `str \| None` | 公開 | `None` | コメントの html URL | - | - |
 | Resolved 済み | `is_minimized` | `bool` | 公開 | `False` | Resolved（minimize）済みか | `false` | - |
+| 周辺 diff | `diff_hunk` | `str \| None` | 公開 | `None` | 指摘箇所の周辺 diff | `"@@ -40,6 +40,8 @@ ..."` | インラインコメントのみ設定される（通常コメントは `None`） |
 
 ### メソッド
 

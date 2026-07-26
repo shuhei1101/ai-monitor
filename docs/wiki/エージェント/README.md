@@ -21,3 +21,4 @@ template_version: 1.0.0
 | [story-conductor](./story-conductor/) | story 要件確定から子 subsystem 起票・バグ差し戻し中継・story マージまでの指揮 | - |
 | [single-scenario-writer](./single-scenario-writer/) | story のユースケース要件から単一ユースケースシナリオを設計 | - |
 | [subsystem-conductor](./subsystem-conductor/) | subsystem の要件確定から architect への一式委任・バグ修正着手・subsystem マージまでの指揮 | - |
+| [architect](./architect/) | SS 設計とライブラリ選定の確定・tester / implementer への割り当てとレビュー | - |

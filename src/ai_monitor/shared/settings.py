@@ -106,6 +106,11 @@ class LabelSettings(BaseSettings):
     )
 
     in_discussion: LabelName
+    confirm_prefix: LabelName
+    layer_intake: LabelName
+    layer_epic: LabelName
+    priority_urgent: LabelName
+    priority_low: LabelName
     confirm_intake_issue_triager: LabelName
     confirm_epic_conductor: LabelName
     confirm_epic_poc_runner: LabelName

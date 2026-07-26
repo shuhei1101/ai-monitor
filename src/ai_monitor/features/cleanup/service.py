@@ -24,15 +24,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_INTAKE_LABEL = "layer:intake"
-_EPIC_LABEL = "layer:epic"
-_CONFIRM_PREFIX = "確認:"
-
-
-def close_completed_intakes(project: MonitoredProject, targets: list[MonitorTarget]) -> None:
+def close_completed_intakes(
+    project: MonitoredProject, targets: list[MonitorTarget], *, intake_label: str
+) -> None:
     """全 Sub-issue closed の intake Issue をクローズする。"""
     for target in targets:
-        if not isinstance(target, Issue) or _INTAKE_LABEL not in target.labels:
+        if not isinstance(target, Issue) or intake_label not in target.labels:
             continue
         # total > 0 かつ completed == total のものをクローズする
         if target.sub_issues_total > 0 and target.sub_issues_completed == target.sub_issues_total:
@@ -51,12 +48,14 @@ def release_closed_epics(
     prev_targets: list[MonitorTarget],
     *,
     registry: SessionRegistry,
+    epic_label: str,
+    confirm_prefix: str,
 ) -> None:
     """前周期との差分で epic のクローズを検知し、配下の全セッションを一括解放する。"""
     open_numbers = {t.number for t in targets}
     for epic in prev_targets:
         # 前周期に居て今周期に居ない layer:epic をクローズ候補にする
-        if not isinstance(epic, Issue) or _EPIC_LABEL not in epic.labels or epic.number in open_numbers:
+        if not isinstance(epic, Issue) or epic_label not in epic.labels or epic.number in open_numbers:
             continue
         # 単体取得で closed を確認する（open は一覧の取りこぼし）
         if get_issue(project, epic.number).state != "closed":
@@ -76,7 +75,7 @@ def release_closed_epics(
                 isinstance(candidate, PullRequest)
                 and any(n in family_set for n in candidate.linked_issue_numbers)
             )
-            if related and any(label.startswith(_CONFIRM_PREFIX) for label in candidate.labels):
+            if related and any(label.startswith(confirm_prefix) for label in candidate.labels):
                 remaining = candidate.number
                 break
         if remaining is not None:

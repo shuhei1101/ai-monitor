@@ -53,6 +53,7 @@ def run_cycle(
     registry: SessionRegistry,
     prev_targets: dict[str, list[MonitorTarget]],
     last_heartbeat_at: str,
+    labels: LabelSettings,
 ) -> tuple[dict[str, list[MonitorTarget]], str]:
     """ポーリング + クリーンアップ検知 + heartbeat 判定の 1 周期を実行する。"""
     standalone_names = {agent.name for agent in agents if agent.standalone}
@@ -77,10 +78,19 @@ def run_cycle(
                     telemetry=settings.telemetry,
                     port=settings.port,
                     ai_monitor_wiki_base=settings.ai_monitor_wiki_base,
+                    priority_urgent=labels.priority_urgent,
+                    priority_low=labels.priority_low,
                 )
             # クリーンアップ検知を実行する
-            close_completed_intakes(project, targets)
-            release_closed_epics(project, targets, prev_targets.get(project.name, []), registry=registry)
+            close_completed_intakes(project, targets, intake_label=labels.layer_intake)
+            release_closed_epics(
+                project,
+                targets,
+                prev_targets.get(project.name, []),
+                registry=registry,
+                epic_label=labels.layer_epic,
+                confirm_prefix=labels.confirm_prefix,
+            )
             release_closed_standalone(project, targets, registry=registry, standalone_names=standalone_names)
             # heartbeat 間隔が経過していればタイムアウト回収を実行する
             if heartbeat_elapsed:
@@ -103,7 +113,7 @@ def main() -> int:
     configure("monitor")
     agents = build_agents(labels, agent_models=settings.agents)
     registry = SessionRegistry(Path(settings.state_path))
-    app = create_app(settings, registry=registry, agents=agents)
+    app = create_app(settings, registry=registry, agents=agents, label_settings=labels)
     uvicorn.run(app, host="127.0.0.1", port=settings.port)
     return 0
 

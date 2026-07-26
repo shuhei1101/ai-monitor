@@ -56,7 +56,7 @@ def test_poll_when_mixed_targets(agent, io_mocks, registry, mon_project):
         _issue(37, labels=["layer:epic"]),
     ]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
     # 検証
     assert io_mocks.send_keys.call_count == 1
     assert "35" in io_mocks.send_keys.call_args.args[0]
@@ -67,7 +67,7 @@ def test_poll_when_new_target(agent, io_mocks, registry, mon_project):
     # 準備
     targets = [_issue(35, labels=["確認:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
     # 検証
     session_name = "ai-monitor-sandbox-35-intake-issue-triager"
     assert io_mocks.create_session.call_args.args[0] == session_name
@@ -90,7 +90,7 @@ def test_poll_when_existing_session(agent, io_mocks, registry, mon_project):
     )
     targets = [_issue(35, labels=["確認:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
     # 検証
     io_mocks.create_session.assert_not_called()
     assert io_mocks.send_keys.call_args.args[0] == "ai-monitor-sandbox-35-intake-issue-triager"
@@ -102,7 +102,7 @@ def test_poll_when_processing_label(agent, io_mocks, registry, mon_project):
     # 準備
     targets = [_issue(35, labels=["確認:intake-issue-triager", "処理中:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
     # 検証
     io_mocks.send_keys.assert_not_called()
     io_mocks.add_label.assert_not_called()
@@ -116,7 +116,7 @@ def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
         _issue(36, labels=["確認:intake-issue-triager", "優先度:急ぎ"]),
     ]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE)
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
     # 検証
     sent_sessions = [c.args[0] for c in io_mocks.send_keys.call_args_list]
     assert sent_sessions == [
@@ -253,9 +253,10 @@ def test_sort_key():
     # 準備
     first = _issue(35)
     second = _issue(40)
+    ranks = {"優先度:急ぎ": 0, "優先度:いつでも": 2}
     # 実行・検証
-    assert service._sort_key(first) == (1, 35)
-    assert service._sort_key(first) < service._sort_key(second)
+    assert service._sort_key(first, ranks) == (1, 35)
+    assert service._sort_key(first, ranks) < service._sort_key(second, ranks)
 
 
 def test_build_context_snapshot():

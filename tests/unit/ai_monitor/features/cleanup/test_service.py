@@ -54,7 +54,7 @@ def registry(tmp_state_path, monkeypatch):
     return registry_mod.SessionRegistry(tmp_state_path)
 
 
-def test_close_completed_intakes(io_mocks, mon_project):
+def test_close_completed_intakes(io_mocks, mon_project, intake_label="layer:intake"):
     """全子 closed のクローズを確認する（正常系）。"""
     # 準備
     targets = [
@@ -62,7 +62,7 @@ def test_close_completed_intakes(io_mocks, mon_project):
         _issue(31, labels=["layer:epic"], total=2, completed=2),
     ]
     # 実行
-    cleanup.close_completed_intakes(mon_project, targets)
+    cleanup.close_completed_intakes(mon_project, targets, intake_label="layer:intake")
     # 検証
     io_mocks.close_issue.assert_called_once()
     assert io_mocks.close_issue.call_args.args[1] == 30
@@ -73,7 +73,7 @@ def test_close_completed_intakes_when_incomplete(io_mocks, mon_project):
     # 準備
     targets = [_issue(30, labels=["layer:intake"], total=2, completed=1)]
     # 実行
-    cleanup.close_completed_intakes(mon_project, targets)
+    cleanup.close_completed_intakes(mon_project, targets, intake_label="layer:intake")
     # 検証
     io_mocks.close_issue.assert_not_called()
 
@@ -83,7 +83,7 @@ def test_close_completed_intakes_when_no_children(io_mocks, mon_project):
     # 準備
     targets = [_issue(30, labels=["layer:intake"], total=0, completed=0)]
     # 実行
-    cleanup.close_completed_intakes(mon_project, targets)
+    cleanup.close_completed_intakes(mon_project, targets, intake_label="layer:intake")
     # 検証
     io_mocks.close_issue.assert_not_called()
 
@@ -99,7 +99,7 @@ def test_release_closed_epics(io_mocks, registry, mon_project):
     for number, agent in [(30, "intake-issue-triager"), (35, "epic-conductor"), (40, "story-conductor")]:
         registry.register(_session(agent=agent, number=number))
     # 実行
-    cleanup.release_closed_epics(mon_project, targets, prev_targets, registry=registry)
+    cleanup.release_closed_epics(mon_project, targets, prev_targets, registry=registry, epic_label="layer:epic", confirm_prefix="確認:")
     # 検証
     assert registry.sessions == []
     assert io_mocks.kill_session.call_count == 3
@@ -115,7 +115,7 @@ def test_release_closed_epics_when_confirm_remains(io_mocks, registry, mon_proje
     io_mocks.get_parent_number.return_value = None
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_epics(mon_project, targets, prev_targets, registry=registry)
+    cleanup.release_closed_epics(mon_project, targets, prev_targets, registry=registry, epic_label="layer:epic", confirm_prefix="確認:")
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
@@ -128,7 +128,7 @@ def test_release_closed_epics_when_still_open(io_mocks, registry, mon_project):
     io_mocks.get_issue.return_value = _issue(35, labels=["layer:epic"], state="open")
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_epics(mon_project, [], prev_targets, registry=registry)
+    cleanup.release_closed_epics(mon_project, [], prev_targets, registry=registry, epic_label="layer:epic", confirm_prefix="確認:")
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
@@ -139,7 +139,7 @@ def test_release_closed_epics_when_no_diff(io_mocks, registry, mon_project):
     # 準備
     epic = _issue(35, labels=["layer:epic"])
     # 実行
-    cleanup.release_closed_epics(mon_project, [epic], [epic], registry=registry)
+    cleanup.release_closed_epics(mon_project, [epic], [epic], registry=registry, epic_label="layer:epic", confirm_prefix="確認:")
     # 検証
     io_mocks.get_issue.assert_not_called()
 

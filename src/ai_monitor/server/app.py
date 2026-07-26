@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from ai_monitor.features.agents.service import reset_session
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.mcp.server import build_mcp_app
-from ai_monitor.shared.settings import Settings
+from ai_monitor.shared.settings import LabelSettings, Settings
 
 if TYPE_CHECKING:
     from ai_monitor.features.sessions.registry import SessionRegistry
@@ -28,10 +28,12 @@ class ContextResetRequest(BaseModel):
     number: int
 
 
-def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Agent]) -> FastAPI:
+def create_app(
+    settings: Settings, *, registry: SessionRegistry, agents: list[Agent], label_settings: LabelSettings
+) -> FastAPI:
     """FastAPI アプリを生成し、MCP のマウントと lifespan を配線する。"""
     # MCP サーバーの ASGI アプリを組み立てる
-    mcp_app = build_mcp_app(settings, registry=registry, agents=agents)
+    mcp_app = build_mcp_app(settings, registry=registry, agents=agents, label_settings=label_settings)
 
     # lifespan で MCP のセッション管理を開始し、その内側でポーリングループを起動する
     @asynccontextmanager
@@ -50,6 +52,7 @@ def create_app(settings: Settings, *, registry: SessionRegistry, agents: list[Ag
                     registry=registry,
                     prev_targets=prev_targets,
                     last_heartbeat_at=heartbeat_at,
+                    labels=label_settings,
                 )
                 stop.wait(settings.poll_interval_sec)
 
