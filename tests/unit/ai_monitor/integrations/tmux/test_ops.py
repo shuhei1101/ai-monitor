@@ -43,6 +43,19 @@ def test_send_keys_when_session_missing(tmp_session_name):
         ops.send_keys(tmp_session_name, "echo x")
 
 
+def test_send_escape(tmp_tmux_session):
+    """Escape の送信を確認する（正常系）。"""
+    # 実行・検証: 例外を投げずに完了する
+    ops.send_escape(tmp_tmux_session)
+
+
+def test_send_escape_when_session_missing(tmp_session_name):
+    """セッション不存在を確認する（異常系）。"""
+    # 実行・検証
+    with pytest.raises(subprocess.CalledProcessError):
+        ops.send_escape(tmp_session_name)
+
+
 def test_has_session(tmp_tmux_session):
     """存在するセッションを確認する（正常系）。"""
     # 実行・検証

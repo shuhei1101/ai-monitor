@@ -44,6 +44,7 @@ def test_receive_context_reset(client, mon_settings, session_factory, monkeypatc
     """リセット要求の受理と /clear + 送信を確認する（正常系）。"""
     # 準備
     sent = []
+    monkeypatch.setattr(app_mod, "send_escape", lambda name: sent.append((name, "<Escape>")))
     monkeypatch.setattr(app_mod, "send_keys", lambda name, text: sent.append((name, text)))
     monkeypatch.setattr(app_mod, "build_agent_docs", lambda *a, **kw: "## フェーズ\n\n# 初期処理\n")
     session = session_factory("architect", 170)
@@ -52,19 +53,21 @@ def test_receive_context_reset(client, mon_settings, session_factory, monkeypatc
         "/context_reset",
         json={"project": "sandbox", "agent_name": "architect", "number": 170},
     )
-    # 検証: /clear → ドキュメントの順で該当セッションへ送信され受理される
+    # 検証: Escape → /clear → ドキュメントの順で該当セッションへ送信され受理される
     assert response.status_code == 200
     assert response.json() == {"ok": True}
-    assert len(sent) == 2
-    assert [name for name, _ in sent] == [session.session_name, session.session_name]
-    assert sent[0][1] == "/clear"
-    assert "# 初期処理" in sent[1][1]
+    assert len(sent) == 3
+    assert {name for name, _ in sent} == {session.session_name}
+    assert sent[0][1] == "<Escape>"
+    assert sent[1][1] == "/clear"
+    assert "# 初期処理" in sent[2][1]
 
 
 def test_receive_context_reset_when_session_missing(client, monkeypatch):
     """台帳に無いセッションからの通知を拒否する（異常系）。"""
     # 準備
     sent = []
+    monkeypatch.setattr(app_mod, "send_escape", lambda name: sent.append((name, "<Escape>")))
     monkeypatch.setattr(app_mod, "send_keys", lambda name, text: sent.append((name, text)))
     # 実行
     response = client.post(

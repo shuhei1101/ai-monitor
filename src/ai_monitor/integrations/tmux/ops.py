@@ -21,6 +21,13 @@ def send_keys(name: str, text: str) -> None:
     _run_tmux(["send-keys", "-t", name, "Enter"])
 
 
+def send_escape(name: str) -> None:
+    """既存セッションへ Escape を送信して実行中の処理を中断させる。"""
+    # 処理中のセッションへ文字列を送っても入力が queue に積まれるだけで実行されないため、先に中断する
+    _run_tmux(["send-keys", "-t", name, "Escape"])
+    time.sleep(1)
+
+
 def has_session(name: str) -> bool:
     """セッションの存在を確認する。"""
     result = _run_tmux(["has-session", "-t", name], check=False)
