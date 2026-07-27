@@ -149,7 +149,7 @@ def test_normal(
     subsystem_issue_factory,
     commit_file,
     wait_until,
-    tmp_path,
+    e2e_state_path,
 ):
     """SA 確定 → 承認 → subsystem Draft PR 作成 → タスク一覧承認 → architect 引き継ぎを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
@@ -244,7 +244,7 @@ def test_normal(
     assert "- [ ]" in pr_body, "タスク一覧がチェックボックス形式で記入されていない"
 
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
-    assert pr.number in _watch_numbers(tmp_path / "state.yaml", subsystem.number)
+    assert pr.number in _watch_numbers(e2e_state_path, subsystem.number)
 
     # 検証: タスク一覧の確認コメントが投稿されている
     pr_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data

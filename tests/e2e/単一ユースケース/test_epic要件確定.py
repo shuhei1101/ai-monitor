@@ -108,7 +108,7 @@ def _assert_agent_comments_resolved(gh_live, repo_ctx, issue_number: int) -> Non
         assert server._is_minimized(comment.node_id), f"コメント {comment.html_url} が未 Resolve"
 
 
-def test_normal_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, tmp_path):
+def test_normal_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
     """epic 本文確定 → 承認 → epic Draft PR 作成 + complex-scenario-writer 引き継ぎを実環境で確認する（正常系）。"""
     # 準備: 親 intake + 本文空の epic Issue（確認ラベル付き・assignee なし）
     intake, epic = epic_issue_factory(INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE)
@@ -130,13 +130,13 @@ def test_normal_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wai
     assert "確認:complex-scenario-writer" in pr_labels
 
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
-    assert pr.number in _watch_numbers(tmp_path / "state.yaml", epic.number)
+    assert pr.number in _watch_numbers(e2e_state_path, epic.number)
 
     # 検証: エージェント投稿の自分宛コメントが全て Resolve 済み
     _assert_agent_comments_resolved(gh_live, repo_ctx, epic.number)
 
 
-def test_normal_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, tmp_path):
+def test_normal_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
     """epic 本文確定 → 承認 → epic Draft PR 作成 + mock-designer 引き継ぎと指示コメントを実環境で確認する（正常系）。"""
     # 準備: 親 intake + 本文空の epic Issue（確認ラベル付き・assignee なし）
     intake, epic = epic_issue_factory(INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE)
@@ -165,10 +165,10 @@ def test_normal_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_factory, w
     assert not server._is_minimized(directed[-1].node_id), "指示コメントが Resolve されてしまっている"
 
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
-    assert pr.number in _watch_numbers(tmp_path / "state.yaml", epic.number)
+    assert pr.number in _watch_numbers(e2e_state_path, epic.number)
 
 
-def test_normal_poc_required(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, tmp_path):
+def test_normal_poc_required(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
     """epic 本文確定 → 承認 → PoC Draft PR 作成 + epic-poc-runner 引き継ぎ（epic Draft PR なし）を実環境で確認する（正常系）。"""
     # 準備: 親 intake + 本文空の epic Issue（確認ラベル付き・assignee なし）
     intake, epic = epic_issue_factory(INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE)
@@ -199,4 +199,4 @@ def test_normal_poc_required(monitor, gh_live, repo_ctx, epic_issue_factory, wai
     assert not server._is_minimized(directed[-1].node_id), "指示コメントが Resolve されてしまっている"
 
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
-    assert pr.number in _watch_numbers(tmp_path / "state.yaml", epic.number)
+    assert pr.number in _watch_numbers(e2e_state_path, epic.number)

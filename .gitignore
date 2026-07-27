@@ -44,3 +44,6 @@ logs/
 # Migration workspace (temporary during setup)
 _migration_source/
 plugins/ai-monitor/hooks/pre-tool-use/inject-rules/cache/
+
+# E2E の共有モニター作業ディレクトリ
+.e2e/

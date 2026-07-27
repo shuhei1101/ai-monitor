@@ -34,7 +34,7 @@ def test_normal(
     story_issue_factory,
     epic_body,
     wait_until,
-    tmp_path,
+    e2e_state_path,
 ):
     """story 本文確定 → 承認 → story Draft PR 作成 + single-scenario-writer 引き継ぎを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
@@ -120,7 +120,7 @@ def test_normal(
     assert "確認:single-scenario-writer" in pr_labels
 
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
-    assert pr.number in _watch_numbers(tmp_path / "state.yaml", story.number)
+    assert pr.number in _watch_numbers(e2e_state_path, story.number)
 
     # 検証: エージェント投稿の自分宛コメントが全て Resolve 済み
     comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=story.number).parsed_data

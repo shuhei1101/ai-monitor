@@ -22,3 +22,5 @@ template_version: 1.0.0
 | [single-scenario-writer](./single-scenario-writer/) | story のユースケース要件から単一ユースケースシナリオを設計 | - |
 | [subsystem-conductor](./subsystem-conductor/) | subsystem の要件確定から architect への一式委任・バグ修正着手・subsystem マージまでの指揮 | - |
 | [architect](./architect/) | SS 設計とライブラリ選定の確定・tester / implementer への割り当てとレビュー | - |
+| [tester](./tester/) | 設計 Wiki を元にした Red 状態のテスト作成と指摘対応 | - |
+| [implementer](./implementer/) | タスク一覧の消化とテストの Green 化・指摘対応 | - |

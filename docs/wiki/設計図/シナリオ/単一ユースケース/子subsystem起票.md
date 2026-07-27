@@ -10,6 +10,8 @@ UC の実装に必要な subsystem（FE / BE / 外部連携 等）を洗い出�
 
 対応エージェント: `story-conductor`（single-scenario-writer / subsystem-conductor の完了報告コメントで復帰）
 
+- 対応テストファイル: `tests/e2e/単一ユースケース/test_子subsystem起票.py`
+
 ## 正常シナリオ（初回・依存順の決定と先頭の起票）
 
 ### セットアップ

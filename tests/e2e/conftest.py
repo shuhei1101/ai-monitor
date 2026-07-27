@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import base64
 import os
+import signal
 import socket
 import subprocess
 import time
 from pathlib import Path
 
+import httpx
 import pytest
 import yaml
 from githubkit.exception import RequestFailed
@@ -15,6 +17,9 @@ from githubkit.exception import RequestFailed
 import ai_monitor.mcp.server as server
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# モニターを全テストで共有するための作業ディレクトリ（xdist の worker 間で共有する）
+SHARED_DIR = REPO_ROOT / ".e2e"
 
 
 def pytest_addoption(parser):
@@ -33,6 +38,43 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if item.path.resolve().is_relative_to(e2e_dir):
             item.add_marker(skip_marker)
+
+
+def pytest_sessionstart(session):
+    """前回の実行が残したモニターとロックを掃除する（xdist では controller 側だけが実行する）。
+
+    残骸が生きていると新しい実行が古いコードのモニターに相乗りしてしまうため、必ず停止させる。
+    """
+    if hasattr(session.config, "workerinput"):
+        return
+    pid_path = SHARED_DIR / "monitor.pid"
+    if pid_path.exists():
+        pid = int(pid_path.read_text(encoding="utf-8").strip())
+        # 生きていれば止める（既に落ちている場合は無視する）
+        try:
+            os.kill(pid, signal.SIGTERM)
+            time.sleep(2)
+        except ProcessLookupError:
+            pass
+        pid_path.unlink()
+    (SHARED_DIR / "monitor.lock").unlink(missing_ok=True)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """共有モニターを停止してロックを解放する（xdist では controller 側だけが実行する）。"""
+    # worker 側は自分の session 終了ごとに呼ばれるため何もしない（他 worker がまだ走っている）
+    if hasattr(session.config, "workerinput"):
+        return
+    pid_path = SHARED_DIR / "monitor.pid"
+    if pid_path.exists():
+        pid = int(pid_path.read_text(encoding="utf-8").strip())
+        # 起動役のプロセスを止める（既に落ちている場合は無視する）
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        pid_path.unlink()
+    (SHARED_DIR / "monitor.lock").unlink(missing_ok=True)
 
 
 @pytest.fixture(scope="session")
@@ -71,47 +113,83 @@ def repo_ctx(sandbox) -> tuple[str, str]:
     return (owner, repo)
 
 
-@pytest.fixture
-def monitor(e2e_settings_path, tmp_path):
-    """実モニター（FastAPI + ポーリングループ）をサブプロセスで起動する。"""
-    env = os.environ.copy()
-    env["AI_MONITOR_ENV"] = "e2e"
-    env["STATE_PATH"] = str(tmp_path / "state.yaml")
-    env["PYTHONPATH"] = str(REPO_ROOT / "src")
-    # 起動元セッションの環境変数が設定ファイルを上書きしないようにする
-    # （SessionStart フックが同名の変数をエージェント向けに展開している）
-    for name in ("AI_MONITOR_WIKI_BASE", "WIKI_BASE", "PORT"):
-        env.pop(name, None)
-    proc = subprocess.Popen(
-        ["uv", "run", "python", "-c", "from ai_monitor.main import main; main()"],
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    # 待受ポートの開通を待つ
+@pytest.fixture(scope="session")
+def e2e_state_path() -> Path:
+    """共有モニターのセッション台帳のパスを返す。"""
+    return SHARED_DIR / "state.yaml"
+
+
+@pytest.fixture(scope="session")
+def monitor(e2e_settings_path, e2e_state_path):
+    """実モニター（FastAPI + ポーリングループ）をテスト全体で 1 本だけ共有する。
+
+    1 プロセスが全対象を監視する本番と同じ構成にすることで、テストを並列実行できる。
+    起動役は排他生成したロックファイルで 1 つに決まり、他のプロセスはポート開通を待って相乗りする。
+    停止は controller 側の `pytest_sessionfinish` が全 worker の終了後に行う。
+    """
+    SHARED_DIR.mkdir(parents=True, exist_ok=True)
     port = yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8")).get("port", 8765)
-    deadline = time.time() + 60
-    ready = False
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            pytest.fail(f"モニターが起動に失敗:\n{proc.stdout.read()[-2000:]}")
+    log_path = SHARED_DIR / "monitor.log"
+    # ロックをアトミックに作れたプロセスだけが起動役になる
+    try:
+        os.close(os.open(SHARED_DIR / "monitor.lock", os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        is_owner = True
+    except FileExistsError:
+        is_owner = False
+    if is_owner:
+        # 起動役の時点でポートが開いていれば、テスト管理外のモニターが占有している
+        # （相乗りすると意図しないコードで検証してしまうため落とす）
         try:
             socket.create_connection(("127.0.0.1", port), timeout=1).close()
-            ready = True
+            pytest.fail(f"ポート {port} がテスト管理外のプロセスに占有されている")
+        except OSError:
+            pass
+        env = os.environ.copy()
+        env["AI_MONITOR_ENV"] = "e2e"
+        env["STATE_PATH"] = str(e2e_state_path)
+        env["PYTHONPATH"] = str(REPO_ROOT / "src")
+        # 起動元セッションの環境変数が設定ファイルを上書きしないようにする
+        # （SessionStart フックが同名の変数をエージェント向けに展開している）
+        for name in ("AI_MONITOR_WIKI_BASE", "WIKI_BASE", "PORT"):
+            env.pop(name, None)
+        with log_path.open("w", encoding="utf-8") as log:
+            proc = subprocess.Popen(
+                ["uv", "run", "python", "-c", "from ai_monitor.main import main; main()"],
+                cwd=REPO_ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, text=True,
+            )
+        (SHARED_DIR / "monitor.pid").write_text(str(proc.pid), encoding="utf-8")
+    # 起動役も相乗り側も待受ポートの開通を待つ
+    deadline = time.time() + 180
+    while time.time() < deadline:
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=1).close()
             break
         except OSError:
             time.sleep(1)
-    if not ready:
-        proc.terminate()
-        pytest.fail("モニターの待受ポートが開通しない")
-    yield proc
-    proc.terminate()
+    else:
+        tail = log_path.read_text(encoding="utf-8")[-2000:] if log_path.exists() else ""
+        pytest.fail(f"モニターの待受ポートが開通しない:\n{tail}")
+    yield
+
+
+def _close_issue_tree(gh_live, owner: str, repo: str, number: int, collected: list[int]) -> None:
+    """Sub-issue を再帰的にたどって子から順に not_planned でクローズし、番号を collected に積む。
+
+    エージェントが起票した子孫 Issue は factory の管理外に生まれるため、親から辿って回収する。
+    """
     try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+        subs = gh_live.rest.issues.list_sub_issues(owner=owner, repo=repo, issue_number=number).parsed_data
+    except RequestFailed:
+        subs = []
+    for sub in subs:
+        _close_issue_tree(gh_live, owner, repo, sub.number, collected)
+    collected.append(number)
+    try:
+        gh_live.rest.issues.update(
+            owner=owner, repo=repo, issue_number=number, state="closed", state_reason="not_planned"
+        )
+    except RequestFailed:
+        pass
 
 
 @pytest.fixture
@@ -130,25 +208,7 @@ def intake_issue_factory(gh_live, repo_ctx, sandbox):
     yield _create
     cleanup_numbers: list[int] = []
     for number in reversed(created):
-        try:
-            subs = gh_live.rest.issues.list_sub_issues(owner=owner, repo=repo, issue_number=number).parsed_data
-        except RequestFailed:
-            subs = []
-        for sub in subs:
-            cleanup_numbers.append(sub.number)
-            try:
-                gh_live.rest.issues.update(
-                    owner=owner, repo=repo, issue_number=sub.number, state="closed", state_reason="not_planned"
-                )
-            except RequestFailed:
-                pass
-        cleanup_numbers.append(number)
-        try:
-            gh_live.rest.issues.update(
-                owner=owner, repo=repo, issue_number=number, state="closed", state_reason="not_planned"
-            )
-        except RequestFailed:
-            pass
+        _close_issue_tree(gh_live, owner, repo, number, cleanup_numbers)
     # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
     listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
     for name in listed.stdout.splitlines():
@@ -205,28 +265,8 @@ def epic_issue_factory(gh_live, repo_ctx, sandbox):
                 gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
             except RequestFailed:
                 pass
-        # epic 配下の Sub-issue（story）をクローズする
-        try:
-            subs = gh_live.rest.issues.list_sub_issues(owner=owner, repo=repo, issue_number=pair["epic"]).parsed_data
-        except RequestFailed:
-            subs = []
-        for sub in subs:
-            cleanup_numbers.append(sub.number)
-            try:
-                gh_live.rest.issues.update(
-                    owner=owner, repo=repo, issue_number=sub.number, state="closed", state_reason="not_planned"
-                )
-            except RequestFailed:
-                pass
-        # epic → intake の順に not_planned でクローズする
-        for number in (pair["epic"], pair["intake"]):
-            cleanup_numbers.append(number)
-            try:
-                gh_live.rest.issues.update(
-                    owner=owner, repo=repo, issue_number=number, state="closed", state_reason="not_planned"
-                )
-            except RequestFailed:
-                pass
+        # intake から子孫（epic → story → subsystem）を辿って子から順にクローズする
+        _close_issue_tree(gh_live, owner, repo, pair["intake"], cleanup_numbers)
     # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
     local_path = sandbox["local_path"]
     for branch in branches:
@@ -291,14 +331,8 @@ def story_issue_factory(gh_live, repo_ctx, sandbox):
                 gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
             except RequestFailed:
                 pass
-        # story Issue を not_planned でクローズする
-        cleanup_numbers.append(story_number)
-        try:
-            gh_live.rest.issues.update(
-                owner=owner, repo=repo, issue_number=story_number, state="closed", state_reason="not_planned"
-            )
-        except RequestFailed:
-            pass
+        # story から子孫（エージェントが起票した subsystem）を辿って子から順にクローズする
+        _close_issue_tree(gh_live, owner, repo, story_number, cleanup_numbers)
     # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
     local_path = sandbox["local_path"]
     for branch in branches:
@@ -355,9 +389,19 @@ def commit_file(gh_live, repo_ctx):
     owner, repo = repo_ctx
 
     def _commit(branch: str, path: str, content: str, message: str) -> None:
+        # 既存ファイルの上書きには blob の sha が要る（無いと 422 になる）
+        try:
+            current = gh_live.rest.repos.get_content(
+                owner=owner, repo=repo, path=path, ref=branch
+            ).parsed_data
+            sha = getattr(current, "sha", None)
+        except RequestFailed:
+            sha = None
+        kwargs = {"sha": sha} if sha else {}
         gh_live.rest.repos.create_or_update_file_contents(
             owner=owner, repo=repo, path=path, message=message,
             content=base64.b64encode(content.encode("utf-8")).decode("ascii"), branch=branch,
+            **kwargs,
         )
 
     return _commit
@@ -469,7 +513,11 @@ def wait_until():
     def _wait(condition, *, timeout_sec: int, interval_sec: int = 15, message: str = ""):
         deadline = time.time() + timeout_sec
         while time.time() < deadline:
-            value = condition()
+            # 長時間のポーリングでは一時的な通信断が起きるので、次の周期に回して待ち続ける
+            try:
+                value = condition()
+            except httpx.TransportError:
+                value = None
             if value:
                 return value
             time.sleep(interval_sec)

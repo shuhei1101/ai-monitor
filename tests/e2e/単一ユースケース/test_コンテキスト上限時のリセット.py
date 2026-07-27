@@ -80,7 +80,7 @@ def _post_context_reset(port: int, project: str, agent_name: str, number: int) -
         return exc.code
 
 
-def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, tmp_path):
+def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
     """コンパクトをブロックしてリセットし、手順どおりに応答することを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
@@ -101,7 +101,7 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, tmp_
     )
 
     # 実行: 稼働中セッションへ /compact を送って PreCompact を発火させる
-    session_name = _session_name(tmp_path / "state.yaml", epic.number)
+    session_name = _session_name(e2e_state_path, epic.number)
     assert session_name, "台帳に epic-conductor のセッションがない"
     boundaries_before = _count_compact_boundaries()
     transcripts_before = _transcripts()
