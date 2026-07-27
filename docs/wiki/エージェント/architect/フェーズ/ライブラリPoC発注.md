@@ -35,18 +35,18 @@ MCP `add_watch_targets` を呼ぶ:
 
 ### library-poc-runner への検証発注
 
-PoC PR ごとに MCP `add_labels` を呼ぶ:
-- `number`: PoC PR の番号
-- `is_pr`: true
-- `labels`:
-  - `$AI_MONITOR_LABEL_CONFIRM_LIBRARY_POC_RUNNER` の値
-
-続けて PoC PR ごとに MCP `comment` を呼ぶ:
+PoC PR ごとに MCP `comment` を呼ぶ:
 - `number`: PoC PR の番号
 - `is_pr`: true
 - `sender`: `architect`
 - `receiver`: `library-poc-runner`
 - `body`: 検証指示（本文の `## 検証観点と結果` に沿って検証し、実測値・判定・所感を本文へ記録する旨）
+
+続けて PoC PR ごとに MCP `add_labels` を呼ぶ:
+- `number`: PoC PR の番号
+- `is_pr`: true
+- `labels`:
+  - `$AI_MONITOR_LABEL_CONFIRM_LIBRARY_POC_RUNNER` の値
 
 ### 待機
 

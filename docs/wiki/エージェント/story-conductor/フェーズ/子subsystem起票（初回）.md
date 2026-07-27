@@ -10,8 +10,7 @@ epic ブランチ配下の worktree に切り替えて（story ブランチの w
 
 ### subsystem の洗い出しと依存順の決定
 
-シナリオの結合フローから subsystem（FE / BE / 外部連携 等）を洗い出し、依存順（例: BE → FE）を決める。
-洗い出した subsystem は起票する子 Issue のタイトルと `scope:*` ラベルで表し、どこまで起票済みかは初期処理で取得した `sub_issues` で追う。
+シナリオの結合フローから subsystem（FE / BE / 外部連携 等）を洗い出し、対象システムごとの担当範囲と依存順（例: BE → FE）を決める。
 
 ### 先頭グループの起票
 
@@ -23,6 +22,16 @@ epic ブランチ配下の worktree に切り替えて（story ブランチの w
   - `$AI_MONITOR_LABEL_LAYER_SUBSYSTEM` の値
   - 対象システムの `scope:*` ラベル
   - `$AI_MONITOR_LABEL_CONFIRM_SUBSYSTEM_CONDUCTOR` の値
+
+### サブシステム一覧の記入
+
+洗い出した subsystem を story Issue 本文の `## サブシステム一覧` に全件記入する（書式はイシュー本文テンプレート「ストーリー」。テンプレート定義順の位置に挿入する）。
+起票した先頭グループの行は `対応 subsystem` 列に `#番号` を入れ、残りは `未起票` のままにする。
+
+MCP `update_body` を呼ぶ:
+- `number`: $issue_number
+- `is_pr`: false
+- `body`: 更新後本文
 
 ### 完了報告の Resolve と起票結果の記録
 

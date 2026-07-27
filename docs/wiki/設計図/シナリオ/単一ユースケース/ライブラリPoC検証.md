@@ -11,6 +11,8 @@ library-poc-runner が担当候補 1 つの PoC を検証する単一ユース�
 
 対応エージェント: `library-poc-runner`
 
+- 対応テストファイル: `tests/e2e/単一ユースケース/test_ライブラリPoC検証.py`
+
 ## 正常シナリオ
 
 ### セットアップ

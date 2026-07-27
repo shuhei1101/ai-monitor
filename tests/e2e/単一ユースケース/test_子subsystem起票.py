@@ -143,6 +143,23 @@ subsystem #{subsystem_number} のインターフェースが確定しました�
 
 SUBSYSTEM_TITLE_BE = "タスク編集 バックエンド"
 
+# 子subsystem起票（初回）が記入した後の状態（先頭グループの BE だけ起票済み）
+SUBSYSTEM_TABLE = """
+## サブシステム一覧
+
+| 対象システム | 担当範囲 | 依存 | 対応 subsystem | 補足 |
+| --- | --- | --- | --- | --- |
+| バックエンド | タスク更新 API と入力検証 | なし | #{backend_number} | - |
+| フロントエンド | タスク編集画面と保存導線 | バックエンド | 未起票 | インターフェース確定後に起票 |
+"""
+
+
+def _row(body: str, keyword: str) -> str:
+    """サブシステム一覧から指定の対象システムの行を取り出す。"""
+    rows = [line for line in body.replace("\r\n", "\n").splitlines() if line.startswith("|") and keyword in line]
+    assert rows, f"サブシステム一覧に「{keyword}」の行がない"
+    return rows[0]
+
 
 def _story_subs(gh_live, owner, repo, story_number):
     """story Issue の Sub-issue 一覧を返す。"""
@@ -199,9 +216,6 @@ def test_normal_first(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
     )
-    story_body_before = (
-        gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=story.number).parsed_data.body or ""
-    ).replace("\r\n", "\n")
 
     # 準備: single-scenario-writer の完了報告 → 確認:story-conductor 付与（起動トリガー）
     report = gh_live.rest.issues.create_comment(
@@ -232,9 +246,11 @@ def test_normal_first(
     assert "確認:subsystem-conductor" in sub_labels, f"確認:subsystem-conductor がない: {sub_labels}"
     assert any(name.startswith("scope:") for name in sub_labels), f"scope:* ラベルがない: {sub_labels}"
 
-    # 検証: story 本文が要件確定時から変わっていない（分担は Sub-issue リンクが表す）
+    # 検証: サブシステム一覧に洗い出し結果が記入され、起票済みの行だけ Issue 番号が入っている
     body_after = (data.body or "").replace("\r\n", "\n")
-    assert body_after == story_body_before, "story 本文が更新されている（分担表が書かれた可能性）"
+    assert "## サブシステム一覧" in body_after, "story 本文に ## サブシステム一覧 がない"
+    assert f"#{subs[0].number}" in body_after, "起票した subsystem の番号がサブシステム一覧に入っていない"
+    assert "未起票" in body_after, "未起票の subsystem の行がない（全件起票された可能性）"
 
     # 検証: 議論中 なし・assignee なしで自動完了している
     labels_after = {label.name for label in data.labels}
@@ -269,12 +285,17 @@ def test_normal_sequential(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
     )
-    story_body_before = (
-        gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=story.number).parsed_data.body or ""
-    ).replace("\r\n", "\n")
     # 準備: 先頭グループ（BE）は起票済み（確認ラベルなし = subsystem-conductor を起動させない）
     backend = subsystem_issue_factory(
         story.number, SUBSYSTEM_TITLE_BE, labels=["layer:subsystem", "scope:backend"]
+    )
+    # 準備: 初回起票が記入した後の状態（BE は起票済み・FE は未起票）を本文に再現する
+    story_body = (
+        gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=story.number).parsed_data.body or ""
+    )
+    gh_live.rest.issues.update(
+        owner=owner, repo=repo, issue_number=story.number,
+        body=story_body + SUBSYSTEM_TABLE.format(backend_number=backend.number),
     )
 
     # 準備: subsystem-conductor のインターフェース確定報告 → 確認:story-conductor 付与（起動トリガー）
@@ -310,9 +331,13 @@ def test_normal_sequential(
     assert any(name.startswith("scope:") for name in added_labels), f"scope:* ラベルがない: {added_labels}"
     assert "scope:backend" not in added_labels, "先頭グループと同じ scope で起票されている"
 
-    # 検証: story 本文が変わっていない
+    # 検証: サブシステム一覧のフロントエンド行が起票した Issue 番号に更新されている
     body_after = (data.body or "").replace("\r\n", "\n")
-    assert body_after == story_body_before, "story 本文が更新されている（分担表が書かれた可能性）"
+    frontend_row = _row(body_after, "フロントエンド")
+    assert f"#{added[0].number}" in frontend_row, (
+        f"サブシステム一覧の該当行が起票した番号に更新されていない: {frontend_row}"
+    )
+    assert "未起票" not in frontend_row, f"該当行に 未起票 が残っている: {frontend_row}"
 
     # 検証: インターフェース確定報告が Resolve されている
     assert server._is_minimized(report.node_id), "インターフェース確定報告が未 Resolve"

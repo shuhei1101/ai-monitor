@@ -26,6 +26,18 @@ complex-scenario-writer:
   - エージェント/complex-scenario-writer/フェーズ/シナリオ作成（初回）.md
   - エージェント/complex-scenario-writer/フェーズ/応答ループ.md
   - エージェント/complex-scenario-writer/フェーズ/完了処理.md
+  - エージェント/complex-scenario-writer/フェーズ/統合テストレビュー.md
+  - エージェント/complex-scenario-writer/フェーズ/テスト結果の判定.md
+  - エージェント/complex-scenario-writer/フェーズ/シナリオ修正の再開指示.md
+  - エージェント/complex-scenario-writer/フェーズ/再テストの実行指示.md
+  - エージェント/complex-scenario-writer/フェーズ/統合テスト割り当て.md
+
+complex-scenario-tester:
+  - エージェント/complex-scenario-tester/README.md
+  - エージェント/complex-scenario-tester/フェーズ/初期処理.md
+  - エージェント/complex-scenario-tester/フェーズ/指摘対応.md
+  - エージェント/complex-scenario-tester/フェーズ/テスト実行.md
+  - エージェント/complex-scenario-tester/フェーズ/テスト実装.md
 
 epic-conductor:
   - エージェント/epic-conductor/README.md
@@ -52,6 +64,12 @@ epic-poc-runner:
   - エージェント/epic-poc-runner/フェーズ/検証実行.md
   - エージェント/epic-poc-runner/フェーズ/完了処理.md
 
+library-poc-runner:
+  - エージェント/library-poc-runner/README.md
+  - エージェント/library-poc-runner/フェーズ/初期処理.md
+  - エージェント/library-poc-runner/フェーズ/再検証.md
+  - エージェント/library-poc-runner/フェーズ/PoC検証.md
+
 intake-issue-triager:
   - エージェント/intake-issue-triager/README.md
   - エージェント/intake-issue-triager/フェーズ/初期処理.md
@@ -75,6 +93,18 @@ single-scenario-writer:
   - エージェント/single-scenario-writer/フェーズ/シナリオ作成（初回）.md
   - エージェント/single-scenario-writer/フェーズ/応答ループ.md
   - エージェント/single-scenario-writer/フェーズ/完了処理.md
+  - エージェント/single-scenario-writer/フェーズ/統合テストレビュー.md
+  - エージェント/single-scenario-writer/フェーズ/テスト結果の判定.md
+  - エージェント/single-scenario-writer/フェーズ/シナリオ修正の再開指示.md
+  - エージェント/single-scenario-writer/フェーズ/再テストの実行指示.md
+  - エージェント/single-scenario-writer/フェーズ/統合テスト割り当て.md
+
+single-scenario-tester:
+  - エージェント/single-scenario-tester/README.md
+  - エージェント/single-scenario-tester/フェーズ/初期処理.md
+  - エージェント/single-scenario-tester/フェーズ/指摘対応.md
+  - エージェント/single-scenario-tester/フェーズ/テスト実行.md
+  - エージェント/single-scenario-tester/フェーズ/テスト実装.md
 
 story-conductor:
   - エージェント/story-conductor/README.md
