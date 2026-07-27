@@ -904,10 +904,49 @@ def test_worktree_remove_when_project_repo_differs(tmp_git_repo, api):
 
 
 def test_worktree_remove_when_worktree_missing(tmp_git_repo, api):
-    """worktree 不存在時のエラーを確認する（異常系）。"""
-    # 実行・検証
-    with pytest.raises(subprocess.CalledProcessError):
-        api.worktree_remove("feat/none")
+    """worktree だけ無い場合にローカルブランチだけ削除されることを確認する（正常系）。"""
+    # 準備
+    subprocess.run(["git", "branch", "feat/no-worktree"], cwd=tmp_git_repo, check=True, capture_output=True)
+    # 実行
+    res = api.worktree_remove("feat/no-worktree")
+    # 検証
+    branches = subprocess.run(
+        ["git", "branch", "--list", "feat/no-worktree"], cwd=tmp_git_repo, capture_output=True, text=True
+    ).stdout
+    assert "feat/no-worktree" not in branches
+    assert res.branch == "feat/no-worktree"
+
+
+def test_worktree_remove_when_branch_missing(tmp_git_repo, api):
+    """ローカルブランチだけ無い場合に worktree だけ削除されることを確認する（正常系）。"""
+    # 準備: ブランチを持たない（detached）worktree を対象パスに作る
+    path = server._worktree_path("feat/detached", cwd=str(tmp_git_repo))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_git_repo), "worktree", "add", "--detach", str(path), "origin/master"],
+        check=True, capture_output=True,
+    )
+    # 実行
+    res = api.worktree_remove("feat/detached")
+    # 検証
+    assert not path.exists()
+    assert res.branch == "feat/detached"
+
+
+def test_worktree_remove_when_nothing_left(tmp_git_repo, api):
+    """削除対象が無い場合に削除の git を実行せず正常終了することを確認する（正常系）。"""
+    # 準備
+    before = subprocess.run(
+        ["git", "worktree", "list"], cwd=tmp_git_repo, capture_output=True, text=True
+    ).stdout
+    # 実行
+    res = api.worktree_remove("feat/none")
+    # 検証
+    assert res.branch == "feat/none"
+    after = subprocess.run(
+        ["git", "worktree", "list"], cwd=tmp_git_repo, capture_output=True, text=True
+    ).stdout
+    assert after == before
 
 
 def test_worktree_remove_when_project_unknown(tmp_git_repo, mon_settings, mcp_ctx_factory):
@@ -1102,6 +1141,24 @@ def test_repo_root_when_in_worktree(tmp_git_repo):
     )
     # 実行・検証
     assert server._repo_root(cwd=str(worktree)) == tmp_git_repo
+
+
+def test_branch_exists(tmp_git_repo):
+    """存在するローカルブランチで True が返ることを確認する（正常系）。"""
+    # 準備
+    subprocess.run(["git", "branch", "feat/exists"], cwd=tmp_git_repo, check=True, capture_output=True)
+    # 実行
+    result = server._branch_exists("feat/exists", cwd=str(tmp_git_repo))
+    # 検証
+    assert result is True
+
+
+def test_branch_exists_when_missing(tmp_git_repo):
+    """存在しないローカルブランチで例外にならず False が返ることを確認する（正常系）。"""
+    # 実行
+    result = server._branch_exists("feat/missing", cwd=str(tmp_git_repo))
+    # 検証
+    assert result is False
 
 
 def test_worktree_path(tmp_git_repo):

@@ -274,6 +274,16 @@ def _worktree_path(branch: str, *, cwd: str) -> Path:
     return root / ".claude" / "worktrees" / branch.replace("/", "-")
 
 
+def _branch_exists(branch: str, *, cwd: str) -> bool:
+    """指定リポジトリにローカルブランチがあるかを返す。"""
+    # 後片付けの判定に使うので、無いこと（非 0 終了）は失敗ではなく結果として扱う
+    found = subprocess.run(
+        ["git", "-C", cwd, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
+        check=False, capture_output=True, text=True,
+    )
+    return found.returncode == 0
+
+
 def _is_minimized(node_id: str) -> bool:
     """コメントの Resolved（minimize）状態を取得する。"""
     data = _get_client().graphql(_IS_MINIMIZED_QUERY, {"id": node_id})
@@ -937,9 +947,11 @@ def worktree_remove(branch: str, *, ctx: Context, settings: Settings) -> Worktre
     project = _resolve_project(ctx, projects=settings.projects)
     # 対象の worktree パスを求める
     path = _worktree_path(branch, cwd=project.local_path)
-    # worktree を削除し、ローカルブランチを強制削除（-D）する
-    _run_git(["worktree", "remove", "--force", str(path)], cwd=project.local_path)
-    _run_git(["branch", "-D", branch], cwd=project.local_path)
+    # 残っているものだけ消す（worktree を作らずに終わったブランチ・片付け済みのブランチにも呼ばれる）
+    if path.exists():
+        _run_git(["worktree", "remove", "--force", str(path)], cwd=project.local_path)
+    if _branch_exists(branch, cwd=project.local_path):
+        _run_git(["branch", "-D", branch], cwd=project.local_path)
     # WorktreeRemoveResult を返す
     return WorktreeRemoveResult(branch=branch, worktree_path=str(path))
 

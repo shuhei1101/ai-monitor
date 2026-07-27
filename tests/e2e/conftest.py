@@ -217,6 +217,30 @@ def intake_issue_factory(gh_live, repo_ctx, sandbox):
 
 
 @pytest.fixture
+def issue_factory(gh_live, repo_ctx, sandbox):
+    """任意のラベルで Issue を作成し、テスト後に Sub-issue・tmux セッションごと片付ける factory。"""
+    owner, repo = repo_ctx
+    created: list[int] = []
+
+    def _create(title: str, body: str, labels: list[str]) -> object:
+        issue = gh_live.rest.issues.create(
+            owner=owner, repo=repo, title=title, body=body, labels=labels
+        ).parsed_data
+        created.append(issue.number)
+        return issue
+
+    yield _create
+    cleanup_numbers: list[int] = []
+    for number in reversed(created):
+        _close_issue_tree(gh_live, owner, repo, number, cleanup_numbers)
+    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
+    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
+    for name in listed.stdout.splitlines():
+        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
+            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+
+
+@pytest.fixture
 def epic_issue_factory(gh_live, repo_ctx, sandbox):
     """親 intake 付きの epic Issue を作成し、テスト後に PR・ブランチ・worktree・tmux セッションごと片付ける factory。"""
     owner, repo = repo_ctx

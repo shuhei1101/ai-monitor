@@ -27,3 +27,6 @@ template_version: 1.0.0
 | [library-poc-runner](./library-poc-runner/) | ライブラリ候補 1 つの PoC 検証と結果記録 | - |
 | [tester](./tester/) | 設計 Wiki を元にした Red 状態のテスト作成と指摘対応 | - |
 | [implementer](./implementer/) | タスク一覧の消化とテストの Green 化・指摘対応 | - |
+| [resetter](./resetter/) | 不要化した Issue 配下の巻き戻し（子孫 Issue / PR / ブランチの削除） | 唯一のユーザー手動起動 |
+| [quick-implementer](./quick-implementer/) | 軽微修正の直接マージ（TDD・Wiki 更新・レビューなし） | - |
+| [questioner](./questioner/) | question Issue の調査と回答 | 実装は行わない |

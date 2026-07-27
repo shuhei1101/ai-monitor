@@ -36,6 +36,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | git 実行入口 | `mcp/server.py` | 関数 | [`_run_git`](#git-実行入口) | git CLI 呼び出しの単一入口 | 失敗時 `CalledProcessError` |
 | 共通 | リポジトリルート解決 | `mcp/server.py` | 関数 | [`_repo_root`](#リポジトリルート解決) | 共通 `.git` からメインリポジトリのルートを解決 | worktree 内からの呼び出しに対応 |
 | 共通 | worktree パス解決 | `mcp/server.py` | 関数 | [`_worktree_path`](#worktree-パス解決) | `.claude/worktrees/` 配下の絶対パスを求める | `/` を `-` に置換 |
+| 共通 | ローカルブランチ存在確認 | `mcp/server.py` | 関数 | [`_branch_exists`](#ローカルブランチ存在確認) | ローカルブランチの有無を返す | 非 0 終了を結果として扱う |
 | 共通 | 質問 DTO | `mcp/models.py` | データモデル | [`Question`](#質問) / [`Choice`](#選択肢) | ask_questions の質問・選択肢 | - |
 | 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`AddressedComment`](#宛先コメント) | `---` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
@@ -1817,6 +1818,7 @@ WorktreeCreateResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 > 種別: 関数
 
 worktree とローカルブランチを削除する（ブランチは強制削除）。
+残っているものだけを消すので、既に片付いたブランチや worktree を作らずに終わったブランチにも呼べる。
 
 #### 引数
 
@@ -1846,15 +1848,16 @@ WorktreeRemoveResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 
 1. 対象プロジェクトを解決する（[プロジェクト解決](#プロジェクト解決)）
 2. 対象の worktree パスを求める（[worktree パス解決](#worktree-パス解決)）
-3. worktree を削除し、ローカルブランチを強制削除（`-D`）する（[git 実行入口](#git-実行入口)）
-4. `WorktreeRemoveResult` を返す
+3. worktree パスがファイルシステム上に存在する場合のみ worktree を削除する（[git 実行入口](#git-実行入口)）
+4. ローカルブランチが存在する場合（[ローカルブランチ存在確認](#ローカルブランチ存在確認)）のみ強制削除（`-D`）する（[git 実行入口](#git-実行入口)）
+5. `WorktreeRemoveResult` を返す
 
 #### 例外
 
 | 例外名 | 発生条件 | メッセージ | 補足 |
 | --- | --- | --- | --- |
 | `ProjectNotFoundError` | ヘッダのプロジェクトが設定に無い | プロジェクト名 | git を実行する前に落とす |
-| `CalledProcessError` | git が非 0 で終了（worktree 不存在 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す |
+| `CalledProcessError` | 削除の git が非 0 で終了（他プロセスによるロック 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す。削除対象が無いだけの場合は削除を実行しないので発生しない |
 
 #### 単体テスト
 
@@ -1869,7 +1872,9 @@ WorktreeRemoveResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_worktree_remove` | 正常 | worktree + ブランチの強制削除 | 未マージ commit を持つブランチと worktree | なし | 両方削除され、戻り値が実体と一致 | squash マージ運用の再現 |
 | `test_worktree_remove_when_project_repo_differs` | 正常 | 対象リポジトリの選択 | プロセスの作業ディレクトリとは別の `local_path` を持つプロジェクト | なし | `local_path` 側の worktree とブランチが削除される | 常駐プロセス化で壊れた前提の回帰確認 |
-| `test_worktree_remove_when_worktree_missing` | 異常 | worktree 不存在 | worktree が無いブランチ名 | なし | `CalledProcessError` | 例外表「git が非 0 で終了」に対応 |
+| `test_worktree_remove_when_worktree_missing` | 正常 | worktree だけ不存在 | worktree は無いがローカルブランチはあるブランチ名 | なし | エラーにならず、ローカルブランチだけ削除される | 巻き戻しで worktree 未作成のブランチを渡す経路 |
+| `test_worktree_remove_when_branch_missing` | 正常 | ローカルブランチだけ不存在 | ブランチを持たない（detached）worktree だけがあるブランチ名 | なし | エラーにならず、worktree だけ削除される | 途中まで片付いた状態からの再実行 |
+| `test_worktree_remove_when_nothing_left` | 正常 | 削除対象なし | worktree もローカルブランチも無いブランチ名 | なし | エラーにならず戻り値が返り、削除の git が実行されない | 何度呼んでも同じ結果になる |
 | `test_worktree_remove_when_project_unknown` | 異常 | プロジェクト不明 | 設定に無いプロジェクト名をヘッダに指定 | なし | `ProjectNotFoundError`・git 実行なし | 例外表「ヘッダのプロジェクトが設定に無い」に対応 |
 
 ---
@@ -2636,6 +2641,56 @@ Path("/home/user/repo/monitored-project/.claude/worktrees/feat-backend-profile-e
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_worktree_path` | 正常 | パス変換 | スラッシュ入りのブランチ名と tmp リポジトリの `cwd` | なし | `cwd` のリポジトリ配下で `/` が `-` に置換された `.claude/worktrees/` の絶対パス | - |
+
+---
+
+### ローカルブランチ存在確認
+> 物理名: `_branch_exists`<br>
+> 種別: 関数
+
+指定リポジトリにローカルブランチがあるかを返す。
+後片付けで「残っているものだけ消す」判定に使う（無いことは失敗ではないので、非 0 終了を結果として扱う）。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| ブランチ名 | `branch` | `str` | ✅ | - | 確認するブランチ名 | - |
+| 対象リポジトリ | `cwd` | `str` | ✅ | - | git を実行するリポジトリの絶対パス | 監視対象プロジェクトの `local_path` |
+
+引数例:
+
+```python
+_branch_exists("feat/backend/profile/edit/edit-api", cwd="/home/user/repo/monitored-project")
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `bool` | ローカルブランチが存在するか | - |
+
+戻り値例:
+
+```python
+True
+```
+
+#### 処理
+
+1. `cwd` のリポジトリで `git show-ref --verify --quiet refs/heads/{branch}` を非 0 終了を許容して実行する
+2. 終了コードが 0 なら `True`、それ以外は `False` を返す
+
+#### 例外
+
+なし
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_branch_exists` | 正常 | 存在するブランチ | tmp リポジトリに作成済みのブランチ名 | なし | `True` | - |
+| `test_branch_exists_when_missing` | 正常 | 存在しないブランチ | 未作成のブランチ名 | なし | `False`・例外にならない | 後片付けの判定に使うため落とさない |
 
 ---
 

@@ -26,11 +26,25 @@ def test_normal(tmp_git_repo, api):
     assert res.branch == "feat/rm"
 
 
-def test_error_when_git_fails(tmp_git_repo, api):
-    """worktree 不存在による git 実行失敗を確認する（異常系・git 実行失敗）。"""
-    # 実行・検証
-    with pytest.raises(subprocess.CalledProcessError):
-        api.worktree_remove("feat/none")
+def test_normal_when_削除対象が残っていない(tmp_git_repo, api):
+    """削除対象が無くても正常終了することを確認する（正常系・削除対象が残っていない）。"""
+    # 準備
+    before = subprocess.run(
+        ["git", "worktree", "list"], cwd=tmp_git_repo, capture_output=True, text=True
+    ).stdout
+    branches_before = subprocess.run(
+        ["git", "branch", "--list"], cwd=tmp_git_repo, capture_output=True, text=True
+    ).stdout
+    # 実行
+    res = api.worktree_remove("feat/none")
+    # 検証
+    assert res.branch == "feat/none"
+    assert subprocess.run(
+        ["git", "worktree", "list"], cwd=tmp_git_repo, capture_output=True, text=True
+    ).stdout == before
+    assert subprocess.run(
+        ["git", "branch", "--list"], cwd=tmp_git_repo, capture_output=True, text=True
+    ).stdout == branches_before
 
 
 def test_error_when_project_unknown(tmp_git_repo, mon_settings, mcp_ctx_factory):

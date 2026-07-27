@@ -152,3 +152,24 @@ implementer:
   - エージェント/implementer/フェーズ/初期処理.md
   - エージェント/implementer/フェーズ/指摘対応.md
   - エージェント/implementer/フェーズ/実装.md
+
+questioner:
+  - エージェント/questioner/README.md
+  - エージェント/questioner/フェーズ/初期処理.md
+  - エージェント/questioner/フェーズ/応答ループ.md
+  - エージェント/questioner/フェーズ/回答.md
+  - エージェント/questioner/フェーズ/完了処理.md
+
+quick-implementer:
+  - エージェント/quick-implementer/README.md
+  - エージェント/quick-implementer/フェーズ/初期処理.md
+  - エージェント/quick-implementer/フェーズ/応答ループ.md
+  - エージェント/quick-implementer/フェーズ/マージ実行.md
+  - エージェント/quick-implementer/フェーズ/修正とPR作成.md
+
+resetter:
+  - エージェント/resetter/README.md
+  - エージェント/resetter/フェーズ/初期処理.md
+  - エージェント/resetter/フェーズ/応答ループ.md
+  - エージェント/resetter/フェーズ/巻き戻しの実行.md
+  - エージェント/resetter/フェーズ/巻き戻し対象の洗い出し.md
