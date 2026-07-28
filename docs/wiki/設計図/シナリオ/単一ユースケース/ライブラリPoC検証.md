@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.0.0
 ---
 
 # ライブラリPoC検証
@@ -33,7 +33,7 @@ sequenceDiagram
   Note over GH: PoC PR に<br>確認:library-poc-runner 付与済み・<br>未解決の検証指示コメントあり
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
   create participant MON as library-poc-runner
-  ORC->>MON: tmux セッション作成 + skill 起動<br>（1 候補 = 1 セッション並列）
+  ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入<br>（1 候補 = 1 セッション並列）
   participant REPO as リポジトリ
   activate MON
   MON->>GH: PoC PR 本文（検証対象 / 調査結果 /<br>検証観点）と検証指示コメントを確認

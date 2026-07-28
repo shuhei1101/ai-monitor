@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.0.0
 ---
 
 # PoC結果確認
@@ -8,6 +8,8 @@ epic-conductor（復帰呼び出し）が epic-poc-runner の検証結果を確�
 PoC を指示した本人が結果を確認してから次へ進める（epic-poc-runner が勝手に次フェーズへ飛ばさない）。
 
 対応エージェント: `epic-conductor`（epic-poc-runner の完了報告コメントで復帰）
+
+- 対応テストファイル: `tests/e2e/単一ユースケース/test_PoC結果確認.py`
 
 ## 正常シナリオ（画面変更なし）
 
@@ -56,14 +58,10 @@ sequenceDiagram
 ### 期待値
 
 - epic Issue の自分宛コメント（epic-poc-runner の完了報告コメント含む）が全て Resolve 済み
-- PoC PR（複数あれば全て）が closed（マージなし）、PoC ブランチ / worktree が削除済み
+- PoC PR（複数あれば全て）が closed（マージなし）、PoC のリモートブランチと worktree が削除済み
 - epic Draft PR（base=master・本文は `## 紐づく Issue` のみ）が作成され、`確認:complex-scenario-writer` が付与されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - `確認:epic-conductor` が除去されている
-
-### 補足
-
-- 疑問がなければユーザー承認は不要（AI 間のクッション確認として動く）
 
 ## 正常シナリオ（画面変更あり）
 

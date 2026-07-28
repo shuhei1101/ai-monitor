@@ -14,6 +14,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 
 常駐サーバは複数セッションから同時に叩かれる。
 ツール関数はモジュール変数に状態を持たず、引数と束ねた依存だけで完結させる。
+ツール本体は同期関数で書き、登録時にワーカースレッドへ逃がす（[スレッド実行](#スレッド実行)）。
 
 ## 一覧
 
@@ -24,6 +25,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | プロジェクト解決 | `mcp/server.py` | 関数 | [`_resolve_project`](#プロジェクト解決) | リクエストヘッダから対象プロジェクトを解決 | 対象リポジトリの出所 |
 | 共通 | 例外 | `mcp/server.py` | クラス | `ProjectNotFoundError` | 対象プロジェクトを解決できない | 仕様は[プロジェクト解決](#プロジェクト解決)の例外表 |
 | 共通 | 配線 | `mcp/server.py` | 関数 | [`アプリ組み立て`](#アプリ組み立て) | ツールを登録した ASGI アプリを返す | モニターの FastAPI にマウントする |
+| 共通 | スレッド実行 | `mcp/server.py` | 関数 | [`_to_thread`](#スレッド実行) | 同期のツール関数をワーカースレッドで実行する非同期関数に包む | 登録時に全ツールへ適用する |
 | 共通 | ログイン解決 | `mcp/server.py` | 関数 | [`_get_current_login`](#ログイン解決) | 認証中ユーザーのログイン名を返す | assignee 操作の対象解決 |
 | 共通 | ラベル再取得 | `mcp/server.py` | 関数 | [`_get_labels`](#ラベル再取得) | 操作後の現在ラベル一覧を返す | - |
 | 共通 | assignee 再取得 | `mcp/server.py` | 関数 | [`_get_assignees`](#assignee-再取得) | 操作後の現在 assignee 一覧を返す | - |
@@ -109,6 +111,7 @@ plugins/ai-monitor/
 
 ```mermaid
 classDiagram
+  direction LR
   MCPサーバー ..> DTO定義 : DTO 生成
   MCPサーバー ..> githubkit : REST / GraphQL 呼び出し
   MCPサーバー ..> gitCLI : worktree / branch 操作
@@ -136,6 +139,7 @@ classDiagram
 
 ```mermaid
 classDiagram
+  direction LR
   イシュースナップショット o-- ラベル : ラベル一覧
   イシュースナップショット o-- コメントエントリ : コメント一覧
   イシュースナップショット o-- ユーザー参照 : 起票者・assignee
@@ -180,6 +184,7 @@ classDiagram
 
 ```mermaid
 classDiagram
+  direction LR
   宛先コメント o-- コメントブロック : ブロック配列
 
   class 宛先コメント {
@@ -202,6 +207,7 @@ classDiagram
 
 ```mermaid
 classDiagram
+  direction LR
   レビュースレッド o-- コメントエントリ : コメント一覧
 
   class レビュースレッド {
@@ -226,6 +232,7 @@ classDiagram
 
 ```mermaid
 classDiagram
+  direction LR
   質問 o-- 選択肢 : 選択肢一覧
 
   class 質問 {
@@ -1968,7 +1975,8 @@ build_mcp_app(settings, registry=registry, agents=agents)
 
 1. MCP サーバーのインスタンスを作る
 2. 全ツールに設定・台帳・エージェント一覧を束ねて登録する（束ねた引数は公開シグネチャから隠す）
-3. Streamable HTTP の ASGI アプリを生成して返す
+3. 登録するのはツールそのものではなく、ワーカースレッドで実行する非同期の包み（[スレッド実行](#スレッド実行)）
+4. Streamable HTTP の ASGI アプリを生成して返す
 
 #### 例外
 
@@ -1980,6 +1988,60 @@ build_mcp_app(settings, registry=registry, agents=agents)
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_build_mcp_app` | 正常 | ツールの登録 | 設定・台帳・エージェント一覧を渡す | なし | 全ツールが登録された ASGI アプリが返る | 名前と個数を確認する |
 | `test_build_mcp_app_when_signature` | 正常 | 内部引数の除去 | 同上 | なし | 公開シグネチャに `settings` / `registry` / `agents` が無い | MCP のスキーマ生成に効く |
+| `test_build_mcp_app_when_async` | 正常 | 非同期での登録 | 登録呼び出しを記録に差し替える | `FastMCP.add_tool` | 登録された全ツールが非同期関数 | イベントループを塞がないことの担保 |
+
+---
+
+### スレッド実行
+> 物理名: `_to_thread`<br>
+> 種別: 関数
+
+同期のツール関数を、ワーカースレッドで実行する非同期関数に包む。
+
+MCP サーバーは 1 本のイベントループで全セッションのリクエストを捌く。
+FastMCP は同期のツール関数をイベントループ上でそのまま呼ぶため、GitHub API や git CLI の応答を待つ間ループが止まり、他セッションのツール呼び出しが待たされてタイムアウトする。
+ツール本体は同期のまま書き、登録時（[アプリ組み立て](#アプリ組み立て)）に本関数で包んでこの経路を消す。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| ツール | `tool` | `Callable[..., Any]` | ✅ | - | 包む対象の同期ツール関数 | 依存を束ねた後のものを渡す |
+
+引数例:
+
+```python
+_to_thread(_bind(get_issue_or_pr, settings=settings))
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `Callable[..., Awaitable[Any]]` | ワーカースレッドで `tool` を実行する非同期関数 | 名前・docstring・公開シグネチャは `tool` のものを引き継ぐ |
+
+戻り値例:
+
+```python
+<function get_issue_or_pr>
+```
+
+#### 処理
+
+1. 受け取った引数のまま `tool` を呼ぶ非同期の包みを定義する
+   - 呼び出しは `anyio.to_thread.run_sync` へ渡してワーカースレッドで実行する
+2. `tool` の名前・docstring・公開シグネチャを包みへ引き継いで返す（MCP は引き継いだシグネチャから引数スキーマを作る）
+
+#### 例外
+
+なし
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_to_thread` | 正常 | 別スレッドでの実行 | 実行スレッドを記録する同期関数を包む | なし | 戻り値が素通しされ、呼び出し元と別のスレッドで実行される | - |
+| `test_to_thread_when_signature` | 正常 | シグネチャの引き継ぎ | 公開シグネチャを差し替えた関数を包む | なし | 名前と公開シグネチャが元のまま | MCP のスキーマ生成に効く |
 
 ---
 

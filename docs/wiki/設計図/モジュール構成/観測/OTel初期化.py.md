@@ -42,6 +42,7 @@ src/ai_monitor/observability/
 
 ```mermaid
 classDiagram
+  direction LR
   初期化 ..> 観測設定 : 設定読込
   初期化 ..> 共通属性組み立て : Resource 生成
   初期化 ..> Log配線 : LoggerProvider 起動

@@ -141,6 +141,40 @@ def confirm_labels(data) -> list[str]:
     return sorted(name for name in label_names(data) if name.startswith("確認:"))
 
 
+def unresolved_review_threads(gh_live, owner: str, repo: str, pr_number: int) -> list[str]:
+    """PR の未解決インライン指摘スレッドの先頭コメントを返す。"""
+    query = """
+    query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 100) {
+            nodes { isResolved comments(first: 1) { nodes { body } } }
+          }
+        }
+      }
+    }
+    """
+    data = gh_live.graphql(query, {"owner": owner, "repo": repo, "number": pr_number})
+    nodes = data["repository"]["pullRequest"]["reviewThreads"]["nodes"]
+    return [
+        node["comments"]["nodes"][0]["body"][:120]
+        for node in nodes
+        if not node["isResolved"] and node["comments"]["nodes"]
+    ]
+
+
+def waiting_for_user(data) -> bool:
+    """エージェントがターンを終えてユーザー待ちに入っているかを返す。
+
+    `議論中` と assignee は前フェーズから残ることがあるため、ターンの終了は
+    モニターが付ける処理中ラベルが消えていることで判定する。
+    """
+    names = label_names(data)
+    if "議論中" not in names or not data.assignees:
+        return False
+    return not [name for name in names if name.startswith("処理中:")]
+
+
 def issue(gh_live, owner, repo, number):
     """Issue / PR の最新スナップショットを返す。"""
     return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data

@@ -31,6 +31,7 @@ plugins/ai-monitor/inject/
 
 ```mermaid
 classDiagram
+  direction LR
   メイン ..> Wiki再帰探索 : 全ページの収集
   Wiki再帰探索 ..> 目次表解析 : 行の抽出
   Wiki再帰探索 ..> ドキュメント読み取り型 : README 取得

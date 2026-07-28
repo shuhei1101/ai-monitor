@@ -35,6 +35,7 @@ src/ai_monitor/integrations/github/
 
 ```mermaid
 classDiagram
+  direction LR
   オープン対象一覧 ..> クライアント生成 : 利用
   オープン対象一覧 ..> 紐づくIssue解析 : PR 本文解析
   ラベル付与 ..> クライアント生成 : 利用

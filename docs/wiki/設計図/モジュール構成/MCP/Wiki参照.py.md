@@ -34,6 +34,7 @@ src/ai_monitor/mcp/
 
 ```mermaid
 classDiagram
+  direction LR
   Wikiページ取得 ..> URL正規化 : raw URL 化
   Wikiページ取得 ..> ソース読み取り選択 : 実装の決定
   Wikiページ取得 ..> ドキュメント読み取り型 : 本文取得

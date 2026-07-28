@@ -1,6 +1,7 @@
 """`src/ai_monitor/features/sessions/registry.py` の単体テスト。"""
 from __future__ import annotations
 
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -81,6 +82,35 @@ def test_register(tmp_state_path, save_mock):
     # 検証
     assert reg.sessions == [session]
     save_mock.assert_called_once()
+
+
+def test_register_when_concurrent(tmp_state_path, monkeypatch):
+    """並行呼び出しの直列化を確認する（正常系）。"""
+    # 準備
+    entered = threading.Event()
+    release = threading.Event()
+
+    def save(path, sessions):
+        # 最初の保存だけ止めて、後続の登録がロック待ちになる状況を作る
+        if not entered.is_set():
+            entered.set()
+            release.wait(5)
+
+    monkeypatch.setattr(registry_mod, "save_sessions", save)
+    reg = registry_mod.SessionRegistry(tmp_state_path)
+    blocking = threading.Thread(target=reg.register, args=(_session(number=35),))
+    waiting = threading.Thread(target=reg.register, args=(_session(number=36),))
+    # 実行
+    blocking.start()
+    entered.wait(5)
+    waiting.start()
+    waiting.join(0.5)
+    # 検証
+    assert waiting.is_alive()
+    release.set()
+    blocking.join(5)
+    waiting.join(5)
+    assert {s.primary_number for s in reg.sessions} == {35, 36}
 
 
 def test_touch(registry, save_mock):

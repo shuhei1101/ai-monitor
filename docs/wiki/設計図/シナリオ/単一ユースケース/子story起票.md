@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.0.0
 ---
 
 # 子story起票
@@ -8,6 +8,8 @@ epic-conductor（復帰呼び出し）が complex-scenario-writer の完了報�
 確定済みユースケース一覧の各 UC に対応する子 story Issue を起票し、対応 story 列にリンクを埋める。
 
 対応エージェント: `epic-conductor`（complex-scenario-writer の完了報告コメントで復帰）
+
+- 対応テストファイル: `tests/e2e/単一ユースケース/test_子story起票.py`
 
 ## 正常シナリオ
 
@@ -34,7 +36,7 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信
   activate MON
   MON->>GH: epic Issue の完了報告を確認<br>（複合シナリオ確定 →<br>子 story 起票に進むと判断）
-  MON->>GH: create_child_issue x UC 数<br>（layer:story + 確認:story-conductor 付与）
+  MON->>GH: create_child_issue x UC 数<br>（layer:story + 確認:story-conductor +<br>親の リバースエンジニアリング ラベル付与）
   MON->>GH: epic Issue 本文の 対応 story 列に<br>#35;番号 反映（update_body）
   MON->>GH: epic Issue の完了報告コメントを Resolve
   MON->>GH: epic Issue に起票結果の報告コメント投稿<br>（ユーザー宛・待機なし）
@@ -47,6 +49,7 @@ sequenceDiagram
 
 - ユースケース一覧の行数と同数の story Issue が epic の Sub-issue として存在する
 - 各 story Issue に `layer:story` + `確認:story-conductor` が付与されている
+- 親 epic Issue に `リバースエンジニアリング` ラベルが付いていた場合、全 story に引き継がれている（付いていなければ子にも付かない）
 - `対応 story` 列の `未起票` が全て `#番号` に置き換わっている
 - epic Issue のラベルが `layer:epic` 系のみになっている（`確認:*` は除去、`議論中` 付与なし・assignee 設定なし）
 

@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import subprocess
+import threading
 from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
@@ -1278,6 +1280,57 @@ def test_build_mcp_app_when_signature(mon_settings, mon_registry, mcp_agents, la
         assert {"ctx", "settings", "registry", "agents"}.isdisjoint(properties), name
     assert "number" in schemas["report_completion"]
 
+
+def test_build_mcp_app_when_async(mon_settings, mon_registry, mcp_agents, label_settings, monkeypatch):
+    """非同期での登録を確認する（正常系）。"""
+    # 準備
+    registered = []
+    monkeypatch.setattr(
+        server.FastMCP, "add_tool", lambda self, fn, **kwargs: registered.append(fn)
+    )
+    # 実行
+    server.build_mcp_app(mon_settings, registry=mon_registry, agents=mcp_agents, label_settings=label_settings)
+    # 検証
+    assert len(registered) == len(EXPECTED_TOOLS)
+    assert all(inspect.iscoroutinefunction(fn) for fn in registered)
+
+
+# ---- スレッド実行 ----
+
+
+def test_to_thread():
+    """別スレッドでの実行を確認する（正常系）。"""
+    # 準備
+    executed: list[int] = []
+
+    def tool(number: int) -> int:
+        executed.append(threading.get_ident())
+        return number * 2
+
+    # 実行
+    result = asyncio.run(server._to_thread(tool)(21))
+    # 検証
+    assert result == 42
+    assert executed != [threading.get_ident()]
+
+
+def test_to_thread_when_signature():
+    """シグネチャの引き継ぎを確認する（正常系）。"""
+    # 準備
+    def tool(number: int, *, settings: str) -> int:
+        """ツール。"""
+        return number
+
+    signature = inspect.signature(tool)
+    tool.__signature__ = signature.replace(
+        parameters=[p for p in signature.parameters.values() if p.name != "settings"]
+    )
+    # 実行
+    wrapped = server._to_thread(tool)
+    # 検証
+    assert wrapped.__name__ == "tool"
+    assert wrapped.__doc__ == "ツール。"
+    assert list(inspect.signature(wrapped).parameters) == ["number"]
 
 
 def test_log_tool_call(caplog):

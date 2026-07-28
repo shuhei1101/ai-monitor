@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 import pytest
 import yaml
-from githubkit.exception import RequestFailed
+from githubkit.exception import RequestError, RequestFailed
 
 import ai_monitor.mcp.server as server
 
@@ -531,6 +531,31 @@ def epic_body() -> str:
 
 
 @pytest.fixture
+def master_baseline(gh_live, repo_ctx):
+    """master へマージするテストの後始末として、master のツリーを実行前へ戻す fixture。
+
+    epic PR を master へマージするテストは sandbox の master に成果物を残す。
+    残ったまま次のテストが走ると、seed が「既存ファイルを削除した」ように見えて
+    レビュー系エージェントが正当に指摘するため、テストごとにツリーを戻す。
+    """
+    owner, repo = repo_ctx
+    baseline = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch="master").parsed_data
+    baseline_tree = baseline.commit.commit.tree.sha
+    yield baseline.commit.sha
+    current = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch="master").parsed_data
+    if current.commit.commit.tree.sha == baseline_tree:
+        return
+    # ツリーだけ実行前に戻す commit を積む（履歴は書き換えない）
+    restored = gh_live.rest.git.create_commit(
+        owner=owner, repo=repo, message="chore: e2e の成果物を master から除去する",
+        tree=baseline_tree, parents=[current.commit.sha],
+    ).parsed_data
+    gh_live.rest.git.update_ref(
+        owner=owner, repo=repo, ref="heads/master", sha=restored.sha
+    )
+
+
+@pytest.fixture
 def wait_until():
     """条件が真値を返すまでポーリングで待つ function fixture。"""
 
@@ -538,9 +563,14 @@ def wait_until():
         deadline = time.time() + timeout_sec
         while time.time() < deadline:
             # 長時間のポーリングでは一時的な通信断が起きるので、次の周期に回して待ち続ける
+            # （githubkit は通信断を RequestError に包む。ステータス異常の RequestFailed は素通しする）
             try:
                 value = condition()
             except httpx.TransportError:
+                value = None
+            except RequestFailed:
+                raise
+            except RequestError:
                 value = None
             if value:
                 return value

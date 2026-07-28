@@ -1,6 +1,6 @@
 {
   "env": {
-    "_INJECT_RULES_INDEXES": "inject-rules が読むルール索引の URL（カンマ区切り）。共通規約 + ai-monitor の書式テンプレート。同名キーはユーザー設定を上書きするため共通側の URL も含める",
-    "INJECT_RULES_INDEXES": "https://raw.githubusercontent.com/shuhei1101/my-plugins/master/docs/rules.yaml,https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/rules.yaml"
+    "_INJECT_RULES_INDEXES": "inject-rules が読むルール索引（カンマ区切り）",
+    "INJECT_RULES_INDEXES": "/mnt/c/Users/shuhe/repo/my-plugins/docs/rules.yaml,/mnt/c/Users/shuhe/repo/ai-monitor/docs/rules.yaml,/mnt/c/Users/shuhe/repo/ai-monitor/docs/rules.self.yaml"
   }
 }

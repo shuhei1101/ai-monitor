@@ -8,8 +8,11 @@
 # CLAUDE_ENV_FILE に `export KEY="value"` 形式で追記するのが公式の永続化手段。
 #
 # settings.yaml が無い・git remote が無い・対象プロジェクトが未登録の場合は、
-# 警告を出して REPO_SLUG / WIKI_BASE / AI_MONITOR_WIKI_BASE の展開だけをスキップする
+# REPO_SLUG / WIKI_BASE / AI_MONITOR_WIKI_BASE の展開だけをスキップする
 # （監視対象外のリポジトリでもセッション自体は開けるようにするため）。
+#
+# 解決結果は stdout に出す。SessionStart フックの stdout はセッションのコンテキストへ
+# 注入されるため、登録漏れに気づかないまま Wiki 参照なしで動く事故を防げる。
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -25,7 +28,8 @@ fi
 grep -Ev '^[[:space:]]*(#|$)' "$ENV_FILE" | sed 's/^/export /' >> "$CLAUDE_ENV_FILE"
 
 skip() {
-  echo "load-constants.sh: WARN: $1（REPO_SLUG / WIKI_BASE / AI_MONITOR_WIKI_BASE の展開をスキップ）" >&2
+  echo "ai-monitor: 監視対象として解決できませんでした（$1）。REPO_SLUG / WIKI_BASE / AI_MONITOR_WIKI_BASE は未設定です。"
+  echo "ai-monitor: 監視対象にする場合は ${SETTINGS_FILE} の projects[] に本リポジトリを登録してください。"
   exit 0
 }
 
@@ -60,3 +64,5 @@ AI_MONITOR_WIKI_BASE=$(echo "$BASES" | sed -n 2p)
   echo "export WIKI_BASE=\"${WIKI_BASE}\""
   echo "export AI_MONITOR_WIKI_BASE=\"${AI_MONITOR_WIKI_BASE}\""
 } >> "$CLAUDE_ENV_FILE"
+
+echo "ai-monitor: 監視対象 ${REPO_SLUG} として解決しました（WIKI_BASE=${WIKI_BASE}）。"

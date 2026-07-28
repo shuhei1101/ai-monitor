@@ -35,6 +35,7 @@ plugins/ai-monitor/inject/
 
 ```mermaid
 classDiagram
+  direction LR
   CLI ..> URL正規化 : blob URL の変換
   CLI ..> URL取得 : ドキュメント取得
   CLI ..> frontmatter除去 : 本文の整形

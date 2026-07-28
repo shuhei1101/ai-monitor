@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from anyio import to_thread
 from githubkit import GitHub
 from githubkit.exception import RequestFailed
 from mcp.server.fastmcp import Context, FastMCP
@@ -171,6 +172,18 @@ def _bind(tool: Callable[..., Any], **deps: Any) -> Callable[..., Any]:
     # MCP はシグネチャから引数スキーマを作るため、束ねた引数を取り除く
     visible = [p for p in signature.parameters.values() if p.name not in bound]
     wrapper.__signature__ = signature.replace(parameters=visible)  # type: ignore[attr-defined]
+    return wrapper
+
+
+def _to_thread(tool: Callable[..., Any]) -> Callable[..., Any]:
+    """同期のツール関数をワーカースレッドで実行する非同期関数に包む。"""
+
+    # 受け取った引数のまま tool を呼ぶ包みを定義する（イベントループを塞がないよう別スレッドで走らせる）
+    @functools.wraps(tool)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        return await to_thread.run_sync(functools.partial(tool, *args, **kwargs))
+
+    # 名前・docstring・公開シグネチャは functools.wraps が引き継ぐ（MCP がスキーマ生成に使う）
     return wrapper
 
 
@@ -1108,8 +1121,11 @@ def build_mcp_app(
         (add_watch_targets, "監視対象追加", None),
         (remove_watch_targets, "監視対象除去", _DESTRUCTIVE),
     ):
+        # 登録するのはツールそのものではなく、ワーカースレッドで実行する非同期の包み
         mcp.add_tool(
-            _bind(tool, settings=settings, registry=registry, agents=agents, label_settings=label_settings),
+            _to_thread(
+                _bind(tool, settings=settings, registry=registry, agents=agents, label_settings=label_settings)
+            ),
             title=title,
             annotations=tool_annotations,
         )

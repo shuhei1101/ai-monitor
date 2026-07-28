@@ -4,5 +4,5 @@
 
 | 画面 | Issue 一覧 | 現役採用案 |
 | -------- | --------------------------------------- | ---------------------------------------------------------------------- |
-| 顧客一覧 | [Issue 一覧](customer-list/) | [a-left-filter (Issue 0)](customer-list/issues/0/a-left-filter/) |
-| 顧客詳細 | [Issue 一覧](customer-detail/) | [a-tabs (Issue 0)](customer-detail/issues/0/a-tabs/) |
+| 顧客一覧 | [Issue 一覧](customer-list/) | [a-left-filter (Issue 0)](customer-list/0/a-left-filter/) |
+| 顧客詳細 | [Issue 一覧](customer-detail/) | [a-tabs (Issue 0)](customer-detail/0/a-tabs/) |

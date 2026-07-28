@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.0.0
 ---
 
 # epic要件確定
@@ -33,7 +33,7 @@ sequenceDiagram
   Note over GH: epic Issue に 確認:epic-conductor 付与済み
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
   create participant MON as epic-conductor
-  ORC->>MON: tmux セッション作成 + skill 起動
+  ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
   participant REPO as リポジトリ
   activate MON
   MON->>GH: 親 intake から範囲抽出・<br>5 セクションの草案を epic Issue 本文に反映
@@ -77,10 +77,6 @@ sequenceDiagram
 - `確認:epic-conductor` が除去され、epic Draft PR（本文は `## 紐づく Issue` のみ）が作成されて `確認:complex-scenario-writer` が付与されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - 自分宛コメントが全て Resolve 済み
-
-### 補足
-
-- フィードバックループは Issue 側の応答ループ（本文修正 → 再待機）で回す
 
 ## 正常シナリオ（PoC 不要・画面変更あり）
 
@@ -156,6 +152,74 @@ sequenceDiagram
 - PoC Draft PR（base=master・タイトル `PoC: {検証テーマ}（epic #N）`・本文は `## 紐づく Issue` のみ）が作成され、`確認:epic-poc-runner` と指示コメント（@epic-poc-runner 宛・未解決）が付与・投稿されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - epic Draft PR は作成されない
+
+## 正常シナリオ（リバースエンジニアリング）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| `リバースエンジニアリング` ラベル | 対象の Issue / PR に付与済み | 本経路を選ぶ判定材料。ユーザーが system Issue に付け、子 Issue へ引き継がれる |
+| epic Issue | `layer:epic` + `type:docs` + `確認:epic-conductor` 付きで存在 | 本文の `## ユースケース一覧` と `## 前提条件` は起票時に記入済み |
+| エピック一覧 | 親 system Issue の `## エピック一覧` に当該 epic の所属 UC と着手順が確定済み | [システム構成確定](./システム構成確定.md) の成果物 |
+| assignee | 未設定 | エージェント起動条件 |
+| 現状の設計書 | 現状モックと現状の複合 UC シナリオが master に存在 | RE PR がマージ済みであることが前提 |
+| モニター | polling 中 | - |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  actor U as ユーザー
+  participant GH as GitHub
+  participant ORC as モニター
+
+  Note over GH: リバースエンジニアリング起動:<br>正常シナリオ 2 本を先に実行済み<br>（master に現状モックと現状シナリオが入っている）
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
+  create participant MON as epic-conductor
+  ORC->>MON: 既存セッションへ送信
+  participant REPO as リポジトリ
+  activate MON
+  MON-->>GH: 親 system Issue の エピック一覧から<br>当該 epic の範囲と所属 UC を読む
+  MON-->>REPO: master の現状モックと現状シナリオから<br>現在の振る舞いを把握
+  MON->>GH: 概要 / 背景 / 横断要件を現状の設計書から逆算して<br>epic Issue 本文に反映
+  MON->>GH: epic Issue に完了報告コメントと<br>確認事項コメント（実装と要件が乖離している箇所・<br>あるべき姿に直す範囲）を投稿
+  MON->>GH: epic Issue に 議論中 付与 +<br>assignee=ユーザー 設定
+  deactivate MON
+
+  loop 応答ループ（修正指示がある間）
+    U->>GH: epic Issue にフィードバックコメント +<br>assignee 外し
+    ORC-->>GH: polling（ユーザー返信 + assignee なし を検知）
+    ORC->>MON: 既存セッションへ送信
+    activate MON
+    MON->>GH: epic Issue の本文修正 +<br>assignee=ユーザー 再設定
+    deactivate MON
+  end
+
+  U->>GH: epic Issue の 議論中 除去 + assignee 外し
+  ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
+  ORC->>MON: 既存セッションへ送信（完了処理）
+  activate MON
+  MON->>GH: epic Issue の自分宛コメント一括 Resolve
+  MON->>GH: epic Issue の 確認:epic-conductor 除去
+  MON->>REPO: worktree + epic ブランチ作成<br>（docs/epic/{ドメイン}）+ 空 commit push
+  MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
+  MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
+  MON->>GH: epic PR に 確認:mock-designer +<br>指示コメントを付与
+  deactivate MON
+  Note over MON: セッションは epic Issue close まで常駐
+```
+
+### 期待値
+
+- epic Issue 本文の 5 セクションが揃い、`## 概要` / `## 背景` / `## 横断要件` が現状の設計書から書かれている
+- epic-conductor が実装コードを読み出した記録がない（入力は親 system Issue のエピック一覧と master の現状の設計書に閉じる）
+- ユースケース一覧の `対応 story` 列が全行 `未起票`
+- 現状の設計書と要件が乖離している箇所が確認事項コメントに挙がり、ユーザー判断が本文に反映されている
+- `確認:epic-conductor` が除去され、epic Draft PR が作成されて `確認:mock-designer` が付与されている
+- 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
+- 自分宛コメントが全て Resolve 済み
 
 ## 異常シナリオ
 

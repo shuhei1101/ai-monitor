@@ -1,6 +1,8 @@
 # ai-monitor inject-rules ルール索引（SoT）
 # rule: 索引ファイルからの相対パス / paths: 注入トリガーの glob（クォート必須）
 # 実体ファイルを書くときに、その書式を定義するテンプレートを注入する
+# 本索引は監視対象プロジェクトからも参照する（全プロジェクト共通の書式・規約だけを置く）
+# ai-monitor 自身の開発でしか使わないルールは rules.self.yaml に置く
 rules:
   - rule: wiki/テンプレート/シナリオ.md
     paths:
@@ -12,6 +14,9 @@ rules:
   - rule: wiki/テンプレート/モジュール構成.md
     paths:
       - "**/docs/wiki/設計図/モジュール構成/**/*.md"
+  - rule: wiki/テンプレート/アーキテクチャ図.md
+    paths:
+      - "**/docs/wiki/設計図/アーキテクチャ図.md"
   - rule: wiki/テンプレート/コンテナ構成.md
     paths:
       - "**/docs/wiki/設計図/コンテナ構成/**/*.md"
@@ -51,10 +56,6 @@ rules:
   - rule: wiki/テンプレート/外部ライブラリ一覧.md
     paths:
       - "**/docs/wiki/外部ライブラリ/README.md"
-  - rule: wiki/テンプレート/対応表.md
-    paths:
-      - "**/docs/wiki/Claudeハーネス/対応表/**/*.md"
-      - "**/docs/wiki/Claudeハーネス/共通対応表/**/*.md"
   - rule: wiki/テンプレート/テスト実行方法.md
     paths:
       - "**/docs/wiki/テスト/テスト実行方法.md"
@@ -67,3 +68,12 @@ rules:
   - rule: wiki/規約/Wiki管理.md
     paths:
       - "**/docs/wiki/**/*.md"
+  - rule: wiki/規約/モック画面構成.md
+    paths:
+      - "**/docs/mock/**"
+  - rule: wiki/規約/デザインスタイル.md
+    paths:
+      - "**/docs/mock/styles/**"
+  - rule: wiki/規約/共通コンポーネント.md
+    paths:
+      - "**/docs/mock/components/**"

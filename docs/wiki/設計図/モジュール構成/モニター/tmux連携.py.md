@@ -29,6 +29,7 @@ src/ai_monitor/integrations/tmux/
 
 ```mermaid
 classDiagram
+  direction LR
   セッション作成 ..> tmux実行入口 : 利用
   キー送信 ..> tmux実行入口 : 利用
   生存確認 ..> tmux実行入口 : 利用

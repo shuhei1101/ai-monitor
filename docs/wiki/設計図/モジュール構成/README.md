@@ -29,3 +29,5 @@ ai-monitor の構成要素（クラス / 関数 / 関数型 / データモデル
 | 注入 | URLドキュメント | [URLドキュメント](./注入/URLドキュメント.py.md) | 指定 URL の本文を md コードブロックで展開する注入 CLI | - |
 | 注入 | Wiki索引 | [Wiki索引](./注入/Wiki索引.py.md) | プロジェクト Wiki の README を再帰的に辿った「ページ（raw URL）/ 概要」2 列表を展開する注入 CLI | - |
 | 観測 | OTel初期化 | [OTel初期化](./観測/OTel初期化.py.md) | OpenTelemetry SDK（Log / Trace / Metric Provider）を起動時に 1 回配線するモジュール | モニターの composition root から呼ぶ |
+| セットアップ | 起動 | [起動](./セットアップ/起動.py.md) | ラベル一括作成 CLI のエントリポイント | `python -m ai_monitor.setup_labels` |
+| セットアップ | ラベル同期 | [ラベル同期](./セットアップ/ラベル同期.py.md) | `constants.env` のラベルを GitHub リポジトリへ冪等に反映する | 監視対象の追加時とエージェント追加時に実行 |

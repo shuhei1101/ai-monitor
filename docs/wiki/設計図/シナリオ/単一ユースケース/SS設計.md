@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.0.0
 ---
 
 # SS設計
@@ -37,7 +37,7 @@ sequenceDiagram
   Note over GH: subsystem PR に 確認:architect 付与済み
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
   create participant MON as architect
-  ORC->>MON: tmux セッション作成 + skill 起動
+  ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
   participant REPO as リポジトリ
   activate MON
   MON->>GH: 紐づく Issue の SA<br>（機能 / 非機能要件）を確認
@@ -212,6 +212,77 @@ sequenceDiagram
 - 設計 Wiki の修正 commit が subsystem ブランチに積まれている（修正はユーザー承認済み）
 - 差し戻し報告コメントのスレッドに修正内容（修正 commit の ID）と再開指示（@{差し戻し元} 宛）が返信追記されている（スレッドは未解決のまま = 差し戻し元 worker が処理時に Resolve する）
 - subsystem PR に `確認:{差し戻し元 worker}`（例: `確認:tester`）が付与され、`確認:architect` が除去されている
+
+## 正常シナリオ（リバースエンジニアリング）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| `リバースエンジニアリング` ラベル | 対象の Issue / PR に付与済み | 本経路を選ぶ判定材料。ユーザーが system Issue に付け、子 Issue へ引き継がれる |
+| subsystem Draft PR | `確認:architect` 付与済み・`## タスク一覧` 承認済み | 設計タスクは全て新規作成 |
+| subsystem Issue | `type:docs` で SA 確定済み | 設計の元ネタ |
+| assignee | PR に未設定 | エージェント起動条件 |
+| 設計 Wiki | 当該サブシステムの結合 / モジュール構成が現状の内容で base に存在 | RE PR がマージ済みであることが前提 |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  actor U as ユーザー
+  participant GH as GitHub
+  participant ORC as モニター
+
+  Note over GH: subsystem PR に 確認:architect 付与済み
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
+  create participant MON as architect
+  ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
+  participant REPO as リポジトリ
+  activate MON
+  MON-->>GH: 紐づく Issue の SA<br>（機能 / 非機能要件）を確認
+  MON-->>REPO: base に入っている現状の設計書を読む
+  MON-->>MON: 現状構造とあるべき構造の差分を整理<br>（維持 / 修正 / 廃止の判定一覧）
+
+  loop タスク一覧の設計 Wiki ごと<br>（インターフェース → ER図 → 画面構成 →<br>バックエンド結合 / フロントエンド結合 →<br>モジュール構成 の上流順）
+    MON->>REPO: 対象 Wiki をあるべき構造で上書きして commit push
+    MON->>GH: subsystem PR に設計の提案コメント<br>（現状構造との差分一覧 + リファクタ範囲の提案 +<br>割れる論点は複数案比較 + 推奨）+<br>議論中 付与 + assignee=ユーザー 設定
+    deactivate MON
+
+    loop 応答ループ（修正指示がある間）
+      U->>GH: subsystem PR にフィードバックコメント +<br>assignee 外し
+      ORC-->>GH: polling（ユーザー返信 + assignee なし を検知）
+      ORC->>MON: 既存セッションへ送信
+      activate MON
+      MON->>REPO: Wiki 修正 commit push
+      MON->>GH: subsystem PR の<br>assignee=ユーザー 再設定
+      deactivate MON
+    end
+
+    U->>GH: subsystem PR の 議論中 除去 +<br>assignee 外し（当該 Wiki の確定）
+    ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
+    ORC->>MON: 既存セッションへ送信
+    activate MON
+    MON->>GH: subsystem PR の<br>自分宛コメント一括 Resolve
+  end
+
+  MON->>GH: タスク一覧の設計タスクに<br>チェックを入れる
+  MON->>GH: subsystem PR の 確認:architect 除去
+  MON->>GH: subsystem PR に 確認:tester 付与<br>（現状固定テスト作成タスクの割り当て）
+  deactivate MON
+  Note over MON: セッションは epic Issue close まで常駐
+```
+
+### 期待値
+
+- タスク一覧の担当分の設計 Wiki が上流順に 1 ページずつ確定され、subsystem ブランチに commit されている
+- architect が実装コードを読み出した記録がない（入力は SA と base の設計書に閉じる）
+- 本 PR の Files changed が現状からあるべき姿への変更範囲になっている
+- 各設計 Wiki の構成要素が実装の物理名と対応づいている（コンテナ列・物理名の引用行が実ファイル / 実シンボルを指す）
+- 現状構造とあるべき構造の差分が提案コメントに一覧化され、リファクタ範囲がユーザーと合意されている
+- `## タスク一覧` の設計タスクがチェック済み
+- subsystem PR に `確認:tester` が付与され、`確認:architect` が除去されている
+- 自分宛コメントが全て Resolve 済み
 
 ## 異常シナリオ
 

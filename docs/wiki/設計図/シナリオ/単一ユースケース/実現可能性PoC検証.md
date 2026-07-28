@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.0.0
 ---
 
 # 実現可能性PoC検証
@@ -33,7 +33,7 @@ sequenceDiagram
   Note over GH: PoC Draft PR 作成済み・<br>確認:epic-poc-runner 付与済み
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
   create participant MON as epic-poc-runner
-  ORC->>MON: tmux セッション作成 + skill 起動
+  ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
   participant REPO as リポジトリ
   activate MON
   MON->>GH: 指示コメント + 親 epic Issue 本文を確認して<br>PoC PR 本文を仮埋め<br>（リスク仮説 / 検証構成 / 成功条件の草案）
@@ -89,11 +89,6 @@ sequenceDiagram
 - PoC PR は open のまま `確認:epic-poc-runner` だけが除去されている
 - epic Issue に `確認:epic-conductor` が付与され、完了報告コメント（@epic-conductor 宛・未解決）が投稿されている
 - PoC PR の自分宛コメントが全て Resolve 済み
-
-### 補足
-
-- PoC コードは main にマージしない（コードは捨てる・知見は残す）
-- Wiki 外部ライブラリページは書かない（採用確定した subsystem の architect が書く）
 
 ## 異常シナリオ（核心機構が成立しない結論）
 

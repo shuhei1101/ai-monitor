@@ -1,16 +1,5 @@
 # ai-monitor
 
-GitHub Issue/PR を **tmux + Claude Code** で自動オーケストレーションするワークフロー基盤。
-1 リポジトリに **2 つの顔** を持つ:
-
-1. **Claude Code プラグインマーケットプレイス**（`.claude-plugin/marketplace.json`）
-   - 監視対象プロジェクトから利用する agent / hook / 注入スクリプトを配布
-2. **設計ドキュメント（`docs/wiki/`）**
-   - ワークフロー全体設計・モニター（Python デーモン）・GitHub 操作 MCP サーバーの設計 SoT
-   - 実装は仕様駆動（docs → 実装）で、この設計に沿って進める
-
----
-
 ## 1. ディレクトリ構成
 
 ```
@@ -21,33 +10,39 @@ ai-monitor/
 │   └── ai-monitor/                          # 唯一のプラグイン
 │       ├── .claude-plugin/plugin.json       # プラグインマニフェスト
 │       ├── agents/                          # サブエージェント定義
-│       ├── hooks/hooks.json                 # SessionStart / PreToolUse / PostCompact フック
+│       ├── hooks/                           # SessionStart / PreCompact フック
 │       ├── inject/                          # Wiki 取得・索引組み立て（モニターと共有）
-│       ├── scripts/                         # Wiki 取得等のヘルパースクリプト
 │       └── constants.env                    # ラベル等の静的定数（SoT・bash / python 両対応）
 ├── config/agent_phases.yaml                 # エージェント名 → フェーズページ一覧
+├── src/ai_monitor/                          # モニター（Python デーモン）+ MCP サーバー
 ├── docs/wiki/                               # 設計ドキュメント（GitHub Pages 公開）
-├── CLAUDE.md                                # ワークフロー全体設計（大元）
 └── settings.yaml.example                    # 共通設定サンプル（github_token + 監視対象プロジェクト宣言）
 ```
-
----
 
 ## 2. セットアップ
 
 ### 2.1. 共通設定の作成
 
-モニターとエージェントセッションが共用する設定を `~/.config/ai-monitor/settings.yaml` に置く:
+モニターとエージェントセッションが共用する設定を `~/.config/ai-monitor/settings.yaml` に置く。
+本リポジトリ直下ではなくホーム配下に置くのは、監視対象プロジェクトの worktree で動くエージェントセッションと E2E テストが同じファイルを参照するため:
 
 ```bash
 mkdir -p ~/.config/ai-monitor
 cp settings.yaml.example ~/.config/ai-monitor/settings.yaml
-# settings.yaml を編集: github_token と projects[]（name / repo / local_path / wiki_base）を宣言
 ```
 
-- SessionStart フックが CWD の git remote と `projects[].repo` を突き合わせて `WIKI_BASE` / `REPO_SLUG` を展開する
-- settings.yaml が無い・プロジェクト未登録のリポジトリでは、警告のみでスキップされる（セッションは通常どおり開ける）
-- キーの一覧は [設計図/設定](./docs/wiki/設計図/設定/) 参照
+編集する項目:
+
+| キー | 内容 | 補足 |
+| --- | --- | --- |
+| `github_token` | fine-grained PAT | 監視対象の全リポジトリに Issues / Pull requests / Contents の RW を付与する |
+| `projects[]` | 監視対象プロジェクト | `name` / `repo`（`owner/name`）/ `local_path` / `wiki_base` を宣言 |
+| `agents[]` | エージェント別のモデル | 全エージェント分のエントリが必須（欠落・空値は起動エラー） |
+
+監視対象にするプロジェクトは、`repo` に対応する GitHub リモート（`origin`）を持っている必要がある。
+SessionStart フックが CWD の git remote と `projects[].repo` を突き合わせて `REPO_SLUG` / `WIKI_BASE` / `AI_MONITOR_WIKI_BASE` を展開するため。
+
+キーの一覧は [設計図/設定](./docs/wiki/設計図/設定/) 参照。
 
 ### 2.2. マーケットプレイス追加
 
@@ -71,60 +66,62 @@ claude plugin install ai-monitor@ai-monitor --scope project
 
 インストール後 `/reload-plugins` で反映。
 
-### 2.4. エージェントの起動
+### 2.4. 監視対象プロジェクト側の設定
 
-エージェントはモニターが tmux セッションとして起動する（手動でのスキル呼び出しは行わない）。
-起動プロンプトにはフェーズ・参考資料・Wiki 索引の全文が載る。
-どのフェーズページを載せるかは [`config/agent_phases.yaml`](./config/agent_phases.yaml) が持つ。
+監視対象プロジェクトの `.claude/settings.json` に、inject-rules が読むルール索引を宣言する:
 
----
-
-## 3. モニター / MCP サーバー
-
-モニター（GitHub polling + tmux セッション管理の Python デーモン）と GitHub 操作 MCP サーバーは、`docs/wiki/` の設計に沿って実装する:
-
-- 実行モデル・エージェント編成: [CLAUDE.md](./CLAUDE.md)
-- モジュール構成: [設計図/モジュール構成](./docs/wiki/設計図/モジュール構成/)
-- MCP ツールのインターフェース: [設計図/バックエンド結合](./docs/wiki/設計図/バックエンド結合/)
-- 設定: [設計図/設定](./docs/wiki/設計図/設定/)
-
----
-
-## 4. 開発
-
-### 4.1. プラグイン部分の編集
-
-`plugins/ai-monitor/` 配下を編集し、以下で確認:
-
-```bash
-# 監視対象プロジェクトから開発中プラグインを直接ロード
-cd /path/to/target-project
-claude --plugin-dir ~/repo/ai-monitor/plugins/ai-monitor
+```json
+{
+  "env": {
+    "INJECT_RULES_INDEXES": "https://raw.githubusercontent.com/shuhei1101/my-plugins/master/docs/rules.yaml,https://raw.githubusercontent.com/shuhei1101/ai-monitor/master/docs/rules.yaml,https://raw.githubusercontent.com/{owner}/{監視対象プロジェクト}/master/docs/rules.yaml"
+  }
+}
 ```
 
-編集後は `/reload-plugins` で反映。
+| 索引 | 内容 |
+| --- | --- |
+| my-plugins の `rules.yaml` | 言語 / フレームワーク横断のコーディング規約（dev-kit） |
+| ai-monitor の `rules.yaml` | 設計ドキュメントの書式テンプレートと横断規約。全プロジェクトで共有する |
+| 監視対象プロジェクト自身の `rules.yaml` | そのプロジェクト固有の規約 |
 
-### 4.2. Wiki の編集
+テンプレートと横断規約は ai-monitor 側を 1 箇所の SoT として共有する。
+エージェントも実行時に `AI_MONITOR_WIKI_BASE`（ai-monitor の Wiki）から読む。
 
-`docs/wiki/` 配下は GitHub Pages で公開されている（`https://shuhei1101.github.io/ai-monitor/`）。
-モニターの Wiki 読み元は設定（`ai_monitor_wiki_base` / `projects[].wiki_base`）で決まり、
-ローカル絶対パスなら push 不要でそのまま反映、raw URL なら master push で反映される。
+ai-monitor 自身の開発でしか使わないルール（エージェント定義・フェーズページ・組織図）は `docs/rules.self.yaml` に分けてあり、監視対象プロジェクトからは参照しない。
 
-### 4.3. コンポーネント間の呼び出し
+プロジェクト側の `docs/rules.yaml` は system-architect が土台生成時に空の索引として作る（プロジェクト固有の規約ができたときに追記する）。
 
-- Wiki → 起動プロンプト: モニターが設定のベースから取得して全文を載せる
-- エージェント → 定数: `${AI_MONITOR_LABEL_*}` 環境変数（SessionStart フックの `load-constants.sh` が `constants.env` と settings.yaml を `CLAUDE_ENV_FILE` 経由で展開）
-- エージェント → モニター: `AI_MONITOR_PORT` の HTTP（作業完了報告・コンパクト通知）
-- モニター → 注入スクリプト: `plugins/ai-monitor/inject/` の関数を直接呼ぶ（`fetch.py` / `build_wiki_index.py` / `read_agent_docs.py`）
+設定できたかは、対象プロジェクトでセッションを開いたときの `ai-monitor: 監視対象 {repo} として解決しました` の 1 行で確認する。
+`監視対象として解決できませんでした` が出た場合は `projects[]` の登録か git remote を見直す。
 
----
+### 2.5. GitHub ラベルの作成
 
-## 5. リンク
+`constants.env` が持つ全ラベル（`確認:*` / `処理中:*` / `layer:*` / `議論中` 等）を対象リポジトリに作成する:
+
+```bash
+# settings.yaml の projects[] 全件に作成
+PYTHONPATH=src uv run python -m ai_monitor.setup_labels
+
+# リポジトリを指定して作成
+PYTHONPATH=src uv run python -m ai_monitor.setup_labels --repo owner/name
+```
+
+既存ラベルは色・説明のみ更新する（冪等）。
+エージェントを追加してラベルが増えたときも同じコマンドで追随する。
+
+### 2.6. モニターの起動
+
+```bash
+PYTHONPATH=src uv run python -m ai_monitor.main
+```
+
+`projects[]` を書き換えたときは再起動が必要。
+エージェントはモニターが tmux セッションとして起動する（手動でのスキル呼び出しは行わない）。
+どのフェーズページを起動プロンプトに載せるかは [`config/agent_phases.yaml`](./config/agent_phases.yaml) が持つ。
+
+## 3. リンク
 
 | リソース | URL |
 | --- | --- |
-| GitHub Pages（Wiki） | https://shuhei1101.github.io/ai-monitor/ |
-| ワークフロー全体設計 | [CLAUDE.md](./CLAUDE.md) |
-| 設計ドキュメント | [docs/wiki/](./docs/wiki/) |
 | プラグイン公式ドキュメント | https://code.claude.com/docs/ja/plugins |
 | マーケットプレイス公式ドキュメント | https://code.claude.com/docs/ja/plugin-marketplaces |

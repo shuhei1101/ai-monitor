@@ -26,7 +26,11 @@ MCP `resolve_comments` で自分宛コメント（完了報告含む）を一括
 
 続けて PoC を畳む（複数の PoC PR があれば全てに実施）:
 
-1. MCP `close` を呼ぶ（PoC PR・`is_pr`: true・マージなし。closed PR の diff が恒久記録になる）
+1. MCP `close` を呼ぶ（マージなし。closed PR の diff が恒久記録になる）:
+   - `number`: PoC PR の番号
+   - `is_pr`: true
+   - `reason`: `completed`
+   - `delete_branch`: true
 2. MCP `worktree_remove` を呼ぶ（`branch`: PoC ブランチ）
 
 ### epic Draft PR の作成

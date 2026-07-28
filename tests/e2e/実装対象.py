@@ -459,6 +459,33 @@ def get_task(store: dict[str, Task], task_id: str) -> Task:
     return store[task_id]
 '''
 
+# 設計どおりに実装が済んだ状態のサービス層（実装レビュー / マージ系の起点）
+IMPLEMENTED_SERVICE_PY = SERVICE_PY.replace(
+    "from tasks.errors import TaskNotFoundError",
+    "from tasks.errors import TaskNotFoundError, ValidationError",
+).replace(
+    "from tasks.models import Task\n",
+    "from tasks.models import Task\n\nTITLE_MIN_LENGTH = 1\nTITLE_MAX_LENGTH = 100\nCONTENT_MAX_LENGTH = 1000\n",
+) + '''
+
+def update_task(store: dict[str, Task], task_id: str, title: str, content: str = "") -> Task:
+    """登録済みタスクのタイトルと本文を更新して返す。"""
+    # タイトルを検証する
+    if not (TITLE_MIN_LENGTH <= len(title) <= TITLE_MAX_LENGTH):
+        raise ValidationError(
+            f"title は {TITLE_MIN_LENGTH} 文字以上 {TITLE_MAX_LENGTH} 文字以内"
+        )
+    # 本文を検証する
+    if len(content) > CONTENT_MAX_LENGTH:
+        raise ValidationError(f"content は {CONTENT_MAX_LENGTH} 文字以内")
+    # 対象タスクを取得する
+    task = get_task(store, task_id)
+    # 差し替えたタスクを書き戻して返す
+    updated = Task(id=task.id, title=title, content=content)
+    store[task_id] = updated
+    return updated
+'''
+
 PROJECT_FILES = {
     ".gitignore": "__pycache__/\n*.pyc\n",
     "src/tasks/__init__.py": "",
@@ -499,39 +526,53 @@ def _store() -> dict[str, Task]:
 class UpdateTaskTest(unittest.TestCase):
     def test_update_task(self):
         """タイトルと本文を更新する（正常系）。"""
+        # 準備
         store = _store()
+        # 実行
         result = update_task(store, "t1", "新タイトル", "新本文")
+        # 検証
         self.assertEqual(result.title, "新タイトル")
         self.assertEqual(result.content, "新本文")
         self.assertEqual(store["t1"].title, "新タイトル")
 
     def test_update_task_when_content_omitted(self):
         """本文を省略すると空文字になる（正常系）。"""
+        # 準備
         store = _store()
+        # 実行
         result = update_task(store, "t1", "新タイトル")
+        # 検証
         self.assertEqual(result.content, "")
 
     def test_update_task_when_title_empty(self):
         """タイトルが空なら ValidationError（異常系）。"""
+        # 準備
         store = _store()
+        # 実行・検証
         with self.assertRaises(ValidationError):
             update_task(store, "t1", "")
 
     def test_update_task_when_title_too_long(self):
         """タイトルが 101 文字なら ValidationError（異常系）。"""
+        # 準備
         store = _store()
+        # 実行・検証
         with self.assertRaises(ValidationError):
             update_task(store, "t1", "a" * 101)
 
     def test_update_task_when_content_too_long(self):
         """本文が 1001 文字なら ValidationError（異常系）。"""
+        # 準備
         store = _store()
+        # 実行・検証
         with self.assertRaises(ValidationError):
             update_task(store, "t1", "新タイトル", "a" * 1001)
 
     def test_update_task_when_task_missing(self):
         """未登録の task_id なら TaskNotFoundError（異常系）。"""
+        # 準備
         store = _store()
+        # 実行・検証
         with self.assertRaises(TaskNotFoundError):
             update_task(store, "missing", "新タイトル")
         self.assertEqual(store["t1"].title, "旧タイトル")
@@ -565,20 +606,28 @@ def _store() -> dict[str, Task]:
 class UpdateTaskTest(unittest.TestCase):
     def test_update_task(self):
         """タイトルと本文を更新する（正常系）。"""
+        # 準備
         store = _store()
+        # 実行
         result = update_task(store, "t1", "新タイトル", "新本文")
+        # 検証
         self.assertEqual(result.title, "新タイトル")
         self.assertEqual(store["t1"].title, "新タイトル")
 
     def test_update_task_when_content_omitted(self):
         """本文を省略すると空文字になる（正常系）。"""
+        # 準備
         store = _store()
+        # 実行
         result = update_task(store, "t1", "新タイトル")
+        # 検証
         self.assertEqual(result.content, "")
 
     def test_update_task_when_title_empty(self):
         """タイトルが空なら ValidationError（異常系）。"""
+        # 準備
         store = _store()
+        # 実行・検証
         with self.assertRaises(ValidationError):
             update_task(store, "t1", "")
 

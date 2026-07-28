@@ -1,0 +1,25 @@
+# ai-monitor 専用 inject-rules ルール索引
+# ai-monitor 自身を開発するときだけ読む（監視対象プロジェクトには参照させない）
+# エージェント定義・フェーズページ・組織図など ai-monitor 固有の実体ファイルに紐づくルールを置く
+rules:
+  - rule: wiki/テンプレート/対応表.md
+    paths:
+      - "**/docs/wiki/Claudeハーネス/対応表/**/*.md"
+      - "**/docs/wiki/Claudeハーネス/共通対応表/**/*.md"
+  - rule: wiki/エージェント/テンプレート/README.md
+    paths:
+      - "**/docs/wiki/エージェント/*/README.md"
+  - rule: wiki/エージェント/テンプレート/フェーズ/フェーズ.md
+    paths:
+      - "**/docs/wiki/エージェント/*/フェーズ/*.md"
+  - rule: wiki/規約/エージェント追加.md
+    paths:
+      - "**/docs/wiki/エージェント/**/*.md"
+      - "**/config/agent_phases.yaml"
+      - "**/plugins/ai-monitor/constants.env"
+  - rule: wiki/プロジェクト管理/エージェント組織図.md
+    paths:
+      - "**/docs/wiki/エージェント/**/*.md"
+      - "**/config/agent_phases.yaml"
+      - "**/plugins/ai-monitor/constants.env"
+      - "**/docs/wiki/設計図/シナリオ/**/*.md"
