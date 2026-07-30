@@ -67,6 +67,9 @@ rules:
   - rule: wiki/テンプレート/README書式.md
     paths:
       - "**/docs/wiki/**/README.md"
+  - rule: wiki/規約/V字モデル.md
+    paths:
+      - "**/docs/wiki/設計図/**/*.md"
   - rule: wiki/規約/Wiki管理.md
     paths:
       - "**/docs/wiki/**/*.md"
