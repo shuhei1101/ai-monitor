@@ -1,6 +1,7 @@
 # RE差し戻し対応
 
-architecture-reverse-engineer が担当範囲の実装を見つけられなかった報告を受け、担当範囲の見直しかリバースエンジニアリングなしで進めるかをユーザーに相談する。
+依頼先が担当範囲の実装を見つけられなかった報告を受け、担当範囲の見直しかリバースエンジニアリングなしで進めるかをユーザーに相談する。
+`{自分}` はフェーズ索引の担当範囲表の値に読み替える。
 
 ## 手順
 
@@ -13,7 +14,7 @@ architecture-reverse-engineer が担当範囲の実装を見つけられなか�
 MCP `comment` を呼ぶ:
 - `number`: RE PR の番号
 - `is_pr`: true
-- `sender`: `system-conductor`
+- `sender`: `{自分}`
 - `receiver`: ユーザーログイン名（`gh api user --jq '.login'` で取得）
 - `format`:
   - `type`: `plain`
@@ -34,5 +35,5 @@ MCP `add_labels` を呼ぶ:
 ### 作業完了報告
 
 MCP `report_completion` を呼ぶ:
-- `agent_name`: `system-conductor`
+- `agent_name`: `{自分}`
 - `number`: RE PR の番号

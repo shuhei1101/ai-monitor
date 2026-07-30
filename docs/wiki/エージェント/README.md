@@ -14,6 +14,7 @@ template_version: 1.0.0
 | --- | --- | --- |
 | [テンプレート](./テンプレート/) | フェーズ索引 + フェーズページの書式定義 | - |
 | [reverse-engineer共通](./reverse-engineer共通/) | `*-reverse-engineer` 5 体が共有するフェーズページ | エージェントではない |
+| [リバースエンジニアリング共通](./リバースエンジニアリング共通/) | 4 レイヤーの conductor が共有する RE 起動フェーズ | エージェントではない |
 | [intake-issue-triager](./intake-issue-triager/) | intake Issue の分解とサブ Issue 起票 | - |
 | [system-conductor](./system-conductor/) | 構成要件の確定から土台生成の委任・master マージ・子 epic 一括起票までの指揮 | ユーザーが直接起票（intake を経由しない） |
 | [system-architect](./system-architect/) | アーキテクチャ図・`docs/wiki/` 骨格・`docs/rules.yaml`・`README.md` の生成とラベル一括作成 | プロジェクトごとに 1 回 |

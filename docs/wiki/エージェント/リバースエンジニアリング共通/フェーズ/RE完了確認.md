@@ -1,6 +1,7 @@
 # RE完了確認
 
-architecture-reverse-engineer が commit した現状のアーキテクチャ図を確認し、起こし漏れがないかをユーザーに確認する。
+依頼先が commit した現状の設計書を確認し、起こし漏れがないかをユーザーに確認する。
+`{自分}` / `{成果物}` はフェーズ索引の担当範囲表の値に読み替える。
 
 ## 手順
 
@@ -8,18 +9,18 @@ architecture-reverse-engineer が commit した現状のアーキテクチャ図
 
 RE ブランチの worktree（`.claude/worktrees/{ブランチ名の / を - に置換}`）へ移動し、`git pull --ff-only` でリモートの最新を取り込む。
 
-commit された `設計図/アーキテクチャ図.md` と、完了報告コメントの機能の洗い出し・読み取れなかった箇所を読む。
+commit された `{成果物}` と、完了報告コメントの内容・読み取れなかった箇所を読む。
 
 ### 最終確認コメントの投稿
 
 MCP `comment` を呼ぶ:
 - `number`: RE PR の番号
 - `is_pr`: true
-- `sender`: `system-conductor`
+- `sender`: `{自分}`
 - `receiver`: ユーザーログイン名（`gh api user --jq '.login'` で取得）
 - `format`:
   - `type`: `plain`
-  - `body`: 起こしたページ一覧 + 洗い出された機能の要約 + 読み取れなかった箇所 + 起こし漏れの指摘方法と承認方法の案内
+  - `body`: 起こしたページ一覧 + 完了報告に添えられた内容の要約 + 読み取れなかった箇所 + 起こし漏れの指摘方法と承認方法の案内
 
 ### 議論中 付与 + 待機
 
@@ -36,5 +37,5 @@ MCP `add_labels` を呼ぶ:
 ### 作業完了報告
 
 MCP `report_completion` を呼ぶ:
-- `agent_name`: `system-conductor`
+- `agent_name`: `{自分}`
 - `number`: RE PR の番号
