@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -54,7 +55,7 @@ def _issue(number, labels=None, assignees=None):
     return Issue(number=number, state="open", labels=labels or [], assignees=assignees or [])
 
 
-def test_poll_when_mixed_targets(agent, io_mocks, registry, mon_project):
+def test_poll_when_mixed_targets(agent, io_mocks, registry, mon_project, rate_limit_gate):
     """確認ラベル + assignee なしの絞り込みを確認する（正常系）。"""
     # 準備
     targets = [
@@ -63,18 +64,18 @@ def test_poll_when_mixed_targets(agent, io_mocks, registry, mon_project):
         _issue(37, labels=["layer:epic"]),
     ]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも", gate=rate_limit_gate)
     # 検証
     assert io_mocks.send_keys.call_count == 1
     assert "35" in io_mocks.send_keys.call_args.args[0]
 
 
-def test_poll_when_new_target(agent, io_mocks, registry, mon_project):
+def test_poll_when_new_target(agent, io_mocks, registry, mon_project, rate_limit_gate):
     """新規対象にセッション作成 + skill 起動を確認する（正常系）。"""
     # 準備
     targets = [_issue(35, labels=["確認:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも", gate=rate_limit_gate)
     # 検証
     session_name = "ai-monitor-sandbox-35-intake-issue-triager"
     assert io_mocks.create_session.call_args.args[0] == session_name
@@ -85,7 +86,7 @@ def test_poll_when_new_target(agent, io_mocks, registry, mon_project):
     assert "--append-system-prompt-file " in sent_text
 
 
-def test_poll_when_existing_session(agent, io_mocks, registry, mon_project):
+def test_poll_when_existing_session(agent, io_mocks, registry, mon_project, rate_limit_gate):
     """既存セッションへの send-keys を確認する（正常系）。"""
     # 準備
     registry.register(
@@ -98,25 +99,40 @@ def test_poll_when_existing_session(agent, io_mocks, registry, mon_project):
     )
     targets = [_issue(35, labels=["確認:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも", gate=rate_limit_gate)
     # 検証
     io_mocks.create_session.assert_not_called()
     assert io_mocks.send_keys.call_args.args[0] == "ai-monitor-sandbox-35-intake-issue-triager"
     assert io_mocks.send_keys.call_args.args[1].startswith("状態が変化しました")
 
 
-def test_poll_when_processing_label(agent, io_mocks, registry, mon_project):
+def test_poll_when_processing_label(agent, io_mocks, registry, mon_project, rate_limit_gate):
     """処理中ラベル付きの対象の除外を確認する（正常系）。"""
     # 準備
     targets = [_issue(35, labels=["確認:intake-issue-triager", "処理中:intake-issue-triager"])]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも", gate=rate_limit_gate)
     # 検証
     io_mocks.send_keys.assert_not_called()
     io_mocks.add_label.assert_not_called()
 
 
-def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
+def test_poll_when_rate_limited(agent, io_mocks, registry, mon_project, rate_limit_gate):
+    """レートリミット待機中の見送りを確認する（正常系）。"""
+    # 準備: 起動条件を満たす対象を用意したうえで関門を待機中にする
+    targets = [_issue(35, labels=["確認:intake-issue-triager"])]
+    rate_limit_gate.block(
+        "ai-monitor-sandbox-35-intake-issue-triager", datetime.now(timezone.utc) + timedelta(minutes=30)
+    )
+    # 実行
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも", gate=rate_limit_gate)
+    # 検証: 起動しても枠を消費して止まるだけなので何もしない
+    io_mocks.create_session.assert_not_called()
+    io_mocks.add_label.assert_not_called()
+    io_mocks.send_keys.assert_not_called()
+
+
+def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project, rate_limit_gate):
     """優先度ソート順の処理を確認する（正常系）。"""
     # 準備
     targets = [
@@ -124,7 +140,7 @@ def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
         _issue(36, labels=["確認:intake-issue-triager", "優先度:急ぎ"]),
     ]
     # 実行
-    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    service.poll(mon_project, agent, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも", gate=rate_limit_gate)
     # 検証
     sent_sessions = [c.args[0] for c in io_mocks.send_keys.call_args_list]
     assert sent_sessions == [
@@ -133,7 +149,7 @@ def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project):
     ]
 
 
-def test_poll_when_phases_unregistered(io_mocks, registry, mon_project):
+def test_poll_when_phases_unregistered(io_mocks, registry, mon_project, rate_limit_gate):
     """フェーズ設定に無いエージェントの見送りを確認する（正常系）。"""
     # 準備
     unregistered = Agent(
@@ -144,14 +160,14 @@ def test_poll_when_phases_unregistered(io_mocks, registry, mon_project):
     )
     targets = [_issue(35, labels=["確認:tester"])]
     # 実行
-    service.poll(mon_project, unregistered, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    service.poll(mon_project, unregistered, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも", gate=rate_limit_gate)
     # 検証: 副作用を起こさずに周期を終える
     io_mocks.create_session.assert_not_called()
     io_mocks.add_label.assert_not_called()
     io_mocks.send_keys.assert_not_called()
 
 
-def test_poll_when_phases_unregistered_and_no_target(io_mocks, registry, mon_project):
+def test_poll_when_phases_unregistered_and_no_target(io_mocks, registry, mon_project, rate_limit_gate):
     """条件一致の対象が無い未登録エージェントでフェーズ設定を読まないことを確認する（正常系）。"""
     # 準備
     unregistered = Agent(
@@ -162,7 +178,7 @@ def test_poll_when_phases_unregistered_and_no_target(io_mocks, registry, mon_pro
     )
     targets = [_issue(35, labels=["確認:tester"], assignees=["shuhei1101"])]
     # 実行
-    service.poll(mon_project, unregistered, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも")
+    service.poll(mon_project, unregistered, targets, registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE, priority_urgent="優先度:急ぎ", priority_low="優先度:いつでも", gate=rate_limit_gate)
     # 検証: 毎周期のログ出力を避けるため設定の読み込み自体を行わない
     io_mocks.load_phase_config.assert_not_called()
 

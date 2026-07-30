@@ -16,7 +16,7 @@ STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "quick-
 
 @pytest.fixture
 def agent_models():
-    """全 17 エージェント分の AgentModel を明示した辞書を返す。"""
+    """全エージェント分の AgentModel を明示した辞書を返す。"""
     from ai_monitor.shared.settings import AgentModel
 
     return {name: AgentModel(model="sonnet") for name in main_mod._AGENT_NAMES}
@@ -31,7 +31,7 @@ def test_build_agents(label_settings, agent_models):
     # 実行
     agents = main_mod.build_agents(label_settings, agent_models=agent_models)
     # 検証
-    assert len(agents) == 17
+    assert len(agents) == len(main_mod._AGENT_NAMES)
     by_name = {a.name: a for a in agents}
     assert by_name["epic-conductor"].confirm_label == "確認:epic-conductor"
     assert by_name["epic-conductor"].processing_label == "処理中:epic-conductor"
@@ -77,13 +77,13 @@ def cycle_env(tmp_state_path, monkeypatch, mon_project, label_settings, agent_mo
     return settings, agents, registry
 
 
-def test_run_cycle(cycle_mocks, cycle_env, label_settings):
+def test_run_cycle(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
     """1 周期の配線を確認する（正常系）。"""
     # 準備
     settings, agents, registry = cycle_env
     # 実行
     targets_by_project, _ = main_mod.run_cycle(
-        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings
+        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
     )
     # 検証
     assert cycle_mocks.list_open_targets.call_count == 1
@@ -94,20 +94,20 @@ def test_run_cycle(cycle_mocks, cycle_env, label_settings):
     assert targets_by_project["sandbox"] == cycle_mocks.list_open_targets.return_value
 
 
-def test_run_cycle_when_heartbeat_elapsed(cycle_mocks, cycle_env, label_settings):
+def test_run_cycle_when_heartbeat_elapsed(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
     """heartbeat 経過時のタイムアウト回収を確認する（正常系）。"""
     # 準備
     settings, agents, registry = cycle_env
     # 実行
     _, heartbeat_at = main_mod.run_cycle(
-        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2000-01-01T00:00:00+00:00", labels=label_settings
+        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2000-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
     )
     # 検証
     cycle_mocks.reap_timed_out_sessions.assert_called_once()
     assert heartbeat_at != "2000-01-01T00:00:00+00:00"
 
 
-def test_run_cycle_when_heartbeat_not_elapsed(cycle_mocks, cycle_env, label_settings):
+def test_run_cycle_when_heartbeat_not_elapsed(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
     """heartbeat 未経過のスキップを確認する（正常系）。"""
     # 準備
     settings, agents, registry = cycle_env
@@ -115,14 +115,14 @@ def test_run_cycle_when_heartbeat_not_elapsed(cycle_mocks, cycle_env, label_sett
     # 実行
     _, heartbeat_at = main_mod.run_cycle(
         settings, agents, registry=registry, prev_targets={}, last_heartbeat_at=now,
-        labels=label_settings,
+        labels=label_settings, gate=rate_limit_gate,
     )
     # 検証
     cycle_mocks.reap_timed_out_sessions.assert_not_called()
     assert heartbeat_at == now
 
 
-def test_run_cycle_when_list_error(cycle_mocks, cycle_env, label_settings):
+def test_run_cycle_when_list_error(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
     """一覧取得失敗の周期見送りを確認する（異常系）。"""
     # 準備
     settings, agents, registry = cycle_env
@@ -131,7 +131,7 @@ def test_run_cycle_when_list_error(cycle_mocks, cycle_env, label_settings):
     cycle_mocks.list_open_targets.side_effect = RequestFailed(response)
     # 実行
     targets_by_project, _ = main_mod.run_cycle(
-        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings
+        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
     )
     # 検証
     cycle_mocks.poll.assert_not_called()

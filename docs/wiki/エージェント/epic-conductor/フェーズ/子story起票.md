@@ -33,7 +33,9 @@ MCP `resolve_comments` で complex-scenario-writer の完了報告コメント�
 - `is_pr`: false
 - `sender`: `epic-conductor`
 - `receiver`: ユーザーログイン名
-- `body`: 起票結果（story Issue のリンク一覧）
+- `format`:
+  - `type`: `plain`
+  - `body`: 起票結果（story Issue のリンク一覧）
 
 ### ラベル除去
 

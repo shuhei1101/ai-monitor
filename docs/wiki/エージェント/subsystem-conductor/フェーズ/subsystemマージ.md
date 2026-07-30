@@ -35,7 +35,9 @@ MCP `add_labels` を呼ぶ:
 - `is_pr`: false
 - `sender`: `subsystem-conductor`
 - `receiver`: `story-conductor`
-- `body`: 完了報告（対象 subsystem Issue 番号 + 実装内容の要約）。バグ差し戻し由来の修正用 PR の場合は、修正完了報告であることと修正内容を書く
+- `format`:
+  - `type`: `plain`
+  - `body`: 完了報告（対象 subsystem Issue 番号 + 実装内容の要約）。バグ差し戻し由来の修正用 PR の場合は、修正完了報告であることと修正内容を書く
 
 ### ラベル除去
 

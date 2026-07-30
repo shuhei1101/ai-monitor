@@ -12,7 +12,7 @@
 
 ### 最小 PoC コードの実装
 
-PoC ブランチの worktree（`.claude/worktrees/{ブランチ名の / を - に置換}`。ブランチ名は PoC PR の `head_ref`）へ移動する。
+PoC ブランチの worktree（`.claude/worktrees/{ブランチ名の / を - に置換}`。ブランチ名は PoC PR の `head_ref`）へ移動し、`git pull --ff-only` でリモートの最新を取り込む。
 
 `## 検証観点と結果` の各観点を実測できる最小のコードを実装し、commit push する。
 
@@ -43,7 +43,10 @@ MCP `comment` を呼ぶ:
 - `is_pr`: true
 - `sender`: `library-poc-runner`
 - `receiver`: 検証指示コメントの送信者
-- `body`: 検証の完了報告（観点ごとの実測値と判定のサマリ + 所感 + 積んだ commit の表。commit の書式は共通ルール『コミット報告』）
+- `format`:
+  - `type`: `commits`
+  - `body`: 検証の完了報告（観点ごとの実測値と判定のサマリ + 所感）
+  - `entries`: 積んだ commit の `commit` と `summary` の組
 
 続けて MCP `transition_phase` を呼ぶ:
 - `number`: $pr_number

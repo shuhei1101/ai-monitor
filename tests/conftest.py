@@ -183,7 +183,7 @@ def tmp_state_path(tmp_path) -> Path:
 
 @pytest.fixture
 def agent_models():
-    """全 17 エージェント分の AgentModel を明示した辞書を返す（テスト用に一律 sonnet）。"""
+    """全エージェント分の AgentModel を明示した辞書を返す（テスト用に一律 sonnet）。"""
     from ai_monitor.shared.settings import _AGENT_NAMES, AgentModel
 
     return {name: AgentModel(model="sonnet") for name in _AGENT_NAMES}
@@ -243,10 +243,19 @@ def mon_settings(mon_project):
         poll_interval_sec=1,
         heartbeat_interval_sec=60,
         session_timeout_min=30,
+        rate_limit_fallback_min=60,
         port=8765,
         telemetry=None,
         ai_monitor_wiki_base="https://example.com/ai-monitor-wiki",
     )
+
+
+@pytest.fixture
+def rate_limit_gate():
+    """待機していないレートリミット関門を返す。"""
+    from ai_monitor.features.rate_limit.gate import RateLimitGate
+
+    return RateLimitGate()
 
 
 @pytest.fixture

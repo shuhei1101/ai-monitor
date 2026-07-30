@@ -179,7 +179,7 @@ SUBSYSTEM_PR_BODY_TEMPLATE = """## 紐づく Issue
 
 ## タスク一覧
 
-- [ ] `設計図/バックエンド結合/タスク更新.py.md` を新規作成
+- [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成
 - [ ] `設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成
 - [ ] 実装コードを書く
 - [ ] 単体テストを追加 + 実行
@@ -187,7 +187,7 @@ SUBSYSTEM_PR_BODY_TEMPLATE = """## 紐づく Issue
 """
 
 DESIGN_TASK_LINES = [
-    "`設計図/バックエンド結合/タスク更新.py.md` を新規作成",
+    "`設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成",
     "`設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成",
 ]
 # 設計ページごとに 1 往復するため、往復回数の上限は設計タスク数 + 余裕分にする
@@ -319,7 +319,7 @@ def test_normal_no_er(
 
     # 検証: 担当分の設計 Wiki が subsystem ブランチに commit され、ER図 は作られていない
     paths = _design_paths(gh_live, owner, repo, subsystem_branch)
-    assert any(p.startswith("docs/wiki/設計図/バックエンド結合/") for p in paths), f"バックエンド結合が未作成: {paths}"
+    assert any(p.startswith("docs/wiki/設計図/インターフェース定義/バックエンド/") for p in paths), f"インターフェース定義（バックエンド）が未作成: {paths}"
     assert any(p.startswith("docs/wiki/設計図/モジュール構成/") for p in paths), f"モジュール構成が未作成: {paths}"
     assert not [p for p in paths if p.startswith("docs/wiki/設計図/ER図/")], (
         f"タスク一覧にない ER図 が作成されている: {paths}"

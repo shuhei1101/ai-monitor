@@ -7,10 +7,9 @@ rules:
   - rule: wiki/テンプレート/シナリオ.md
     paths:
       - "**/docs/wiki/設計図/シナリオ/**/*.md"
-  - rule: wiki/テンプレート/結合.md
+  - rule: wiki/テンプレート/インターフェース定義.md
     paths:
-      - "**/docs/wiki/設計図/バックエンド結合/**/*.md"
-      - "**/docs/wiki/設計図/フロントエンド結合/**/*.md"
+      - "**/docs/wiki/設計図/インターフェース定義/**/*.md"
   - rule: wiki/テンプレート/モジュール構成.md
     paths:
       - "**/docs/wiki/設計図/モジュール構成/**/*.md"

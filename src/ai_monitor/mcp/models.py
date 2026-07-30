@@ -1,9 +1,9 @@
 """MCP ツールの Pydantic DTO 集約。"""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Choice(BaseModel):
@@ -21,6 +21,50 @@ class Question(BaseModel):
     choices: list[Choice]
     recommended_index: int = -1
     recommended_reason: str = ""
+
+
+class CommitEntry(BaseModel):
+    """コミット表 1 行分の入力。"""
+
+    commit: str
+    summary: str
+
+
+class PageRangeEntry(BaseModel):
+    """ページ範囲表 1 行分の入力。"""
+
+    page: str
+    # 単一 commit のときは None（範囲セルが commit 単体になる）
+    start_commit: str | None = None
+    commit: str
+
+
+class PlainFormat(BaseModel):
+    """本文だけのコメント。"""
+
+    type: Literal["plain"] = "plain"
+    body: str
+
+
+class CommitsFormat(BaseModel):
+    """本文 + commit 表のコメント。"""
+
+    type: Literal["commits"] = "commits"
+    body: str
+    entries: list[CommitEntry]
+
+
+class PagesFormat(BaseModel):
+    """本文 + ページ範囲表のコメント。"""
+
+    type: Literal["pages"] = "pages"
+    body: str
+    entries: list[PageRangeEntry]
+
+
+type CommentFormat = Annotated[
+    PlainFormat | CommitsFormat | PagesFormat, Field(discriminator="type")
+]
 
 
 class CommentBlock(BaseModel):

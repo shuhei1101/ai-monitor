@@ -54,7 +54,7 @@ sequenceDiagram
   ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
-  MON->>GH: create_child_issue x 件数分<br>（layer:* + 確認:*-conductor 付与）
+  MON->>GH: 子 Issue を件数分作成<br>（layer:* + 確認:*-conductor 付与）
   MON->>GH: intake Issue の自分宛コメント一括 Resolve
   MON->>GH: intake Issue の 確認:intake-issue-triager 除去
   deactivate MON

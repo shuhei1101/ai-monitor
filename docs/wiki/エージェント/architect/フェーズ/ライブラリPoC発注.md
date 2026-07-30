@@ -24,7 +24,9 @@ MCP `reply_comment` を呼ぶ:
 - `comment_node_id`: 候補比較コメントの node_id
 - `sender`: `architect`
 - `receiver`: ユーザーログイン名（`gh api user --jq '.login'` で取得）
-- `body`: 作成した PoC PR のリンク一覧（候補ごと 1 行）
+- `format`:
+  - `type`: `plain`
+  - `body`: 作成した PoC PR のリンク一覧（候補ごと 1 行）
 
 ### 監視面の登録
 
@@ -40,7 +42,9 @@ PoC PR ごとに MCP `comment` を呼ぶ:
 - `is_pr`: true
 - `sender`: `architect`
 - `receiver`: `library-poc-runner`
-- `body`: 検証指示（本文の `## 検証観点と結果` に沿って検証し、実測値・判定・所感を本文へ記録する旨）
+- `format`:
+  - `type`: `plain`
+  - `body`: 検証指示（本文の `## 検証観点と結果` に沿って検証し、実測値・判定・所感を本文へ記録する旨）
 
 続けて PoC PR ごとに MCP `add_labels` を呼ぶ:
 - `number`: PoC PR の番号

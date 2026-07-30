@@ -42,7 +42,9 @@ MCP `resolve_comments` で single-scenario-writer の完了報告コメントを
 - `is_pr`: false
 - `sender`: `story-conductor`
 - `receiver`: ユーザーログイン名
-- `body`: 起票結果（先頭グループの subsystem Issue リンク一覧 + 依存順の要点）
+- `format`:
+  - `type`: `plain`
+  - `body`: 起票結果（先頭グループの subsystem Issue リンク一覧 + 依存順の要点）
 
 ### ラベル除去
 

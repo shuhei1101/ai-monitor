@@ -67,7 +67,7 @@ SUBSYSTEM_PR_BODY = """## 紐づく Issue
 
 ## タスク一覧
 
-- [ ] `設計図/バックエンド結合/タスク更新.py.md` を新規作成
+- [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成
 - [ ] `設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成
 - [ ] `update_task` を実装
 - [ ] 単体テストを作成して実行
@@ -496,7 +496,7 @@ PROJECT_FILES = {
     "docs/wiki/テスト/テスト実行方法.md": TEST_HOWTO_MD,
 }
 
-INTEGRATION_PATH = "docs/wiki/設計図/バックエンド結合/タスク更新.py.md"
+INTEGRATION_PATH = "docs/wiki/設計図/インターフェース定義/バックエンド/タスク更新.py.md"
 MODULE_PATH = "docs/wiki/設計図/モジュール構成/バックエンド/タスク.py.md"
 
 DESIGN_FILES = {

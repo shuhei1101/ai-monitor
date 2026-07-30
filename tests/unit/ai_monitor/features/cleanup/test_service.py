@@ -1,6 +1,7 @@
 """`src/ai_monitor/features/cleanup/service.py` の単体テスト。"""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -201,48 +202,48 @@ def test_release_closed_standalone_when_workflow_agent(io_mocks, registry, mon_p
     assert len(registry.sessions) == 1
 
 
-def test_reap_timed_out_sessions(io_mocks, registry, mon_project):
+def test_reap_timed_out_sessions(io_mocks, registry, mon_project, rate_limit_gate):
     """超過セッションの回収を確認する（正常系）。"""
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect", "処理中:architect"])]
     agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30)
+    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate)
     # 検証
     assert io_mocks.remove_label.call_args.args[2] == "処理中:architect"
     io_mocks.kill_session.assert_called_once_with("ai-monitor-sandbox-52-architect")
     assert registry.sessions == []
 
 
-def test_reap_timed_out_sessions_when_waiting(io_mocks, registry, mon_project):
+def test_reap_timed_out_sessions_when_waiting(io_mocks, registry, mon_project, rate_limit_gate):
     """待機中の対象外を確認する（正常系）。"""
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect"])]
     agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30)
+    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate)
     # 検証
     io_mocks.kill_session.assert_not_called()
     io_mocks.remove_label.assert_not_called()
     assert len(registry.sessions) == 1
 
 
-def test_reap_timed_out_sessions_when_session_gone(io_mocks, registry, mon_project):
+def test_reap_timed_out_sessions_when_session_gone(io_mocks, registry, mon_project, rate_limit_gate):
     """実体消失の台帳修復を確認する（正常系）。"""
     # 準備
     registry.register(_session(agent="architect", number=52))
     io_mocks.has_session.return_value = False
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, [], registry=registry, agents=[], timeout_min=30)
+    cleanup.reap_timed_out_sessions(mon_project, [], registry=registry, agents=[], timeout_min=30, gate=rate_limit_gate)
     # 検証
     assert registry.sessions == []
     io_mocks.kill_session.assert_not_called()
     io_mocks.remove_label.assert_not_called()
 
 
-def test_reap_timed_out_sessions_when_label_error(io_mocks, registry, mon_project, request_failed):
+def test_reap_timed_out_sessions_when_label_error(io_mocks, registry, mon_project, request_failed, rate_limit_gate):
     """ラベル除去失敗の見送りを確認する（異常系）。"""
     # 準備
     registry.register(_session(agent="architect", number=52))
@@ -250,7 +251,24 @@ def test_reap_timed_out_sessions_when_label_error(io_mocks, registry, mon_projec
     agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     io_mocks.remove_label.side_effect = request_failed(500)
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30)
+    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate)
     # 検証
+    io_mocks.kill_session.assert_not_called()
+    assert len(registry.sessions) == 1
+
+
+def test_reap_timed_out_sessions_when_rate_limited(io_mocks, registry, mon_project, rate_limit_gate):
+    """レートリミット待機中の見送りを確認する（正常系）。"""
+    # 準備: 回収条件を満たすセッションを用意したうえで関門を待機中にする
+    registry.register(_session(agent="architect", number=52))
+    targets = [_issue(52, labels=["確認:architect", "処理中:architect"])]
+    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
+    rate_limit_gate.block(
+        "ai-monitor-sandbox-52-architect", datetime.now(timezone.utc) + timedelta(minutes=30)
+    )
+    # 実行
+    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate)
+    # 検証: 止まっているのはハングではないので kill しない
+    io_mocks.remove_label.assert_not_called()
     io_mocks.kill_session.assert_not_called()
     assert len(registry.sessions) == 1

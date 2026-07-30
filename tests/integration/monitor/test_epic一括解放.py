@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
 
+from ai_monitor.features.rate_limit.gate import RateLimitGate
 from ai_monitor.features.sessions.types import AgentSession
 from ai_monitor.main import build_agents, run_cycle
 from ai_monitor.shared.types import Issue
@@ -48,7 +49,7 @@ def _prev_targets():
 def _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, current_items):
     agents = build_agents(label_settings, agent_models=agent_models)
     return run_cycle(
-        mon_settings, agents, registry=mon_registry, prev_targets=prev, last_heartbeat_at=FUTURE, labels=label_settings
+        mon_settings, agents, registry=mon_registry, prev_targets=prev, last_heartbeat_at=FUTURE, labels=label_settings, gate=RateLimitGate()
     )
 
 

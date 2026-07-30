@@ -9,13 +9,21 @@ from githubkit.exception import RequestFailed
 from ai_monitor.mcp.models import EmptyResult
 
 
-def test_normal(gh, resp, api):
-    """マージ戦略解決 → マージ + head ブランチ削除の一連を確認する（正常系）。"""
+def test_normal(gh, resp, api, monkeypatch):
+    """マージ可否の確定待ち → マージ + head ブランチ削除の一連を確認する（正常系）。"""
     # 準備
-    gh.rest.pulls.get.return_value = resp(NS(head=NS(ref="feat/x", sha="S")))
+    import ai_monitor.mcp.server as server
+
+    monkeypatch.setattr(server.time, "sleep", lambda _: None)
+    gh.rest.pulls.get.side_effect = [
+        resp(NS(head=NS(ref="feat/x", sha="S"), mergeable=None)),
+        resp(NS(head=NS(ref="feat/x", sha="S"), mergeable=True)),
+    ]
     # 実行
     res = api.merge_pr(52)
     # 検証
+    assert gh.rest.pulls.get.call_count == 2
+    assert gh.rest.pulls.merge.call_count == 1
     assert gh.rest.pulls.merge.call_args.kwargs["merge_method"] == "squash"
     assert gh.rest.git.delete_ref.call_args.kwargs["ref"] == "heads/feat/x"
     assert res == EmptyResult()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,7 @@ from ai_monitor.shared.settings import MonitoredProject, TelemetrySettings
 from ai_monitor.shared.types import Issue, MonitorTarget, PullRequest
 
 if TYPE_CHECKING:
+    from ai_monitor.features.rate_limit.gate import RateLimitGate
     from ai_monitor.features.sessions.registry import SessionRegistry
 
 logger = logging.getLogger(__name__)
@@ -36,8 +38,12 @@ def poll(
     ai_monitor_wiki_base: str,
     priority_urgent: str,
     priority_low: str,
+    gate: RateLimitGate,
 ) -> None:
     """対象の絞り込みから送信までのポーリング 1 周期を実行する。"""
+    # レートリミットの待機中は起動しない（起動しても枠を消費して止まるだけ）
+    if gate.is_blocked(datetime.now(timezone.utc)):
+        return
     # 確認ラベルあり + assignee なしの対象を絞り込む
     matched = [t for t in targets if agent.confirm_label in t.labels and not t.assignees]
     # 処理中ラベルが付いた対象を除外する（send-keys 済みで報告待ち）

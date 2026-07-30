@@ -59,7 +59,9 @@ sequenceDiagram
   MON->>GH: epic PR の方針関連の自分宛コメント一括 Resolve
   MON->>REPO: 確定した方針でモック作成 →<br>docs/mock 配下に commit push
   MON->>GH: epic PR 本文に `### モック`（画面ごとの URL 一覧）を追記<br>（update_body）
-  MON->>GH: epic PR に 1 画面 = 1 コメントで<br>モック URL 共有 + 議論中 付与 +<br>assignee=ユーザー 設定
+  MON->>GH: 確認事項を 1 論点 = 1 コメントで投稿<br>（要素に紐づく論点は該当行にインライン・<br>紐づかない論点は会話欄）
+  MON->>GH: epic PR に 1 画面 = 1 コメントで<br>モック URL 共有
+  MON->>GH: epic PR に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 
   loop モックの応答ループ（モックへの修正要望がある間）
@@ -87,6 +89,7 @@ sequenceDiagram
 
 - epic PR 本文に `## UI 設計`（`### 画面一覧` / `### 画面遷移` / `### モック`）が段階的に記入され、完了時点で 3 セクション全て記入済み
 - モックが `docs/mock/pages/{画面名}/issues/{epic番号}/{案名}/` に commit され、コメントに URL が共有されている
+- 確認事項が 1 論点 = 1 コメントで投稿され、特定の要素に紐づく論点は該当行のインライン、画面全体の方向性は会話欄に振り分けられている
 - `確認:mock-designer` が除去され、親 epic Issue に `確認:epic-conductor` + 完了報告コメント（@epic-conductor 宛・未解決）が付与・投稿されている
 - epic PR の自分宛コメント（指示コメント + モック URL コメント含む）が全て Resolve 済み
 
@@ -139,7 +142,9 @@ sequenceDiagram
   MON->>GH: epic PR の採取結果関連の自分宛コメント一括 Resolve
   MON->>REPO: 確定した画面一覧でモック作成 →<br>docs/mock 配下に commit push
   MON->>GH: epic PR 本文に `### モック`（画面ごとの URL 一覧）を追記<br>（update_body）
-  MON->>GH: epic PR に 1 画面 = 1 コメントで<br>モック URL 共有 + 議論中 付与 +<br>assignee=ユーザー 設定
+  MON->>GH: 確認事項を 1 論点 = 1 コメントで投稿<br>（要素に紐づく論点は該当行にインライン・<br>紐づかない論点は会話欄）
+  MON->>GH: epic PR に 1 画面 = 1 コメントで<br>モック URL 共有
+  MON->>GH: epic PR に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 
   loop モックの応答ループ（モックへの修正要望がある間）

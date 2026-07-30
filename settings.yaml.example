@@ -18,6 +18,9 @@ session_timeout_min: 30
 # 生存確認の周期（秒）
 heartbeat_interval_sec: 60
 
+# 会話ログからリセット時刻を読めなかった場合に待つ時間（分）
+rate_limit_fallback_min: 60
+
 # セッション台帳の永続化先
 state_path: data/state.yaml
 
@@ -34,11 +37,25 @@ projects:
     local_path: /mnt/c/Users/shuhe/repo/myapp
     wiki_base: /mnt/c/Users/shuhe/repo/myapp/docs/wiki
 
-# エージェント別モデル（全 17 エージェント分のエントリ必須・欠落 / 空値は起動エラー）
+# エージェント別モデル（全 24 エージェント分のエントリ必須・欠落 / 空値は起動エラー）
 # 推奨は「頭を使う工程は claude-opus-4-7 / 機械的な工程は sonnet」
 agents:
   intake-issue-triager:
     model: claude-opus-4-7      # Issue の分解・種別判定
+  system-conductor:
+    model: claude-opus-4-7      # 構成要件の整理・エピック分割
+  system-architect:
+    model: claude-opus-4-7      # アーキテクチャ図・docs/wiki 骨格の生成
+  architecture-reverse-engineer:
+    model: claude-opus-4-7      # 既存コードからの現状アーキテクチャ図の起こし
+  mock-reverse-engineer:
+    model: claude-opus-4-7      # 既存画面からの現状モックの起こし
+  complex-scenario-reverse-engineer:
+    model: claude-opus-4-7      # 既存コードからの現状複合 UC シナリオの起こし
+  single-scenario-reverse-engineer:
+    model: claude-opus-4-7      # 既存コードからの現状単一 UC シナリオの起こし
+  ss-design-reverse-engineer:
+    model: claude-opus-4-7      # 既存コードからの現状結合 / モジュール構成の起こし
   epic-conductor:
     model: claude-opus-4-7      # epic 要件・方針判断
   epic-poc-runner:

@@ -8,7 +8,7 @@ from __future__ import annotations
 from githubkit.exception import RequestFailed
 
 # 設計タスクをモジュール構成 1 件に絞った subsystem PR 本文。
-# バックエンド結合は seed 済みにして、インターフェース確定報告（上位への連絡）が混ざらないようにする。
+# インターフェース定義（バックエンド）は seed 済みにして、インターフェース確定報告（上位への連絡）が混ざらないようにする。
 SUBSYSTEM_PR_BODY = """## 紐づく Issue
 
 - #{subsystem_number}

@@ -18,6 +18,13 @@ CONSTANTS_ENV = Path(__file__).resolve().parents[3] / "plugins" / "ai-monitor" /
 
 _AGENT_NAMES: tuple[str, ...] = (
     "intake-issue-triager",
+    "system-conductor",
+    "system-architect",
+    "architecture-reverse-engineer",
+    "mock-reverse-engineer",
+    "complex-scenario-reverse-engineer",
+    "single-scenario-reverse-engineer",
+    "ss-design-reverse-engineer",
     "epic-conductor",
     "epic-poc-runner",
     "mock-designer",
@@ -68,6 +75,7 @@ class Settings(BaseSettings):
     poll_interval_sec: int = 15
     session_timeout_min: int = 30
     heartbeat_interval_sec: int = 60
+    rate_limit_fallback_min: int = 60
     state_path: str = "data/state.yaml"
     ai_monitor_wiki_base: str
     projects: list[MonitoredProject] = []
@@ -76,7 +84,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_agents_completeness(self):
-        """agents に全 17 エージェント分のエントリが揃っていることを検証する。"""
+        """agents に全 24 エージェント分のエントリが揃っていることを検証する。"""
         # 欠落しているエージェント名を列挙して起動を止める（フォールバックしない）
         missing = [name for name in _AGENT_NAMES if name not in self.agents]
         if missing:
@@ -112,6 +120,13 @@ class LabelSettings(BaseSettings):
     priority_urgent: LabelName
     priority_low: LabelName
     confirm_intake_issue_triager: LabelName
+    confirm_system_conductor: LabelName
+    confirm_system_architect: LabelName
+    confirm_architecture_reverse_engineer: LabelName
+    confirm_mock_reverse_engineer: LabelName
+    confirm_complex_scenario_reverse_engineer: LabelName
+    confirm_single_scenario_reverse_engineer: LabelName
+    confirm_ss_design_reverse_engineer: LabelName
     confirm_epic_conductor: LabelName
     confirm_epic_poc_runner: LabelName
     confirm_mock_designer: LabelName
@@ -129,6 +144,13 @@ class LabelSettings(BaseSettings):
     confirm_quick_implementer: LabelName
     confirm_questioner: LabelName
     processing_intake_issue_triager: LabelName
+    processing_system_conductor: LabelName
+    processing_system_architect: LabelName
+    processing_architecture_reverse_engineer: LabelName
+    processing_mock_reverse_engineer: LabelName
+    processing_complex_scenario_reverse_engineer: LabelName
+    processing_single_scenario_reverse_engineer: LabelName
+    processing_ss_design_reverse_engineer: LabelName
     processing_epic_conductor: LabelName
     processing_epic_poc_runner: LabelName
     processing_mock_designer: LabelName

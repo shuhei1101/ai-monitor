@@ -40,6 +40,32 @@ def test_normal(gh, resp, api):
     assert res[2].blocks[-1].sender == "architect"
 
 
+def test_normal_when_user_appended(gh, resp, api):
+    """末尾の区切り線の有無でブロック数が変わらないことを確認する（正常系）。"""
+    # 準備
+    agent_block = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n---\n"
+    gh.rest.issues.list_comments.return_value = resp(
+        [
+            # ユーザーが区切り線を置かずに書き足したコメント
+            _comment_ns("IC_1", f"{agent_block}\n\nこの観点も追加してほしい。"),
+            # ユーザーが書き足しの後にも区切り線を置いたコメント
+            _comment_ns("IC_2", f"{agent_block}\n\nこの観点も追加してほしい。\n\n---\n"),
+        ]
+    )
+    gh.graphql.side_effect = [{"node": {"isMinimized": False}}, {"node": {"isMinimized": False}}]
+    # 実行
+    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
+    # 検証
+    assert [c.node_id for c in res] == ["IC_1", "IC_2"]
+    # 末尾の区切り線の有無で件数が変わらず、空のブロックも含まれない
+    assert [len(c.blocks) for c in res] == [2, 2]
+    for comment in res:
+        assert all(block.body for block in comment.blocks)
+        # 最終ブロックは from なし（ユーザー投稿）= 現担当宛と判定される
+        assert comment.blocks[-1].sender is None
+        assert comment.blocks[-1].receiver is None
+
+
 def test_error_when_api_error(gh, request_failed, api):
     """API エラーの伝播を確認する（異常系）。"""
     # 準備

@@ -20,6 +20,7 @@ from ai_monitor.shared.settings import MonitoredProject
 from ai_monitor.shared.types import Issue, MonitorTarget, PullRequest
 
 if TYPE_CHECKING:
+    from ai_monitor.features.rate_limit.gate import RateLimitGate
     from ai_monitor.features.sessions.registry import SessionRegistry
 
 logger = logging.getLogger(__name__)
@@ -158,11 +159,13 @@ def reap_timed_out_sessions(
     registry: SessionRegistry,
     agents: list[Agent],
     timeout_min: int,
+    gate: RateLimitGate,
 ) -> None:
     """処理中のまま超過したセッションを kill して回収し、実体消失の台帳を修復する。"""
     processing_by_agent = {agent.name: agent.processing_label for agent in agents}
     targets_by_number = {t.number: t for t in targets}
     now = datetime.now(timezone.utc)
+    alive = []
     for session in [s for s in registry.sessions if s.project == project.name]:
         # tmux に実体が無いセッションは台帳から除去する（実行中セッションの SoT は tmux）
         if not has_session(session.session_name):
@@ -173,6 +176,11 @@ def reap_timed_out_sessions(
                 session.session_name,
             )
             continue
+        alive.append(session)
+    # レートリミットの待機中は回収しない（止まっているのはハングではない）
+    if gate.is_blocked(now):
+        return
+    for session in alive:
         # last_seen_at の超過を判定する
         elapsed = now - datetime.fromisoformat(session.last_seen_at)
         if elapsed < timedelta(minutes=timeout_min):

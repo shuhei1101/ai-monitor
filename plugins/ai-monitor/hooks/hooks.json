@@ -27,6 +27,22 @@
           }
         ]
       }
+    ],
+
+    "StopFailure": [
+      {
+        "matcher": "rate_limit",
+        "hooks": [
+          {
+            "_description": "利用上限への到達をモニターへ通知し、リセット時刻までの待機を開始させる",
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/stop-failure/notify_rate_limit.py"
+            ]
+          }
+        ]
+      }
     ]
   }
 }

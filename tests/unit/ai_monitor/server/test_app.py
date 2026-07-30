@@ -1,11 +1,15 @@
 """`src/ai_monitor/server/app.py` の単体テスト。"""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
 import ai_monitor.server.app as app_mod
 from ai_monitor.features.agents.types import Agent
+
+RESETS_AT = datetime(2026, 7, 29, 2, 30, tzinfo=timezone(timedelta(hours=9)))
 
 
 @pytest.fixture
@@ -74,4 +78,79 @@ def test_receive_context_reset_when_session_missing(client, monkeypatch):
     )
     # 検証
     assert response.status_code == 404
+    assert calls == []
+
+
+@pytest.fixture
+def blocked(monkeypatch):
+    """関門への待機記録を記録用モックに差し替える。"""
+    calls = []
+    monkeypatch.setattr(
+        app_mod.RateLimitGate, "block", lambda self, name, resets_at: calls.append((name, resets_at))
+    )
+    return calls
+
+
+def test_receive_rate_limit(client, blocked, session_factory, monkeypatch):
+    """会話ログから読んだ時刻での待機開始を確認する（正常系）。"""
+    # 準備
+    monkeypatch.setattr(app_mod, "resolve_reset_at", lambda path, now: RESETS_AT)
+    session = session_factory("architect", 170)
+    # 実行
+    response = client.post(
+        "/rate_limit",
+        json={
+            "project": "sandbox",
+            "agent_name": "architect",
+            "number": 170,
+            "transcript_path": "/home/user/.claude/projects/-mnt-c-repo/5a00ce9c.jsonl",
+        },
+    )
+    # 検証: 読んだ時刻で待機が開始され resets_at が返る
+    assert response.status_code == 200
+    assert response.json() == {"resets_at": RESETS_AT.isoformat()}
+    assert blocked == [(session.session_name, RESETS_AT)]
+
+
+def test_receive_rate_limit_when_unparsable(client, blocked, mon_settings, session_factory, monkeypatch):
+    """時刻を読めない場合の既定の待機時間を確認する（正常系）。"""
+    # 準備
+    monkeypatch.setattr(app_mod, "resolve_reset_at", lambda path, now: None)
+    session_factory("architect", 170)
+    before = datetime.now(timezone.utc)
+    # 実行
+    response = client.post(
+        "/rate_limit",
+        json={
+            "project": "sandbox",
+            "agent_name": "architect",
+            "number": 170,
+            "transcript_path": "/home/user/.claude/projects/-mnt-c-repo/5a00ce9c.jsonl",
+        },
+    )
+    # 検証: 現在時刻 + rate_limit_fallback_min で待機が開始される
+    assert response.status_code == 200
+    _, resets_at = blocked[0]
+    fallback = timedelta(minutes=mon_settings.rate_limit_fallback_min)
+    assert before + fallback <= resets_at <= datetime.now(timezone.utc) + fallback
+
+
+def test_receive_rate_limit_when_session_missing(client, blocked, monkeypatch):
+    """台帳に無いセッションからの通知を拒否する（異常系）。"""
+    # 準備
+    calls = []
+    monkeypatch.setattr(app_mod, "resolve_reset_at", lambda path, now: calls.append(path))
+    # 実行
+    response = client.post(
+        "/rate_limit",
+        json={
+            "project": "sandbox",
+            "agent_name": "architect",
+            "number": 999,
+            "transcript_path": "/home/user/.claude/projects/-mnt-c-repo/5a00ce9c.jsonl",
+        },
+    )
+    # 検証: 404 が返り待機が開始されない
+    assert response.status_code == 404
+    assert blocked == []
     assert calls == []

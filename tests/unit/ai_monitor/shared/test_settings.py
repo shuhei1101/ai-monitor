@@ -6,17 +6,11 @@ from pydantic import ValidationError
 
 import ai_monitor.shared.settings as settings_mod
 
-_ALL_AGENT_NAMES = [
-    "intake-issue-triager", "epic-conductor", "epic-poc-runner", "mock-designer",
-    "complex-scenario-writer", "complex-scenario-tester", "story-conductor",
-    "single-scenario-writer", "single-scenario-tester", "subsystem-conductor",
-    "architect", "library-poc-runner", "tester", "implementer", "resetter",
-    "quick-implementer", "questioner",
-]
+_ALL_AGENT_NAMES = list(settings_mod._AGENT_NAMES)
 
 
 def _agents_yaml(names=_ALL_AGENT_NAMES) -> str:
-    """全 17 エージェント分の agents セクション文字列を生成する。"""
+    """全エージェント分の agents セクション文字列を生成する。"""
     return "agents:\n" + "".join(f"  {name}:\n    model: sonnet\n" for name in names)
 
 

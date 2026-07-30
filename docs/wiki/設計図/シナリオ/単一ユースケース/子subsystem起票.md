@@ -38,7 +38,7 @@ sequenceDiagram
   activate MON
   MON->>GH: story Issue の完了報告を確認<br>（単一シナリオ確定 →<br>子 subsystem 起票に進むと判断）
   MON->>GH: シナリオから subsystem を洗い出して<br>依存順を決定（例: BE → FE）
-  MON->>GH: 依存のない先頭グループのみ<br>create_child_issue（layer:subsystem + scope:* +<br>確認:subsystem-conductor +<br>親の リバースエンジニアリング ラベル付与）
+  MON->>GH: 依存のない先頭グループのみ<br>子 Issue を作成（layer:subsystem + scope:* +<br>確認:subsystem-conductor +<br>親の リバースエンジニアリング ラベル付与）
   MON->>GH: story Issue 本文の サブシステム一覧 に<br>洗い出し結果を記入<br>（起票済みは Issue 番号・残りは 未起票）
   MON->>GH: story Issue の完了報告コメントを Resolve
   MON->>GH: story Issue に起票結果の報告コメント投稿<br>（ユーザー宛・待機なし）
@@ -63,7 +63,7 @@ sequenceDiagram
 | Mock | なし（実環境で実行） | - |
 | story Issue | `確認:story-conductor` 付与済み + subsystem-conductor のインターフェース確定報告コメント（先行 subsystem のインターフェース確定・自分宛・未解決）あり | Sub-issue は先頭グループのみ |
 | サブシステム一覧 | 本文に記入済み（先頭グループの行は Issue 番号、後続の行は `未起票`） | 逐次起票の対象を特定する元ネタ |
-| 先行 subsystem | `バックエンド結合/{論理名}.md` の `## インターフェース` が確定済み・設計は続行中 | 逐次起票を誘発 |
+| 先行 subsystem | `インターフェース定義/バックエンド/{論理名}.md` の `## インターフェース` が確定済み・設計は続行中 | 逐次起票を誘発 |
 | assignee | 未設定 | エージェント起動条件 |
 
 ### フロー
@@ -80,7 +80,7 @@ sequenceDiagram
   activate MON
   MON-->>GH: サブシステム一覧 の 未起票 行から<br>依存が満たされた次の subsystem を特定
   MON->>GH: subsystem-conductor の<br>インターフェース確定報告コメントを Resolve
-  MON->>GH: 次の subsystem を create_child_issue<br>（layer:subsystem + scope:* +<br>確認:subsystem-conductor +<br>親の リバースエンジニアリング ラベル付与）
+  MON->>GH: 次の subsystem の子 Issue を作成<br>（layer:subsystem + scope:* +<br>確認:subsystem-conductor +<br>親の リバースエンジニアリング ラベル付与）
   MON->>GH: story Issue 本文の サブシステム一覧 の<br>該当行を Issue 番号に更新
   MON->>GH: story Issue の 確認:story-conductor 除去<br>（ユーザー承認なしの自動完了）
   deactivate MON

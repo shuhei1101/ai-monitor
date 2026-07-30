@@ -5,7 +5,7 @@ import pytest
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
-from ai_monitor.mcp.models import Choice, Question
+from ai_monitor.mcp.models import Choice, PlainFormat, Question
 
 
 def _last_comment_body(gh_live, repo_ctx, number: int) -> str:
@@ -38,7 +38,7 @@ def test_ext_get_issue_or_pr_when_pr(pr_factory, gh_live, repo_ctx, api):
     # 準備
     owner, repo = repo_ctx
     pr = pr_factory(draft=False)
-    posted = api.comment(pr.number, is_pr=True, sender="architect", body="外部疎通テスト用コメント")
+    posted = api.comment(pr.number, is_pr=True, sender="architect", format=PlainFormat(body="外部疎通テスト用コメント"))
     api.resolve_comments([posted.node_id])
     gh_live.rest.pulls.merge(owner=owner, repo=repo, pull_number=pr.number, merge_method="squash")
     # 実行
@@ -57,7 +57,7 @@ def test_ext_comment(issue_factory, gh_live, repo_ctx, api):
     # 準備
     issue = issue_factory()
     # 実行
-    res = api.comment(issue.number, is_pr=False, sender="architect", body="外部疎通テストの投稿です。")
+    res = api.comment(issue.number, is_pr=False, sender="architect", format=PlainFormat(body="外部疎通テストの投稿です。"))
     # 検証
     assert res.node_id.startswith("IC_")
     assert res.url
@@ -93,9 +93,9 @@ def test_ext_reply_comment(issue_factory, gh_live, repo_ctx, api):
     """既存コメントへの `---` 区切り追記を確認する（正常系）。"""
     # 準備
     issue = issue_factory()
-    first = api.comment(issue.number, is_pr=False, sender="architect", body="最初の投稿。")
+    first = api.comment(issue.number, is_pr=False, sender="architect", format=PlainFormat(body="最初の投稿。"))
     # 実行
-    res = api.reply_comment(first.node_id, sender="tester", body="返信です。")
+    res = api.reply_comment(first.node_id, sender="tester", format=PlainFormat(body="返信です。"))
     # 検証
     assert res.node_id == first.node_id
     body = _last_comment_body(gh_live, repo_ctx, issue.number)
@@ -107,7 +107,7 @@ def test_ext_resolve_comments(issue_factory, api):
     """minimizeComment の実行で isMinimized が true になることを確認する（正常系）。"""
     # 準備
     issue = issue_factory()
-    posted = api.comment(issue.number, is_pr=False, sender="architect", body="Resolve 対象。")
+    posted = api.comment(issue.number, is_pr=False, sender="architect", format=PlainFormat(body="Resolve 対象。"))
     # 実行
     res = api.resolve_comments([posted.node_id])
     # 検証
@@ -120,8 +120,8 @@ def test_ext_list_addressed_comments(issue_factory, gh_live, repo_ctx, api):
     # 準備
     owner, repo = repo_ctx
     issue = issue_factory()
-    addressed = api.comment(issue.number, is_pr=False, sender="tester", receiver="architect", body="報告です。")
-    api.comment(issue.number, is_pr=False, sender="architect", receiver="tester", body="宛先違い。")
+    addressed = api.comment(issue.number, is_pr=False, sender="tester", receiver="architect", format=PlainFormat(body="報告です。"))
+    api.comment(issue.number, is_pr=False, sender="architect", receiver="tester", format=PlainFormat(body="宛先違い。"))
     plain = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=issue.number, body="ユーザーの素のコメント。"
     ).parsed_data

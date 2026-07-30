@@ -4,6 +4,8 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException
@@ -11,6 +13,8 @@ from pydantic import BaseModel
 
 from ai_monitor.features.agents.service import reset_session
 from ai_monitor.features.agents.types import Agent
+from ai_monitor.features.rate_limit.gate import RateLimitGate
+from ai_monitor.features.rate_limit.service import resolve_reset_at
 from ai_monitor.mcp.server import build_mcp_app
 from ai_monitor.shared.settings import LabelSettings, Settings
 
@@ -28,12 +32,23 @@ class ContextResetRequest(BaseModel):
     number: int
 
 
+class RateLimitRequest(BaseModel):
+    """`POST /rate_limit` のリクエストボディ。"""
+
+    project: str
+    agent_name: str
+    number: int
+    transcript_path: str
+
+
 def create_app(
     settings: Settings, *, registry: SessionRegistry, agents: list[Agent], label_settings: LabelSettings
 ) -> FastAPI:
     """FastAPI アプリを生成し、MCP のマウントと lifespan を配線する。"""
     # MCP サーバーの ASGI アプリを組み立てる
     mcp_app = build_mcp_app(settings, registry=registry, agents=agents, label_settings=label_settings)
+    # 上限の待機状態は到達通知の受信とポーリングループで共有する（上限はアカウント単位なので 1 つだけ持つ）
+    gate = RateLimitGate()
 
     # lifespan で MCP のセッション管理を開始し、その内側でポーリングループを起動する
     @asynccontextmanager
@@ -53,6 +68,7 @@ def create_app(
                     prev_targets=prev_targets,
                     last_heartbeat_at=heartbeat_at,
                     labels=label_settings,
+                    gate=gate,
                 )
                 stop.wait(settings.poll_interval_sec)
 
@@ -92,6 +108,34 @@ def create_app(
             ai_monitor_wiki_base=settings.ai_monitor_wiki_base,
         )
         return {"ok": True}
+
+    @app.post("/rate_limit")
+    def receive_rate_limit(body: RateLimitRequest) -> dict:
+        """上限到達の通知を受け、リセット時刻まで待機を開始する。"""
+        # 台帳からセッションを検索する
+        session = registry.find(body.project, body.agent_name, body.number)
+        if session is None:
+            logger.warning(
+                "台帳に無いセッションからのレートリミット通知を拒否しました: "
+                "project=%s agent_name=%s number=%s",
+                body.project,
+                body.agent_name,
+                body.number,
+            )
+            raise HTTPException(status_code=404)
+        # 会話ログからリセット時刻を読む（読めなければ既定の待機時間から算出する）
+        now = datetime.now(timezone.utc).astimezone()
+        resets_at = resolve_reset_at(Path(body.transcript_path), now)
+        if resets_at is None:
+            resets_at = now + timedelta(minutes=settings.rate_limit_fallback_min)
+        # 解除時刻と対象セッションを関門に記録する
+        gate.block(session.session_name, resets_at)
+        logger.info(
+            "レートリミットの待機を開始しました: session_name=%s resets_at=%s",
+            session.session_name,
+            resets_at.isoformat(),
+        )
+        return {"resets_at": resets_at.isoformat()}
 
     # MCP の ASGI アプリをルートにマウントする（接続先は /mcp）
     # マウントは後続の全パスを引き受けるため、自前のルート登録より後に行う

@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
 
+from ai_monitor.features.rate_limit.gate import RateLimitGate
 from ai_monitor.main import build_agents, run_cycle
 
 FUTURE = "2100-01-01T00:00:00+00:00"
@@ -29,7 +30,7 @@ def _intake_ns(number, total, completed):
 
 def _cycle(mon_settings, label_settings, agent_models, mon_registry):
     agents = build_agents(label_settings, agent_models=agent_models)
-    return run_cycle(mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=FUTURE, labels=label_settings)
+    return run_cycle(mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=FUTURE, labels=label_settings, gate=RateLimitGate())
 
 
 def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry):

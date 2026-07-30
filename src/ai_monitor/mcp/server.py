@@ -25,7 +25,9 @@ from ai_monitor.mcp.models import (
     AddressedComment,
     AssigneesResult,
     CommentBlock,
+    CommentFormat,
     CommentResult,
+    CommitsFormat,
     CreatedIssueResult,
     CreatedPRResult,
     EmptyResult,
@@ -35,6 +37,7 @@ from ai_monitor.mcp.models import (
     Label,
     LabelsResult,
     MonitorAck,
+    PlainFormat,
     Question,
     ResolveResult,
     ReviewThread,
@@ -57,6 +60,10 @@ PROJECT_HEADER = "X-Project"
 
 # 選択肢の記号（A. B. C. ...）
 CHOICE_LETTERS = "ABCDEFGHIJ"
+
+# マージ可否の計算完了を待つ試行回数と間隔
+MERGEABLE_POLL_ATTEMPTS = 10
+MERGEABLE_POLL_INTERVAL_SEC = 2
 
 _MINIMIZE_MUTATION = (
     "mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: RESOLVED })"
@@ -187,6 +194,28 @@ def _to_thread(tool: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
+def _wait_mergeable(pr_number: int, *, owner: str, repo: str) -> Any:
+    """GitHub のマージ可否計算が終わるまで PR を取り直し、確定後のスナップショットを返す。
+
+    GitHub は base 更新のたびに非同期で計算し、確定するまで mergeable に null を返す。
+    その状態でマージを投げると 405 になるため、確定を待ってから実行する。
+    戻り値が Any なのは、githubkit の PullRequest 型が API バージョン別モジュールにあり、
+    型注釈のために特定バージョンへ依存させたくないため。
+    """
+    client = _get_client()
+    for attempt in range(MERGEABLE_POLL_ATTEMPTS):
+        # 計算中は間隔を空けて取り直す
+        if attempt:
+            time.sleep(MERGEABLE_POLL_INTERVAL_SEC)
+        pr = client.rest.pulls.get(owner=owner, repo=repo, pull_number=pr_number).parsed_data
+        if pr.mergeable is not None:
+            return pr
+    logger.warning(
+        "マージ可否が確定しませんでした: pr_number=%s attempts=%s", pr_number, MERGEABLE_POLL_ATTEMPTS
+    )
+    return pr
+
+
 def _get_current_login() -> str:
     """認証中ユーザーのログイン名を返す。"""
     # 認証中ユーザーを取得し、ログイン名を返す
@@ -227,7 +256,10 @@ def _parse_comment_blocks(body: str) -> list[CommentBlock]:
     """`---` 区切りブロックの from / to と本文をパースする。"""
     blocks: list[CommentBlock] = []
     # 本文を --- 区切りでブロックに分割する
-    for chunk in re.split(r"\n-{3,}\n", body):
+    for chunk in re.split(r"\n-{3,}[ \t]*(?:\n|\Z)", body):
+        # 先頭 / 末尾の区切り線で生じる空要素を捨てる（末尾の区切り線の有無でブロック数を変えないため）
+        if not chunk.strip():
+            continue
         # 各ブロック先頭の > from: / > to: 行を抽出して取り除く
         sender: str | None = None
         receiver: str | None = None
@@ -247,17 +279,53 @@ def _parse_comment_blocks(body: str) -> list[CommentBlock]:
     return blocks
 
 
-def _format_block(sender: str, receiver: str | None, body: str, is_reply: bool = False) -> str:
-    """from / to ヘッダー + 本文の定型ブロックを組み立てる。"""
+def _format_block(sender: str, receiver: str | None, body: str, needs_separator: bool = False) -> str:
+    """from / to ヘッダー + 本文 + 末尾の区切り線の定型ブロックを組み立てる。"""
     # > from: 行（receiver があれば > to: 行も）を組み立てる
     header = f"> from: {_ensure_at(sender)}"
     if receiver is not None:
         header += f"\n> to: {_ensure_at(receiver)}"
-    # ヘッダーと本文を連結して返す（is_reply=True なら先頭に --- を付ける）
+    # ヘッダーと本文を連結する（needs_separator=True なら先頭に --- を付ける）
     block = f"{header}\n\n{body}"
-    if is_reply:
+    if needs_separator:
         block = f"---\n{block}"
-    return block
+    # 末尾に区切り線を足して返す（ユーザーが続きに書き足してそのまま次のブロックにできる状態にする）
+    return f"{block}\n\n---\n"
+
+
+def _ends_with_separator(body: str) -> bool:
+    """本文の末尾（末尾の空白・改行を除く）が `---` かを返す。"""
+    # 末尾の空白・改行を除いた文字列を取り出す
+    stripped = body.rstrip()
+    if not stripped:
+        return False
+    # 末尾行が区切り線と一致するかを返す
+    return stripped.splitlines()[-1].strip() == "---"
+
+
+def _render_format(format: CommentFormat) -> str:
+    """本文フォーマットから、コメントに載せる本文（表を持つ形式は表も）を組み立てる。"""
+    # 表を持たない形式は本文をそのまま返す
+    if isinstance(format, PlainFormat):
+        return format.body
+    # 表を持つ形式は行が 1 件も無いと表にならないので呼び出し側の誤りとして弾く
+    if not format.entries:
+        raise ValueError("表を持つ format には entries が 1 件以上必要です")
+    # type ごとに列見出しと各行のセルを決める
+    if isinstance(format, CommitsFormat):
+        headers = ("commit", "内容")
+        rows = [(f"`{entry.commit}`", entry.summary) for entry in format.entries]
+    else:
+        headers = ("対象ページ", "commit 範囲")
+        rows = [
+            # 起点 commit があれば範囲、無ければ単一 commit を範囲セルにする
+            (f"`{entry.page}`", f"`{entry.start_commit}..{entry.commit}`" if entry.start_commit else f"`{entry.commit}`")
+            for entry in format.entries
+        ]
+    # 本文 + 空行 + 表 を連結して返す
+    table = [f"| {headers[0]} | {headers[1]} |", "| --- | --- |"]
+    table += [f"| {left} | {right} |" for left, right in rows]
+    return f"{format.body}\n\n" + "\n".join(table) + "\n"
 
 
 def _ensure_at(name: str) -> str:
@@ -430,7 +498,7 @@ def comment(
     number: int,
     is_pr: bool,
     sender: str,
-    body: str,
+    format: CommentFormat,
     receiver: str | None = None,
     *,
     ctx: Context,
@@ -438,6 +506,8 @@ def comment(
 ) -> CommentResult:
     """定型ブロックでコメントを投稿する。"""
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
+    # format の type に応じて本文（表を含む場合は表も）を組み立てる
+    body = _render_format(format)
     # from / to ヘッダー + 本文を組み立てる
     text = _format_block(sender, receiver, body)
     # 投稿して CommentResult を返す
@@ -486,7 +556,7 @@ def ask_questions(
 def reply_comment(
     comment_node_id: str,
     sender: str,
-    body: str,
+    format: CommentFormat,
     receiver: str | None = None,
     *,
     ctx: Context,
@@ -497,8 +567,12 @@ def reply_comment(
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # 既存コメントの現在本文を取得する
     node = client.graphql(_COMMENT_BODY_QUERY, {"id": comment_node_id})["node"]
-    # --- 区切りの追記ブロックを組み立てる
-    block = _format_block(sender, receiver, body, is_reply=True)
+    # format の type に応じて本文（表を含む場合は表も）を組み立てる
+    body = _render_format(format)
+    # 既存本文が区切り線で終わっていなければ、追記ブロックの先頭に --- を足す
+    block = _format_block(
+        sender, receiver, body, needs_separator=not _ends_with_separator(node["body"])
+    )
     # 既存本文の末尾に連結してコメントを更新し、CommentResult を返す
     resp = client.rest.issues.update_comment(
         owner=owner, repo=repo, comment_id=node["databaseId"], body=f"{node['body']}\n\n{block}"
@@ -927,11 +1001,12 @@ def merge_pr(
     """既定 squash + ブランチ削除で PR をマージする。"""
     client = _get_client()
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
+    # マージ可否の計算が終わるのを待って PR を取得する
+    pr = _wait_mergeable(pr_number, owner=owner, repo=repo)
     # strategy（省略時 squash）で REST マージを実行する
     client.rest.pulls.merge(owner=owner, repo=repo, pull_number=pr_number, merge_method=strategy or "squash")
     # head のリモートブランチを削除し、EmptyResult を返す
-    head_ref = client.rest.pulls.get(owner=owner, repo=repo, pull_number=pr_number).parsed_data.head.ref
-    client.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{head_ref}")
+    client.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
     return EmptyResult()
 
 

@@ -18,11 +18,16 @@ from ai_monitor.mcp.models import (
     AssigneesResult,
     Choice,
     CommentResult,
+    CommitEntry,
+    CommitsFormat,
     CreatedIssueResult,
     CreatedPRResult,
     EmptyResult,
     LabelsResult,
     MonitorAck,
+    PageRangeEntry,
+    PagesFormat,
+    PlainFormat,
     Question,
     ResolveResult,
     SearchResultItem,
@@ -216,12 +221,44 @@ def test_comment(gh, api):
     # 準備
     gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
     # 実行
-    res = api.comment(35, is_pr=False, sender="architect", body="設計 Wiki を更新しました。")
+    res = api.comment(35, is_pr=False, sender="architect", format=PlainFormat(body="設計 Wiki を更新しました。"))
     # 検証
     posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
     assert posted.startswith("> from: @architect")
     assert "設計 Wiki を更新しました。" in posted
     assert res == CommentResult(node_id="IC_1", url="http://c/1")
+
+
+def test_comment_when_commits_format(gh, api):
+    """commit 表付きの投稿を確認する（正常系）。"""
+    # 準備
+    gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
+    fmt = CommitsFormat(
+        body="テスト作成が完了しました。",
+        entries=[CommitEntry(commit="a1b2c3d", summary="結合テストを追加")],
+    )
+    # 実行
+    api.comment(40, is_pr=True, sender="tester", receiver="architect", format=fmt)
+    # 検証
+    posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
+    assert "| commit | 内容 |" in posted
+    assert "| `a1b2c3d` | 結合テストを追加 |" in posted
+
+
+def test_comment_when_pages_format(gh, api):
+    """ページ範囲表付きの投稿を確認する（正常系）。"""
+    # 準備
+    gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
+    fmt = PagesFormat(
+        body="以下の設計でテストを作成してください。",
+        entries=[PageRangeEntry(page="docs/wiki/設計図/インターフェース定義/バックエンド/ユーザー登録.py.md", commit="a1b2c3d")],
+    )
+    # 実行
+    api.comment(40, is_pr=True, sender="architect", receiver="tester", format=fmt)
+    # 検証
+    posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
+    assert "| 対象ページ | commit 範囲 |" in posted
+    assert "| `docs/wiki/設計図/インターフェース定義/バックエンド/ユーザー登録.py.md` | `a1b2c3d` |" in posted
 
 
 # ---- 質問投稿 ----
@@ -293,7 +330,7 @@ def test_reply_comment(gh, api):
     gh.graphql.return_value = {"node": {"body": "元コメント", "databaseId": 111}}
     gh.rest.issues.update_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
     # 実行
-    res = api.reply_comment("IC_1", sender="tester", body="修正しました。")
+    res = api.reply_comment("IC_1", sender="tester", format=PlainFormat(body="修正しました。"))
     # 検証
     kwargs = gh.rest.issues.update_comment.call_args.kwargs
     assert kwargs["comment_id"] == 111
@@ -301,6 +338,23 @@ def test_reply_comment(gh, api):
     assert "\n---\n" in kwargs["body"]
     assert "> from: @tester" in kwargs["body"]
     assert res == CommentResult(node_id="IC_1", url="http://c/1")
+
+
+def test_reply_comment_when_commits_format(gh, api):
+    """commit 表付きの追記を確認する（正常系）。"""
+    # 準備
+    gh.graphql.return_value = {"node": {"body": "元コメント", "databaseId": 111}}
+    gh.rest.issues.update_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
+    fmt = CommitsFormat(
+        body="指摘 3 件に対応しました。",
+        entries=[CommitEntry(commit="a1b2c3d", summary="異常系ケースを追加")],
+    )
+    # 実行
+    api.reply_comment("IC_1", sender="tester", receiver="architect", format=fmt)
+    # 検証
+    posted = gh.rest.issues.update_comment.call_args.kwargs["body"]
+    assert "| commit | 内容 |" in posted
+    assert "| `a1b2c3d` | 異常系ケースを追加 |" in posted
 
 
 # ---- コメント一括Resolve ----
@@ -798,7 +852,7 @@ def test_mark_pr_ready(gh, api):
 def test_merge_pr(gh, api):
     """既定戦略（squash）でのマージとブランチ削除を確認する（正常系）。"""
     # 準備
-    gh.rest.pulls.get.return_value = _resp(NS(head=NS(ref="feat/x", sha="S")))
+    gh.rest.pulls.get.return_value = _resp(NS(head=NS(ref="feat/x", sha="S"), mergeable=True))
     # 実行
     api.merge_pr(52)
     # 検証
@@ -809,11 +863,66 @@ def test_merge_pr(gh, api):
 def test_merge_pr_when_strategy_given(gh, api):
     """戦略指定でのマージを確認する（正常系）。"""
     # 準備
-    gh.rest.pulls.get.return_value = _resp(NS(head=NS(ref="feat/x", sha="S")))
+    gh.rest.pulls.get.return_value = _resp(NS(head=NS(ref="feat/x", sha="S"), mergeable=True))
     # 実行
     api.merge_pr(52, strategy="rebase")
     # 検証
     assert gh.rest.pulls.merge.call_args.kwargs["merge_method"] == "rebase"
+
+
+def test_merge_pr_when_mergeable_pending(gh, api, monkeypatch):
+    """マージ可否が計算中のとき確定を待ってからマージすることを確認する（正常系）。"""
+    # 準備
+    monkeypatch.setattr(server.time, "sleep", lambda _: None)
+    gh.rest.pulls.get.side_effect = [
+        _resp(NS(head=NS(ref="feat/x", sha="S"), mergeable=None)),
+        _resp(NS(head=NS(ref="feat/x", sha="S"), mergeable=True)),
+    ]
+    # 実行
+    api.merge_pr(52)
+    # 検証
+    assert gh.rest.pulls.get.call_count == 2
+    assert gh.rest.pulls.merge.call_args.kwargs["merge_method"] == "squash"
+
+
+# ---- マージ可否待ち ----
+
+
+def test_wait_mergeable(gh):
+    """確定済みなら 1 回の取得で返すことを確認する（正常系）。"""
+    # 準備
+    gh.rest.pulls.get.return_value = _resp(NS(mergeable=True))
+    # 実行
+    pr = server._wait_mergeable(52, owner="o", repo="r")
+    # 検証
+    assert pr.mergeable is True
+    assert gh.rest.pulls.get.call_count == 1
+
+
+def test_wait_mergeable_when_pending(gh, monkeypatch):
+    """計算中は取り直して確定後のスナップショットを返すことを確認する（正常系）。"""
+    # 準備
+    monkeypatch.setattr(server.time, "sleep", lambda _: None)
+    gh.rest.pulls.get.side_effect = [_resp(NS(mergeable=None)), _resp(NS(mergeable=False))]
+    # 実行
+    pr = server._wait_mergeable(52, owner="o", repo="r")
+    # 検証
+    assert pr.mergeable is False
+    assert gh.rest.pulls.get.call_count == 2
+
+
+def test_wait_mergeable_when_never_settles(gh, monkeypatch, caplog):
+    """上限まで確定しない場合に最後のスナップショットを返すことを確認する（正常系）。"""
+    # 準備
+    monkeypatch.setattr(server.time, "sleep", lambda _: None)
+    gh.rest.pulls.get.return_value = _resp(NS(mergeable=None))
+    # 実行
+    with caplog.at_level("WARNING"):
+        pr = server._wait_mergeable(52, owner="o", repo="r")
+    # 検証
+    assert pr.mergeable is None
+    assert gh.rest.pulls.get.call_count == server.MERGEABLE_POLL_ATTEMPTS
+    assert "マージ可否" in caplog.text
 
 
 # ---- worktree 作成 / 削除 ----
@@ -1076,20 +1185,46 @@ def test_parse_comment_blocks_when_plain_user_comment():
     assert blocks[0].body == "この観点も追加してほしい。"
 
 
+def test_parse_comment_blocks_when_user_appended_without_separator():
+    """ユーザーが区切り線を置かずに書き足した本文のパースを確認する（正常系）。"""
+    # 準備
+    body = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n---\n\nこの観点も追加してほしい。"
+    # 実行
+    blocks = server._parse_comment_blocks(body)
+    # 検証
+    assert len(blocks) == 2
+    assert blocks[0].sender == "architect"
+    assert blocks[1].sender is None and blocks[1].receiver is None
+    assert blocks[1].body == "この観点も追加してほしい。"
+
+
+def test_parse_comment_blocks_when_user_appended_with_separator():
+    """ユーザーが末尾に区切り線を置いた本文のパースを確認する（正常系）。"""
+    # 準備
+    body = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n---\n\nこの観点も追加してほしい。\n\n---\n"
+    # 実行
+    blocks = server._parse_comment_blocks(body)
+    # 検証
+    assert len(blocks) == 2
+    assert blocks[1].sender is None
+    assert blocks[1].body == "この観点も追加してほしい。"
+
+
 def test_format_block():
     """from / to ヘッダー付き定型ブロックの組み立てを確認する（正常系）。"""
     # 実行
     out = server._format_block("architect", "implementer", "本文")
     # 検証
-    assert out == "> from: @architect\n> to: @implementer\n\n本文"
+    assert out == "> from: @architect\n> to: @implementer\n\n本文\n\n---\n"
 
 
-def test_format_block_when_reply():
-    """返信ブロックの先頭 `---` 付与を確認する（正常系）。"""
+def test_format_block_when_needs_separator():
+    """先頭にも `---` を付ける指定を確認する（正常系）。"""
     # 実行
-    out = server._format_block("tester", None, "本文", is_reply=True)
+    out = server._format_block("tester", None, "本文", needs_separator=True)
     # 検証
     assert out.startswith("---\n")
+    assert out.endswith("---\n")
     assert "> from: @tester" in out
 
 
@@ -1098,7 +1233,105 @@ def test_format_block_when_receiver_none():
     # 実行
     out = server._format_block("tester", None, "本文")
     # 検証
-    assert out == "> from: @tester\n\n本文"
+    assert out == "> from: @tester\n\n本文\n\n---\n"
+
+
+def test_ends_with_separator():
+    """末尾が区切り線の本文の判定を確認する（正常系）。"""
+    # 実行・検証
+    assert server._ends_with_separator("> from: @architect\n\n設計を更新しました。\n\n---\n") is True
+
+
+def test_ends_with_separator_when_trailing_blank():
+    """区切り線の後に空行がある本文の判定を確認する（正常系）。"""
+    # 実行・検証
+    assert server._ends_with_separator("本文\n\n---\n\n\n") is True
+
+
+def test_ends_with_separator_when_user_appended():
+    """区切り線の後にユーザーが書き足した本文の判定を確認する（正常系）。"""
+    # 実行・検証
+    assert server._ends_with_separator("本文\n\n---\n\nこの観点も追加してほしい。") is False
+
+
+def test_ends_with_separator_when_empty():
+    """空文字の判定を確認する（正常系）。"""
+    # 実行・検証
+    assert server._ends_with_separator("") is False
+
+
+def test_render_format_when_plain():
+    """本文のみの形式で body がそのまま返ることを確認する（正常系）。"""
+    # 実行
+    out = server._render_format(PlainFormat(body="設計 Wiki を更新しました。"))
+    # 検証
+    assert out == "設計 Wiki を更新しました。"
+
+
+def test_render_format_when_commits():
+    """commit 表の組み立てを確認する（正常系）。"""
+    # 準備
+    fmt = CommitsFormat(
+        body="テスト作成が完了しました。",
+        entries=[
+            CommitEntry(commit="a1b2c3d", summary="結合テストを追加"),
+            CommitEntry(commit="e4f5g6h", summary="異常系ケースを追加"),
+        ],
+    )
+    # 実行
+    out = server._render_format(fmt)
+    # 検証
+    assert out == (
+        "テスト作成が完了しました。\n\n"
+        "| commit | 内容 |\n"
+        "| --- | --- |\n"
+        "| `a1b2c3d` | 結合テストを追加 |\n"
+        "| `e4f5g6h` | 異常系ケースを追加 |\n"
+    )
+
+
+def test_render_format_when_pages_single():
+    """起点 commit なしのページ行で範囲セルが commit 単体になることを確認する（正常系）。"""
+    # 準備
+    fmt = PagesFormat(
+        body="以下の設計でテストを作成してください。",
+        entries=[PageRangeEntry(page="docs/wiki/設計図/インターフェース定義/バックエンド/ユーザー登録.py.md", commit="a1b2c3d")],
+    )
+    # 実行
+    out = server._render_format(fmt)
+    # 検証
+    assert out == (
+        "以下の設計でテストを作成してください。\n\n"
+        "| 対象ページ | commit 範囲 |\n"
+        "| --- | --- |\n"
+        "| `docs/wiki/設計図/インターフェース定義/バックエンド/ユーザー登録.py.md` | `a1b2c3d` |\n"
+    )
+
+
+def test_render_format_when_pages_range():
+    """起点 commit ありのページ行で範囲セルが `start_commit..commit` になることを確認する（正常系）。"""
+    # 準備
+    fmt = PagesFormat(
+        body="以下の設計で実装してください。",
+        entries=[
+            PageRangeEntry(
+                page="docs/wiki/設計図/モジュール構成/バックエンド/ユーザー.py.md",
+                start_commit="e4f5g6h",
+                commit="i7j8k9l",
+            )
+        ],
+    )
+    # 実行
+    out = server._render_format(fmt)
+    # 検証
+    assert "| `e4f5g6h..i7j8k9l` |" in out
+
+
+def test_render_format_when_empty_entries():
+    """表を持つ形式で行が空のときのエラーを確認する（異常系）。"""
+    # 実行・検証
+    with pytest.raises(ValueError):
+        server._render_format(CommitsFormat(body="本文", entries=[]))
 
 
 def test_ensure_at():

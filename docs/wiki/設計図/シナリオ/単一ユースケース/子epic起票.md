@@ -4,11 +4,11 @@ template_version: 2.0.0
 
 # 子epic起票
 
-system-architect が system Issue の `## エピック一覧` から epic Issue を一括起票する単一ユースケース。
+system-conductor が system Issue の `## エピック一覧` から epic Issue を一括起票する単一ユースケース。
 新規プロジェクトの立ち上げでも既存プロジェクトの移行でも通る。
 着手は直列にするため、確認ラベルは着手順が先頭の epic にだけ付ける。
 
-対応エージェント: `system-architect`（復帰）
+対応エージェント: `system-conductor`（復帰）
 
 - 対応テストファイル: `tests/e2e/単一ユースケース/test_子epic起票.py`
 
@@ -19,7 +19,7 @@ system-architect が system Issue の `## エピック一覧` から epic Issue 
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| system Issue | `確認:system-architect` 付与済み・`## エピック一覧` が確定済み | [システム構成確定](./システム構成確定.md) で承認済み |
+| system Issue | `確認:system-conductor` 付与済み・`## エピック一覧` が確定済み | [システム構成確定](./システム構成確定.md) で承認済み |
 | assignee | 未設定 | エージェント起動条件 |
 | `議論中` | 未付与 | - |
 | system PR | master へマージ済み | エピック一覧の `対応 Issue` 列が全行 `未起票` |
@@ -34,16 +34,16 @@ sequenceDiagram
   participant ORC as モニター
 
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
-  create participant MON as system-architect
+  create participant MON as system-conductor
   ORC->>MON: 既存セッションへ送信
   activate MON
   MON-->>GH: system Issue の エピック一覧 から<br>epic 名・所属 UC・着手順を読む
   MON-->>GH: エピックのイシュー本文テンプレートを取得
-  MON->>GH: create_child_issue x epic 件数分<br>（layer:epic + type:* + 親の リバースエンジニアリング ラベル付与・<br>ユースケース一覧と前提条件を記入）
+  MON->>GH: 子 Issue を epic 件数分作成<br>（layer:epic + type:* + 親の リバースエンジニアリング ラベル付与・<br>ユースケース一覧と前提条件を記入）
   MON->>GH: system Issue の エピック一覧 の<br>対応 Issue 列に起票した番号を反映
   MON->>GH: 着手順が先頭の epic に<br>確認:epic-conductor 付与
   MON->>GH: system Issue の自分宛コメント一括 Resolve
-  MON->>GH: system Issue の 確認:system-architect 除去
+  MON->>GH: system Issue の 確認:system-conductor 除去
   deactivate MON
   Note over MON: セッションは system Issue close<br>（モニター直轄）まで常駐
 ```

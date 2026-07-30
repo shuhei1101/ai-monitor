@@ -33,18 +33,23 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | Resolved 状態取得 | `mcp/server.py` | 関数 | [`_is_minimized`](#resolved-状態取得) | コメントの `isMinimized` を GraphQL で取得 | - |
 | 共通 | コメント投稿実体 | `mcp/server.py` | 関数 | [`_create_issue_comment`](#コメント投稿実体) | REST でコメントを投稿 | PR も同エンドポイント |
 | 共通 | コメント解析 | `mcp/server.py` | 関数 | [`_parse_comment_blocks`](#コメント解析) | `---` 区切りブロックの from / to と本文をパース | - |
-| 共通 | 定型ブロック組立 | `mcp/server.py` | 関数 | [`_format_block`](#定型ブロック組立) | from / to ヘッダー + 本文を組み立てる | 書式は `規約/コメント.md` |
+| 共通 | 定型ブロック組立 | `mcp/server.py` | 関数 | [`_format_block`](#定型ブロック組立) | from / to ヘッダー + 本文 + 末尾の区切り線を組み立てる | 書式は `規約/コメント.md` |
+| 共通 | 本文レンダリング | `mcp/server.py` | 関数 | [`_render_format`](#本文レンダリング) | `type` に応じて本文（+ 表）を組み立てる | plain / commit 表 / ページ範囲表 |
+| 共通 | 区切り線判定 | `mcp/server.py` | 関数 | [`_ends_with_separator`](#区切り線判定) | 本文の末尾が `---` かを判定する | 返信時の区切り線の重複を防ぐ |
 | 共通 | アット付与 | `mcp/server.py` | 関数 | [`_ensure_at`](#アット付与) | 先頭に `@` がなければ付与 | - |
 | 共通 | git 実行入口 | `mcp/server.py` | 関数 | [`_run_git`](#git-実行入口) | git CLI 呼び出しの単一入口 | 失敗時 `CalledProcessError` |
 | 共通 | リポジトリルート解決 | `mcp/server.py` | 関数 | [`_repo_root`](#リポジトリルート解決) | 共通 `.git` からメインリポジトリのルートを解決 | worktree 内からの呼び出しに対応 |
 | 共通 | worktree パス解決 | `mcp/server.py` | 関数 | [`_worktree_path`](#worktree-パス解決) | `.claude/worktrees/` 配下の絶対パスを求める | `/` を `-` に置換 |
 | 共通 | ローカルブランチ存在確認 | `mcp/server.py` | 関数 | [`_branch_exists`](#ローカルブランチ存在確認) | ローカルブランチの有無を返す | 非 0 終了を結果として扱う |
+| 共通 | マージ可否待ち | `mcp/server.py` | 関数 | [`_wait_mergeable`](#マージ可否待ち) | GitHub のマージ可否計算が終わるまで PR を取り直す | base 更新直後の 405 を避ける |
 | 共通 | 質問 DTO | `mcp/models.py` | データモデル | [`Question`](#質問) / [`Choice`](#選択肢) | ask_questions の質問・選択肢 | - |
 | 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`AddressedComment`](#宛先コメント) | `---` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
 | 共通 | 検索結果 DTO | `mcp/models.py` | データモデル | [`SearchResultItem`](#検索結果) | search_issues_and_prs の戻り値要素 | - |
 | 共通 | 操作結果 DTO | `mcp/models.py` | データモデル | [`CommentResult`](#コメント結果) / [`ResolveResult`](#resolve-結果) / [`LabelsResult`](#ラベル結果) / [`AssigneesResult`](#assignee-結果) / [`EmptyResult`](#空結果) / [`CreatedIssueResult`](#issue-作成結果) / [`CreatedPRResult`](#pr-作成結果) | 各ツールの戻り値 | - |
 | 共通 | worktree 結果 DTO | `mcp/models.py` | データモデル | [`WorktreeCreateResult`](#worktree-作成結果) / [`WorktreeRemoveResult`](#worktree-削除結果) | worktree 操作の戻り値 | - |
+| 共通 | 本文フォーマット型 | `mcp/models.py` | 型 | [`CommentFormat`](#本文フォーマット) | `type` を判別子とする Annotated Union | `Field(discriminator="type")` |
+| 共通 | 本文フォーマット DTO | `mcp/models.py` | データモデル | [`PlainFormat`](#プレーン形式) / [`CommitsFormat`](#commit-表形式) / [`PagesFormat`](#ページ範囲表形式) / [`CommitEntry`](#コミットエントリ) / [`PageRangeEntry`](#ページ範囲エントリ) | 本文構成の入力 | Union の各分岐と行の型 |
 | 共通 | スナップショット DTO | `mcp/models.py` | データモデル | [`IssueSnapshot`](#イシュースナップショット) / [`Label`](#ラベル) / [`UserRef`](#ユーザー参照) / [`IssueRef`](#イシュー参照) / [`IssueCommentEntry`](#コメントエントリ) / [`SubIssuesSummary`](#サブイシュー集計) | get_issue_or_pr の戻り値ツリー | - |
 | Issue・PR情報取得 | MCP ツール | `mcp/server.py` | 関数 | [`get_issue_or_pr`](#issuepr情報取得) | Issue / PR の情報を 1 コマンドで取得 | 読み取り専用 |
 | コメント投稿 | MCP ツール | `mcp/server.py` | 関数 | [`comment`](#コメント投稿) | 定型ブロックでコメントを投稿 | - |
@@ -256,7 +261,7 @@ FastMCP でツールを定義するファイル。
 GitHub 系の全ツールは[クライアント生成](#クライアント生成)と[プロジェクト解決](#プロジェクト解決)を、worktree 系の全ツールは[プロジェクト解決](#プロジェクト解決)と [git 実行入口](#git-実行入口)を共通で通る。
 worktree 系が[プロジェクト解決](#プロジェクト解決)を通るのは、操作対象のリポジトリをプロセスの作業ディレクトリではなく監視対象プロジェクトの `local_path` に固定するため。
 全ツールは[ツール呼び出しログ](#ツール呼び出しログ)でラップし、ログ出力を個々のツールに書かない。
-各ツールのインターフェース（リクエスト / レスポンス / 制約）は [バックエンド結合](../../バックエンド結合/README.md) の詳細ファイルが SoT。
+各ツールのインターフェース（リクエスト / レスポンス / 制約）は [インターフェース定義（バックエンド）](../../インターフェース定義/README.md) の詳細ファイルが SoT。
 疎通テストは sandbox（`shuhei1101/ai-monitor-e2e`）を対象に手動実行する（[プロジェクト解決](#プロジェクト解決)が読むヘッダに sandbox を指定する。手順は `テスト/テスト実行方法.md`）。
 
 ---
@@ -269,7 +274,7 @@ worktree 系が[プロジェクト解決](#プロジェクト解決)を通るの
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_registered_tools` | 正常 | 全ツールの登録 | FastMCP サーバー生成 | なし | ツール名一覧がバックエンド結合の索引と一致 | - |
+| `test_registered_tools` | 正常 | 全ツールの登録 | FastMCP サーバー生成 | なし | ツール名一覧がインターフェース定義（バックエンド）の索引と一致 | - |
 | `test_tool_annotations` | 正常 | ヒント宣言 | FastMCP サーバー生成 | なし | `get_issue_or_pr` / `list_addressed_comments` / `list_review_threads` / `search_issues_and_prs` が readOnlyHint・remove 系 / close / merge が destructiveHint | - |
 
 ---
@@ -407,7 +412,7 @@ IssueSnapshot(number=35, title="プロフィール編集機能", state="OPEN", l
 > 物理名: `comment`<br>
 > 種別: 関数
 
-定型ブロック（from / to ヘッダー + 本文）のコメントを投稿する。
+定型ブロック（from / to ヘッダー + 本文 + 末尾の区切り線）のコメントを投稿する。
 
 #### 引数
 
@@ -417,12 +422,12 @@ IssueSnapshot(number=35, title="プロフィール編集機能", state="OPEN", l
 | PR フラグ | `is_pr` | `bool` | ✅ | - | PR なら `True` | - |
 | 送信者 | `sender` | `str` | ✅ | - | 送信者のエージェント名 | `@` は不要（自動付与） |
 | 宛先 | `receiver` | `str \| None` | - | `None`（to 行なし = 現担当宛） | 宛先名 | - |
-| 本文 | `body` | `str` | ✅ | - | 本文 | Markdown 可 |
+| 本文構成 | `format` | [`CommentFormat`](#本文フォーマット) | ✅ | - | `type` で判別される本文の構成 | 本文は `format.body` |
 
 引数例:
 
 ```python
-comment(35, is_pr=False, sender="architect", body="設計 Wiki を更新しました。")
+comment(35, is_pr=False, sender="architect", format=PlainFormat(body="設計 Wiki を更新しました。"))
 ```
 
 #### 戻り値
@@ -439,8 +444,9 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 #### 処理
 
-1. from / to ヘッダー + 本文を組み立てる（[定型ブロック組立](#定型ブロック組立)）
-2. 投稿して `CommentResult` を返す（[コメント投稿実体](#コメント投稿実体)）
+1. `format` の `type` に応じて本文（表を含む場合は表も）を組み立てる（[本文レンダリング](#本文レンダリング)）
+2. from / to ヘッダー + 本文を組み立てる（[定型ブロック組立](#定型ブロック組立)）
+3. 投稿して `CommentResult` を返す（[コメント投稿実体](#コメント投稿実体)）
 
 #### 例外
 
@@ -452,7 +458,9 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_comment` | 正常 | 定型ブロックで投稿 | sender / receiver / body | githubkit | `_format_block` の出力で投稿され `CommentResult` を返す | - |
+| `test_comment` | 正常 | 定型ブロックで投稿 | sender / receiver / body | githubkit | `_format_block` の出力（末尾が `---`）で投稿され `CommentResult` を返す | - |
+| `test_comment_when_commits_format` | 正常 | commit 表付きの投稿 | `format` が `CommitsFormat` | githubkit | 本文末尾（区切り線の手前）に `\| commit \| 内容 \|` の表が入る | - |
+| `test_comment_when_pages_format` | 正常 | ページ範囲表付きの投稿 | `format` が `PagesFormat` | githubkit | 本文末尾に `\| 対象ページ \| commit 範囲 \|` の表が入る | - |
 
 #### 疎通テスト
 
@@ -513,7 +521,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_ask_questions` | 正常 | 選択肢 + 推奨付き質問投稿 | `Question` x2 + recommended_index | githubkit | 選択肢と推奨の書式を含む本文で投稿 | - |
+| `test_ask_questions` | 正常 | 選択肢 + 推奨付き質問投稿 | `Question` x2 + recommended_index | githubkit | 選択肢と推奨の書式を含み末尾が `---` の本文で投稿 | - |
 | `test_ask_questions_when_no_recommendation` | 正常 | 推奨なしの省略 | `recommended_index=-1` | githubkit | 推奨行を含まない本文で投稿 | - |
 | `test_ask_questions_when_empty_intro_and_background` | 正常 | 空文字セクションの省略 | `intro` / `background` が空文字 | githubkit | 前置き・背景を含まない本文で投稿 | - |
 
@@ -538,7 +546,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 | 返信先 | `comment_node_id` | `str` | ✅ | - | 追記対象コメントの GraphQL node_id | `get_issue_or_pr` / `list_addressed_comments` で取得 |
 | 送信者 | `sender` | `str` | ✅ | - | 送信者のエージェント名 | `@` は不要 |
 | 宛先 | `receiver` | `str \| None` | - | `None`（to 行なし = 現担当宛） | 宛先名 | - |
-| 本文 | `body` | `str` | ✅ | - | 追記ブロックの本文 | Markdown 可 |
+| 本文構成 | `format` | [`CommentFormat`](#本文フォーマット) | ✅ | - | `type` で判別される追記ブロックの構成 | コメント投稿と共通 |
 
 引数例:
 
@@ -561,8 +569,10 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 #### 処理
 
 1. `comment_node_id` から既存コメントの現在本文を取得する
-2. `---` 区切りの追記ブロックを組み立てる（[定型ブロック組立](#定型ブロック組立)・`is_reply=True`）
-3. 既存本文の末尾に連結してコメントを更新し、`CommentResult` を返す
+2. `format` の `type` に応じて本文（表を含む場合は表も）を組み立てる（[本文レンダリング](#本文レンダリング)）
+3. 既存本文の末尾が区切り線かを判定する（[区切り線判定](#区切り線判定)）
+4. 追記ブロックを組み立てる（[定型ブロック組立](#定型ブロック組立)・`needs_separator` は 3 の判定の否定）
+5. 既存本文の末尾に連結してコメントを更新し、`CommentResult` を返す
 
 #### 例外
 
@@ -575,7 +585,9 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_reply_comment` | 正常 | `---` 区切りの返信追記 | 既存コメントの node_id | githubkit | 先頭 `---` + 宛先ヘッダー付きで追記 | - |
+| `test_reply_comment` | 正常 | 末尾が区切り線でない本文への追記 | 末尾が通常の文の既存コメント | githubkit | 先頭 `---` + 宛先ヘッダー付きで追記され、末尾が `---` で終わる | ユーザーが書き足した後 |
+| `test_reply_comment_when_ends_with_separator` | 正常 | 末尾が区切り線の本文への追記 | 末尾が `---` の既存コメント | githubkit | 先頭に `---` を足さずに追記され、境目の `---` が 1 本だけになる | 本ツールが投稿した後 |
+| `test_reply_comment_when_commits_format` | 正常 | 表付きの追記 | `format` が `CommitsFormat` | githubkit | 追記ブロックの末尾（区切り線の手前）に表が入る | コメント投稿と同じ書式 |
 
 #### 疎通テスト
 
@@ -818,7 +830,7 @@ CommentResult(node_id="PRRC_kwDO...", url="https://github.com/.../pull/52#discus
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_review_comment` | 正常 | インライン投稿 | path / line / sender / body | githubkit | head SHA + 定型ブロックで投稿 API が呼ばれ `CommentResult` を返す | - |
+| `test_create_review_comment` | 正常 | インライン投稿 | path / line / sender / body | githubkit | head SHA + 定型ブロック（末尾が `---`）で投稿 API が呼ばれ `CommentResult` を返す | - |
 | `test_create_review_comment_when_multi_line` | 正常 | 範囲指定の投稿 | `start_line=42`・`line=48` | githubkit | `start_line` 付きで投稿 API が呼ばれる | - |
 | `test_create_review_comment_when_out_of_diff` | 異常 | diff 外の行 | REST が 422 を返す | githubkit | `RequestFailed` がそのまま伝播 | 例外表「422 等」に対応 |
 
@@ -1732,14 +1744,15 @@ EmptyResult()
 
 #### 処理
 
-1. `strategy`（省略時 `squash`）で REST マージを実行する
-2. head のリモートブランチを削除し、`EmptyResult` を返す
+1. マージ可否の計算が終わるのを待って PR を取得する（[マージ可否待ち](#マージ可否待ち)）
+2. `strategy`（省略時 `squash`）で REST マージを実行する
+3. head のリモートブランチを削除し、`EmptyResult` を返す
 
 #### 例外
 
 | 例外名 | 発生条件 | メッセージ | 補足 |
 | --- | --- | --- | --- |
-| `RequestFailed` | API 応答が 4xx / 5xx（対象不存在・認証エラー 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+| `RequestFailed` | API 応答が 4xx / 5xx（対象不存在・認証エラー・コンフリクトで実際にマージ不能 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
 
 #### 単体テスト
 
@@ -1747,6 +1760,7 @@ EmptyResult()
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_merge_pr` | 正常 | 既定戦略でのマージ | strategy 省略 | githubkit | `merge_method=squash` でマージし、head ブランチを削除 | - |
 | `test_merge_pr_when_strategy_given` | 正常 | 戦略指定でのマージ | `strategy="rebase"` | githubkit | `merge_method=rebase` でマージされる | - |
+| `test_merge_pr_when_mergeable_pending` | 正常 | 計算中からの再取得 | 1 回目の取得で `mergeable` が `None`・2 回目で確定 | githubkit / `time.sleep` | 確定後にマージが実行される | 待たずに投げると 405 になる経路 |
 
 #### 疎通テスト
 
@@ -2103,7 +2117,6 @@ MonitoredProject(name="sandbox", repo="shuhei1101/ai-monitor-e2e", local_path="/
 
 ---
 
-
 ### ログイン解決
 > 物理名: `_get_current_login`<br>
 > 種別: 関数
@@ -2399,6 +2412,9 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 コメント本文を `---` 区切りごとに分割し、各ブロックの `> from:` / `> to:` 行と本文を抽出する。
 ヘッダーなしは sender / receiver とも `None`。
 
+エージェントのブロックは末尾が `---` で終わるため、ユーザーが続きに書いたコメントは「末尾が `---` の本文」にも「末尾が `---` でない本文」にもなる。
+どちらも同じ数のブロックとして取れるよう、区切り線で生じる空要素は捨てる。
+
 #### 引数
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
@@ -2426,8 +2442,9 @@ _parse_comment_blocks(body)
 #### 処理
 
 1. 本文を `---` 区切りでブロックに分割する
-2. 各ブロック先頭の `> from:` / `> to:` 行を抽出して取り除く（無ければ sender / receiver とも `None`）
-3. 残りを本文とした `CommentBlock` の配列（投稿順）を返す
+2. 空白・改行だけのブロックを捨てる（先頭 / 末尾の区切り線で生じる空要素）
+3. 各ブロック先頭の `> from:` / `> to:` 行を抽出して取り除く（無ければ sender / receiver とも `None`）
+4. 残りを本文とした `CommentBlock` の配列（投稿順）を返す
 
 #### 例外
 
@@ -2439,6 +2456,8 @@ _parse_comment_blocks(body)
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_parse_comment_blocks` | 正常 | from / to ヘッダーと本文の抽出 | `---` 区切り 3 ブロックのコメント本文 | なし | 各ブロックの sender / receiver / body が取れる | - |
 | `test_parse_comment_blocks_when_plain_user_comment` | 正常 | ヘッダーなしは宛先なしユーザー投稿 | 素のコメント | なし | sender / receiver とも `None`・本文がそのまま入る | - |
+| `test_parse_comment_blocks_when_user_appended_without_separator` | 正常 | ユーザーが区切り線を置かずに書き足した | エージェントブロック（末尾 `---`）+ ユーザーコメントで終わる本文 | なし | 2 ブロックが取れ、2 番目が sender `None` のユーザーコメント | 空要素が混じらない |
+| `test_parse_comment_blocks_when_user_appended_with_separator` | 正常 | ユーザーが末尾に区切り線を置いた | 同上 + 末尾が `---` の本文 | なし | 同じく 2 ブロックが取れる（末尾の空要素を捨てる） | 区切り線の有無で結果が変わらない |
 
 ---
 
@@ -2446,8 +2465,10 @@ _parse_comment_blocks(body)
 > 物理名: `_format_block`<br>
 > 種別: 関数
 
-`> from: @sender` + `> to: @receiver` + 本文を組み立てる。
+`> from: @sender` + `> to: @receiver` + 本文 + 末尾の区切り線を組み立てる。
 書式の SoT は `規約/コメント.md`。
+
+末尾に `---` と空行を置くのは、ユーザーがそのコメントの続きに書き足してそのまま返信できるようにするため。
 
 #### 引数
 
@@ -2456,7 +2477,7 @@ _parse_comment_blocks(body)
 | 送信者 | `sender` | `str` | ✅ | - | from 行の送信者名 | - |
 | 宛先 | `receiver` | `str \| None` | ✅ | - | to 行の宛先名 | `None` で to 行を省略 |
 | 本文 | `body` | `str` | ✅ | - | ブロック本文 | - |
-| 返信フラグ | `is_reply` | `bool` | - | `False` | `True` で先頭に `---` を付ける | - |
+| 先頭区切りフラグ | `needs_separator` | `bool` | - | `False` | `True` で先頭に `---` を付ける | 追記先が区切り線で終わっていない場合に `True` |
 
 引数例:
 
@@ -2468,18 +2489,19 @@ _format_block("architect", "implementer", "L42 に null チェックを追加し
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `str` | 定型ブロック文字列 | - |
+| `str` | 定型ブロック文字列 | 常に `---` + 改行で終わる |
 
 戻り値例:
 
 ```python
-"> from: @architect\n> to: @implementer\n\nL42 に null チェックを追加してください。"
+"> from: @architect\n> to: @implementer\n\nL42 に null チェックを追加してください。\n\n---\n"
 ```
 
 #### 処理
 
 1. `> from:` 行（`receiver` があれば `> to:` 行も）を組み立てる（[アット付与](#アット付与)で `@` を補完）
-2. ヘッダーと本文を連結して返す（`is_reply=True` なら先頭に `---` を付ける）
+2. ヘッダーと本文を連結する（`needs_separator=True` なら先頭に `---` を付ける）
+3. 末尾に `---` と改行を足して返す
 
 #### 例外
 
@@ -2489,9 +2511,118 @@ _format_block("architect", "implementer", "L42 に null チェックを追加し
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_format_block` | 正常 | 定型ブロックの組み立て | sender / receiver / body | なし | `> from: @sender` + `> to: @receiver` + 本文 | - |
-| `test_format_block_when_reply` | 正常 | 返信は先頭に `---` | `is_reply=True` | なし | 先頭が `---` で始まる | - |
-| `test_format_block_when_receiver_none` | 正常 | receiver 省略時は to 行なし | `receiver=None` | なし | from 行 + 本文のみ | - |
+| `test_format_block` | 正常 | 定型ブロックの組み立て | sender / receiver / body | なし | `> from: @sender` + `> to: @receiver` + 本文 + 末尾の `---` | - |
+| `test_format_block_when_needs_separator` | 正常 | 先頭にも `---` を付ける | `needs_separator=True` | なし | 先頭が `---` で始まり末尾も `---` で終わる | - |
+| `test_format_block_when_receiver_none` | 正常 | receiver 省略時は to 行なし | `receiver=None` | なし | from 行 + 本文 + 末尾の `---` | - |
+
+---
+
+### 本文レンダリング
+> 物理名: `_render_format`<br>
+> 種別: 関数
+
+本文フォーマット（`type` 判別の Union）を受け取り、コメントに載せる本文を組み立てる。
+本文と表の並べ方・表の書式はこの関数が持つ（呼び出し元は素の値を渡し、Markdown を書かない）。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 本文構成 | `format` | [`CommentFormat`](#本文フォーマット) | ✅ | - | `type` で判別される本文の構成 | `PlainFormat` / `CommitsFormat` / `PagesFormat` |
+
+引数例:
+
+```python
+_render_format(CommitsFormat(body="テスト作成が完了しました。", entries=[CommitEntry(commit="a1b2c3d", summary="結合テストを追加")]))
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `str` | 組み立てた本文 | 表を持つ `type` では本文の後ろに表が続く |
+
+戻り値例:
+
+```python
+"テスト作成が完了しました。\n\n| commit | 内容 |\n| --- | --- |\n| `a1b2c3d` | 結合テストを追加 |\n"
+```
+
+#### 処理
+
+1. `type` が `plain` なら `body` をそのまま返す
+2. 表を持つ `type` で `entries` が空なら `ValueError` を送出する
+3. `type` で列見出しを決める（`commits` = `commit` / `内容`、`pages` = `対象ページ` / `commit 範囲`）
+4. `commits` は commit ID をバッククォートで囲んだ行を並べる
+5. `pages` は `start_commit` があれば `start_commit..commit`、無ければ `commit` 単体を範囲セルにして、ページとともにバッククォートで囲んだ行を並べる
+6. `body` + 空行 + 表 を連結して返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `ValueError` | 表を持つ `type` で `entries` が空 | 1 件以上必要である旨 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_render_format_when_plain` | 正常 | 本文のみ | `PlainFormat` | なし | `body` がそのまま返る | 表を付けない |
+| `test_render_format_when_commits` | 正常 | commit 表の組み立て | `CommitsFormat` に 2 件 | なし | 本文の後ろに `\| commit \| 内容 \|` の表・入力順 | - |
+| `test_render_format_when_pages_single` | 正常 | 単一 commit のページ行 | `start_commit` なし | なし | 範囲セルが commit 単体 | - |
+| `test_render_format_when_pages_range` | 正常 | 範囲指定のページ行 | `start_commit` あり | なし | 範囲セルが `start_commit..commit` | `..` の組み立ては本関数の責務 |
+| `test_render_format_when_empty_entries` | 異常 | 空入力 | `CommitsFormat` の `entries=[]` | なし | `ValueError` | 例外表に対応 |
+
+---
+
+### 区切り線判定
+> 物理名: `_ends_with_separator`<br>
+> 種別: 関数
+
+本文の末尾（末尾の空白・改行を除く）が `---` かを判定する。
+返信時に区切り線を重複させないための判定に使う。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 本文 | `body` | `str` | ✅ | - | 判定対象の本文 | 既存コメントの本文 |
+
+引数例:
+
+```python
+_ends_with_separator("> from: @architect\n\n設計を更新しました。\n\n---\n")
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `bool` | 末尾が `---` なら `True` | - |
+
+戻り値例:
+
+```python
+True
+```
+
+#### 処理
+
+1. 末尾の空白・改行を除いた文字列を取り出す
+2. その末尾行が `---` と一致するかを返す
+
+#### 例外
+
+なし
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_ends_with_separator` | 正常 | 末尾が区切り線 | 末尾が `---\n` の本文 | なし | `True` | 本ツールが投稿したコメント |
+| `test_ends_with_separator_when_trailing_blank` | 正常 | 区切り線の後に空行がある | 末尾が `---\n\n\n` の本文 | なし | `True` | 空白・改行は無視する |
+| `test_ends_with_separator_when_user_appended` | 正常 | 区切り線の後にユーザーが書き足した | 末尾が通常の文の本文 | なし | `False` | 区切り線を足す条件 |
+| `test_ends_with_separator_when_empty` | 正常 | 空文字 | `""` | なし | `False` | - |
 
 ---
 
@@ -2753,6 +2884,64 @@ True
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_branch_exists` | 正常 | 存在するブランチ | tmp リポジトリに作成済みのブランチ名 | なし | `True` | - |
 | `test_branch_exists_when_missing` | 正常 | 存在しないブランチ | 未作成のブランチ名 | なし | `False`・例外にならない | 後片付けの判定に使うため落とさない |
+
+---
+
+### マージ可否待ち
+> 物理名: `_wait_mergeable`<br>
+> 種別: 関数
+
+GitHub のマージ可否計算が終わるまで PR を取り直し、確定後のスナップショットを返す。
+
+GitHub は base ブランチが更新されるたびにマージ可否を非同期で計算し、確定するまで `mergeable` に `null` を返す。
+この状態でマージを投げると `405 Method Not Allowed` になるため、確定を待ってから実行する。
+待ち時間の上限まで確定しなければ、そのまま最後のスナップショットを返す（マージ実行の応答でエラーになるので握りつぶさない）。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| PR 番号 | `pr_number` | `int` | ✅ | - | 対象 PR 番号 | - |
+| オーナー | `owner` | `str` | ✅ | - | 対象リポジトリのオーナー | キーワード引数 |
+| リポジトリ | `repo` | `str` | ✅ | - | 対象リポジトリ名 | キーワード引数 |
+
+引数例:
+
+```python
+_wait_mergeable(52, owner="shuhei1101", repo="ai-monitor")
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `PullRequest` | 最後に取得した PR のスナップショット | `head.ref` の解決にも使う |
+
+戻り値例:
+
+```python
+PullRequest(number=52, mergeable=True, head=Head(ref="feat/backend/profile/edit/edit-api"))
+```
+
+#### 処理
+
+1. 上限回数まで、間隔を空けながら PR を取得し直す
+   - `mergeable` が確定していれば、その時点のスナップショットを返す
+   - `[WARNING]` 上限まで確定しなかった（`pr_number` / 試行回数）
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx（対象不存在・認証エラー 等） | HTTP ステータスと本文 | 呼び出し元へそのまま伝播する |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_wait_mergeable` | 正常 | 確定済みの即時返却 | 1 回目の取得で `mergeable` が確定 | githubkit | 取得は 1 回でスナップショットを返す | - |
+| `test_wait_mergeable_when_pending` | 正常 | 計算中の再取得 | 1 回目が `None`・2 回目で確定 | githubkit / `time.sleep` | 2 回目のスナップショットを返す | - |
+| `test_wait_mergeable_when_never_settles` | 正常 | 上限まで未確定 | 常に `None` を返す | githubkit / `time.sleep` | 上限回数だけ取得して最後のスナップショットを返す | 判断は呼び出し元のマージ実行に委ねる |
 
 ---
 
@@ -3095,6 +3284,132 @@ worktree 削除の結果（Pydantic `BaseModel`）。
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ブランチ名 | `branch` | `str` | 公開 | - | 削除対象のブランチ名 | - | - |
 | worktree パス | `worktree_path` | `str` | 公開 | - | 削除した worktree の絶対パス | - | - |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## 本文フォーマット
+> 物理名: `CommentFormat`<br>
+> 種別: 型<br>
+> コンテナ: `mcp/models.py`
+
+[`PlainFormat`](#プレーン形式) | [`CommitsFormat`](#commit-表形式) | [`PagesFormat`](#ページ範囲表形式) の判別可能ユニオン。
+`Annotated[PlainFormat | CommitsFormat | PagesFormat, Field(discriminator="type")]` として定義し、`type` の値で入力スキーマを切り替える。
+
+本文（`body`）を各分岐が持つことで、形式ごとに必要なフィールドの組み合わせが型で決まる。
+本文が 2 つ必要・表が 2 つ必要 といった構成が出てきた場合も、新しい `type` を足して表現する。
+
+## プレーン形式
+> 物理名: `PlainFormat`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+本文だけのコメント（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 種別 | `type` | `Literal["plain"]` | 公開 | `"plain"` | 判別子 | `plain` | Union の分岐に使う |
+| 本文 | `body` | `str` | 公開 | - | 本文 | - | Markdown 可 |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## commit 表形式
+> 物理名: `CommitsFormat`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+本文 + commit 表のコメント（Pydantic `BaseModel`）。
+完了報告で使う。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 種別 | `type` | `Literal["commits"]` | 公開 | `"commits"` | 判別子 | `commits` | Union の分岐に使う |
+| 本文 | `body` | `str` | 公開 | - | 表の前に置く本文 | - | - |
+| 行 | `entries` | [`list[CommitEntry]`](#コミットエントリ) | 公開 | - | 表の行 | - | 積んだ順に並べる |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## ページ範囲表形式
+> 物理名: `PagesFormat`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+本文 + ページ範囲表のコメント（Pydantic `BaseModel`）。
+配下の worker への割り当てで使う。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 種別 | `type` | `Literal["pages"]` | 公開 | `"pages"` | 判別子 | `pages` | Union の分岐に使う |
+| 本文 | `body` | `str` | 公開 | - | 表の前に置く本文 | - | - |
+| 行 | `entries` | [`list[PageRangeEntry]`](#ページ範囲エントリ) | 公開 | - | 表の行 | - | 読ませたい順に並べる |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## コミットエントリ
+> 物理名: `CommitEntry`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+コミット表 1 行分の入力（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| commit ID | `commit` | `str` | 公開 | - | 短縮 SHA | `a1b2c3d` | バッククォートは付けずに渡す |
+| 内容 | `summary` | `str` | 公開 | - | その commit で何をしたか | `ユーザー編集 API を追加` | 1 行 |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## ページ範囲エントリ
+> 物理名: `PageRangeEntry`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+ページ範囲表 1 行分の入力（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 対象ページ | `page` | `str` | 公開 | - | ページのパス | `docs/wiki/設計図/インターフェース定義/バックエンド/ユーザー登録.py.md` | リポジトリルートからの相対パス |
+| 起点 commit | `start_commit` | `str \| None` | 公開 | `None` | 範囲の起点になる commit ID | `e4f5g6h` | 単一 commit のときは `None` |
+| commit | `commit` | `str` | 公開 | - | 最後に更新した commit ID | `i7j8k9l` | 単一 commit のときはこれだけ |
 
 ### メソッド
 

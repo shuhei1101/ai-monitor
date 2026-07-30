@@ -42,7 +42,10 @@ MCP `comment` を呼ぶ:
 - `is_pr`: false
 - `sender`: `quick-implementer`
 - `receiver`: ユーザーログイン名（`gh api user --jq '.login'` で取得）
-- `body`: 確認依頼（PR リンク + 変更内容の要約 + 積んだ commit の表。commit の書式は共通ルール『コミット報告』）
+- `format`:
+  - `type`: `commits`
+  - `body`: 確認依頼（PR リンク + 変更内容の要約）
+  - `entries`: 積んだ commit の `commit` と `summary` の組
 
 続けて MCP `add_labels` を呼ぶ:
 - `number`: $issue_number

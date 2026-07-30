@@ -27,16 +27,14 @@ complex-scenario-writer:
   - エージェント/complex-scenario-writer/フェーズ/応答ループ.md
   - エージェント/complex-scenario-writer/フェーズ/完了処理.md
   - エージェント/complex-scenario-writer/フェーズ/統合テストレビュー.md
-  - エージェント/complex-scenario-writer/フェーズ/テスト結果の判定.md
   - エージェント/complex-scenario-writer/フェーズ/シナリオ修正の再開指示.md
-  - エージェント/complex-scenario-writer/フェーズ/再テストの実行指示.md
+  - エージェント/complex-scenario-writer/フェーズ/再テストの実行.md
   - エージェント/complex-scenario-writer/フェーズ/統合テスト割り当て.md
 
 complex-scenario-tester:
   - エージェント/complex-scenario-tester/README.md
   - エージェント/complex-scenario-tester/フェーズ/初期処理.md
   - エージェント/complex-scenario-tester/フェーズ/指摘対応.md
-  - エージェント/complex-scenario-tester/フェーズ/テスト実行.md
   - エージェント/complex-scenario-tester/フェーズ/テスト実装.md
 
 epic-conductor:
@@ -94,16 +92,14 @@ single-scenario-writer:
   - エージェント/single-scenario-writer/フェーズ/応答ループ.md
   - エージェント/single-scenario-writer/フェーズ/完了処理.md
   - エージェント/single-scenario-writer/フェーズ/統合テストレビュー.md
-  - エージェント/single-scenario-writer/フェーズ/テスト結果の判定.md
   - エージェント/single-scenario-writer/フェーズ/シナリオ修正の再開指示.md
-  - エージェント/single-scenario-writer/フェーズ/再テストの実行指示.md
+  - エージェント/single-scenario-writer/フェーズ/再テストの実行.md
   - エージェント/single-scenario-writer/フェーズ/統合テスト割り当て.md
 
 single-scenario-tester:
   - エージェント/single-scenario-tester/README.md
   - エージェント/single-scenario-tester/フェーズ/初期処理.md
   - エージェント/single-scenario-tester/フェーズ/指摘対応.md
-  - エージェント/single-scenario-tester/フェーズ/テスト実行.md
   - エージェント/single-scenario-tester/フェーズ/テスト実装.md
 
 story-conductor:
@@ -173,3 +169,48 @@ resetter:
   - エージェント/resetter/フェーズ/応答ループ.md
   - エージェント/resetter/フェーズ/巻き戻しの実行.md
   - エージェント/resetter/フェーズ/巻き戻し対象の洗い出し.md
+
+system-conductor:
+  - エージェント/system-conductor/README.md
+  - エージェント/system-conductor/フェーズ/初期処理.md
+  - エージェント/system-conductor/フェーズ/リバースエンジニアリング起動.md
+  - エージェント/system-conductor/フェーズ/RE差し戻し対応.md
+  - エージェント/system-conductor/フェーズ/RE完了確認.md
+  - エージェント/system-conductor/フェーズ/応答ループ.md
+  - エージェント/system-conductor/フェーズ/REマージ.md
+  - エージェント/system-conductor/フェーズ/構成確定（初回）.md
+  - エージェント/system-conductor/フェーズ/構成確定（完了処理）.md
+  - エージェント/system-conductor/フェーズ/systemマージ.md
+  - エージェント/system-conductor/フェーズ/子epic起票.md
+
+system-architect:
+  - エージェント/system-architect/README.md
+  - エージェント/system-architect/フェーズ/初期処理.md
+  - エージェント/system-architect/フェーズ/土台生成（初回）.md
+  - エージェント/system-architect/フェーズ/応答ループ.md
+  - エージェント/system-architect/フェーズ/完了処理.md
+
+architecture-reverse-engineer:
+  - エージェント/architecture-reverse-engineer/README.md
+  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
+  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+
+mock-reverse-engineer:
+  - エージェント/mock-reverse-engineer/README.md
+  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
+  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+
+complex-scenario-reverse-engineer:
+  - エージェント/complex-scenario-reverse-engineer/README.md
+  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
+  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+
+single-scenario-reverse-engineer:
+  - エージェント/single-scenario-reverse-engineer/README.md
+  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
+  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+
+ss-design-reverse-engineer:
+  - エージェント/ss-design-reverse-engineer/README.md
+  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
+  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md

@@ -15,6 +15,8 @@ from ai_monitor.features.cleanup.service import (
     release_closed_epics,
     release_closed_standalone,
 )
+from ai_monitor.features.rate_limit.gate import RateLimitGate
+from ai_monitor.features.rate_limit.service import resume_blocked_sessions
 from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.integrations.github.client import get_client
 from ai_monitor.integrations.github.search import list_open_targets
@@ -54,6 +56,7 @@ def run_cycle(
     prev_targets: dict[str, list[MonitorTarget]],
     last_heartbeat_at: str,
     labels: LabelSettings,
+    gate: RateLimitGate,
 ) -> tuple[dict[str, list[MonitorTarget]], str]:
     """ポーリング + クリーンアップ検知 + heartbeat 判定の 1 周期を実行する。"""
     standalone_names = {agent.name for agent in agents if agent.standalone}
@@ -80,6 +83,7 @@ def run_cycle(
                     ai_monitor_wiki_base=settings.ai_monitor_wiki_base,
                     priority_urgent=labels.priority_urgent,
                     priority_low=labels.priority_low,
+                    gate=gate,
                 )
             # クリーンアップ検知を実行する
             close_completed_intakes(project, targets, intake_label=labels.layer_intake)
@@ -92,10 +96,17 @@ def run_cycle(
                 confirm_prefix=labels.confirm_prefix,
             )
             release_closed_standalone(project, targets, registry=registry, standalone_names=standalone_names)
-            # heartbeat 間隔が経過していればタイムアウト回収を実行する
+            # heartbeat 間隔が経過していれば再開送信 → タイムアウト回収の順に実行する
+            # （逆順だと待機で古くなった last_seen_at を回収が拾い、再開直後のセッションを kill する）
             if heartbeat_elapsed:
+                resume_blocked_sessions(gate, registry=registry, now=now)
                 reap_timed_out_sessions(
-                    project, targets, registry=registry, agents=agents, timeout_min=settings.session_timeout_min
+                    project,
+                    targets,
+                    registry=registry,
+                    agents=agents,
+                    timeout_min=settings.session_timeout_min,
+                    gate=gate,
                 )
         except Exception:
             logger.exception("プロジェクトの周期を見送ります: project=%s", project.name)

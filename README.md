@@ -89,7 +89,7 @@ claude plugin install ai-monitor@ai-monitor --scope project
 
 ai-monitor 自身の開発でしか使わないルール（エージェント定義・フェーズページ・組織図）は `docs/rules.self.yaml` に分けてあり、監視対象プロジェクトからは参照しない。
 
-プロジェクト側の `docs/rules.yaml` は system-architect が土台生成時に空の索引として作る（プロジェクト固有の規約ができたときに追記する）。
+プロジェクト側の `docs/rules.yaml` は system-architect が土台生成時に空の索引として作る（依頼元は system-conductor）（プロジェクト固有の規約ができたときに追記する）。
 
 設定できたかは、対象プロジェクトでセッションを開いたときの `ai-monitor: 監視対象 {repo} として解決しました` の 1 行で確認する。
 `監視対象として解決できませんでした` が出た場合は `projects[]` の登録か git remote を見直す。

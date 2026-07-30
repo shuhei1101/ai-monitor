@@ -30,7 +30,9 @@ MCP `comment` を呼ぶ:
 - `is_pr`: true
 - `sender`: `architect`
 - `receiver`: ユーザーログイン名（`gh api user --jq '.login'` で取得）
-- `body`: 全候補の結果まとめ（候補 / 観点 / 実測値 / 判定の表 + PoC PR リンク + 推奨候補と理由 + 採用決定・追加検証の依頼方法の案内）
+- `format`:
+  - `type`: `plain`
+  - `body`: 全候補の結果まとめ（候補 / 観点 / 実測値 / 判定の表 + PoC PR リンク + 推奨候補と理由 + 採用決定・追加検証の依頼方法の案内）
 
 - 追加検証の結果で既存の結果まとめを更新する場合、`comment` ではなく MCP `reply_comment`（`comment_node_id`: 結果まとめコメントの node_id）で更新後の表を追記する
 

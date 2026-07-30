@@ -134,7 +134,7 @@ INTERFACE_DONE_REPORT = """> from: @subsystem-conductor
 
 subsystem #{subsystem_number} のインターフェースが確定しました（設計は続行中）。
 
-- 確定した結合ドキュメント: `設計図/バックエンド結合/タスク更新.py.md`
+- 確定した結合ドキュメント: `設計図/インターフェース定義/バックエンド/タスク更新.py.md`
 - リクエスト: `PATCH /tasks/{{task_id}}`（body に `title` / `content`）
 - レスポンス: 更新後のタスク（`id` / `title` / `content` / `updated_at`）
 
