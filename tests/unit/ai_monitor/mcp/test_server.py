@@ -19,6 +19,7 @@ from ai_monitor.mcp.models import (
     Choice,
     CommentResult,
     CommitEntry,
+    CreatedLabelResult,
     CommitsFormat,
     CreatedIssueResult,
     CreatedPRResult,
@@ -46,6 +47,7 @@ EXPECTED_TOOLS = {
     "create_review_comment",
     "list_review_threads",
     "resolve_review_threads",
+    "create_label",
     "add_labels",
     "remove_labels",
     "transition_phase",
@@ -648,6 +650,46 @@ def test_resolve_review_threads(gh, api):
         query, variables = call_obj.args
         assert "resolveReviewThread" in query
         assert variables == {"id": node_id}
+
+
+# ---- ラベル作成 ----
+
+
+def test_create_label(gh, api):
+    """未作成のラベルの作成を確認する（正常系）。"""
+    # 準備
+    gh.rest.issues.create_label.return_value = _resp(NS(name="scope:backend"))
+    # 実行
+    res = api.create_label("scope:backend", color="c2e0c6", description="担当サブシステム")
+    # 検証
+    kwargs = gh.rest.issues.create_label.call_args.kwargs
+    assert kwargs["name"] == "scope:backend"
+    assert kwargs["color"] == "c2e0c6"
+    assert kwargs["description"] == "担当サブシステム"
+    assert res == CreatedLabelResult(name="scope:backend", created=True)
+
+
+def test_create_label_when_exists(gh, api):
+    """同名が既にある場合の冪等な戻り値を確認する（正常系）。"""
+    # 準備
+    response = MagicMock()
+    response.status_code = 422
+    gh.rest.issues.create_label.side_effect = RequestFailed(response)
+    # 実行
+    res = api.create_label("scope:backend", color="c2e0c6")
+    # 検証
+    assert res == CreatedLabelResult(name="scope:backend", created=False)
+
+
+def test_create_label_when_forbidden(gh, api):
+    """422 以外の API エラーの伝播を確認する（異常系）。"""
+    # 準備
+    response = MagicMock()
+    response.status_code = 403
+    gh.rest.issues.create_label.side_effect = RequestFailed(response)
+    # 実行・検証
+    with pytest.raises(RequestFailed):
+        api.create_label("scope:backend", color="c2e0c6")
 
 
 # ---- ラベル追加 / 除去 / フェーズ遷移 ----

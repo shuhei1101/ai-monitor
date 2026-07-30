@@ -29,6 +29,7 @@ from ai_monitor.mcp.models import (
     CommentResult,
     CommitsFormat,
     CreatedIssueResult,
+    CreatedLabelResult,
     CreatedPRResult,
     EmptyResult,
     IssueCommentEntry,
@@ -60,6 +61,9 @@ PROJECT_HEADER = "X-Project"
 
 # 選択肢の記号（A. B. C. ...）
 CHOICE_LETTERS = "ABCDEFGHIJ"
+
+# 同名ラベルが既に存在するときに GitHub が返すステータス
+HTTP_UNPROCESSABLE = 422
 
 # マージ可否の計算完了を待つ試行回数と間隔
 MERGEABLE_POLL_ATTEMPTS = 10
@@ -764,6 +768,26 @@ def resolve_review_threads(thread_node_ids: list[str]) -> ResolveResult:
 
 
 @_log_tool_call
+def create_label(
+    name: str, color: str, description: str = "", *, ctx: Context, settings: Settings
+) -> CreatedLabelResult:
+    """リポジトリにラベル定義を作る（同名が既にあれば何もしない）。"""
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
+    # ラベル作成 API を名前・色・説明で呼ぶ
+    try:
+        _get_client().rest.issues.create_label(
+            owner=owner, repo=repo, name=name, color=color, description=description
+        )
+    except RequestFailed as exc:
+        # 同名が既に存在する 422 だけは成功扱いにする（既存の色と説明は変えない）
+        if exc.response.status_code != HTTP_UNPROCESSABLE:
+            raise
+        return CreatedLabelResult(name=name, created=False)
+    logger.info("ラベルを作成しました: name=%s", name)
+    return CreatedLabelResult(name=name, created=True)
+
+
+@_log_tool_call
 def add_labels(
     number: int, is_pr: bool, labels: list[str], *, ctx: Context, settings: Settings
 ) -> LabelsResult:
@@ -1176,6 +1200,7 @@ def build_mcp_app(
         (create_review_comment, "インラインコメント投稿", None),
         (list_review_threads, "レビュースレッド一覧", _READ_ONLY),
         (resolve_review_threads, "レビュースレッド一括Resolve", None),
+        (create_label, "ラベル作成", None),
         (add_labels, "ラベル追加", None),
         (remove_labels, "ラベル除去", _DESTRUCTIVE),
         (transition_phase, "フェーズ遷移", None),

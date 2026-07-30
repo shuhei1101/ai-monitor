@@ -138,6 +138,14 @@ class ResolveResult(BaseModel):
     resolved_count: int
 
 
+class CreatedLabelResult(BaseModel):
+    """ラベル作成の結果。"""
+
+    name: str
+    # 本呼び出しで作成したか（既存なら False）
+    created: bool
+
+
 class LabelsResult(BaseModel):
     """ラベル追加・除去・フェーズ遷移の結果。"""
 

@@ -46,6 +46,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`AddressedComment`](#宛先コメント) | `---` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
 | 共通 | 検索結果 DTO | `mcp/models.py` | データモデル | [`SearchResultItem`](#検索結果) | search_issues_and_prs の戻り値要素 | - |
+| 共通 | ラベル作成結果 DTO | `mcp/models.py` | データモデル | [`CreatedLabelResult`](#ラベル作成結果) | create_label の戻り値 | - |
 | 共通 | 操作結果 DTO | `mcp/models.py` | データモデル | [`CommentResult`](#コメント結果) / [`ResolveResult`](#resolve-結果) / [`LabelsResult`](#ラベル結果) / [`AssigneesResult`](#assignee-結果) / [`EmptyResult`](#空結果) / [`CreatedIssueResult`](#issue-作成結果) / [`CreatedPRResult`](#pr-作成結果) | 各ツールの戻り値 | - |
 | 共通 | worktree 結果 DTO | `mcp/models.py` | データモデル | [`WorktreeCreateResult`](#worktree-作成結果) / [`WorktreeRemoveResult`](#worktree-削除結果) | worktree 操作の戻り値 | - |
 | 共通 | 本文フォーマット型 | `mcp/models.py` | 型 | [`CommentFormat`](#本文フォーマット) | `type` を判別子とする Annotated Union | `Field(discriminator="type")` |
@@ -61,6 +62,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | インラインコメント投稿 | MCP ツール | `mcp/server.py` | 関数 | [`create_review_comment`](#インラインコメント投稿) | PR の特定ファイル・行に紐づくレビューコメントを投稿 | - |
 | レビュースレッド一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_review_threads`](#レビュースレッド一覧) | インライン指摘のスレッドを取得 | 読み取り専用 |
 | レビュースレッド一括Resolve | MCP ツール | `mcp/server.py` | 関数 | [`resolve_review_threads`](#レビュースレッド一括resolve) | レビュースレッドを一括で解決 | - |
+| ラベル作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_label`](#ラベル作成) | リポジトリにラベル定義を作る | 既存なら何もしない |
 | ラベル追加 | MCP ツール | `mcp/server.py` | 関数 | [`add_labels`](#ラベル追加) | ラベルを追加して現況を返す | 冪等 |
 | ラベル除去 | MCP ツール | `mcp/server.py` | 関数 | [`remove_labels`](#ラベル除去) | ラベルを除去して現況を返す | `議論中` は対象外 |
 | フェーズ遷移 | MCP ツール | `mcp/server.py` | 関数 | [`transition_phase`](#フェーズ遷移) | ラベルの除去 + 追加を 1 呼び出しで実行 | - |
@@ -955,6 +957,69 @@ ResolveResult(resolved_count=2)
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
 | `test_ext_resolve_review_threads` | GitHub | resolveReviewThread の実行 | スレッドが `isResolved: true` になる | 副作用: sandbox のスレッドを解決 |
+
+---
+
+### ラベル作成
+> 物理名: `create_label`<br>
+> 種別: 関数
+
+リポジトリにラベル定義を作る。
+`constants.env` に載らないプロジェクト固有のラベルを、必要になったエージェントがその場で用意するために使う。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| ラベル名 | `name` | `str` | ✅ | - | 作成するラベル名 | 大文字小文字を区別する |
+| 色 | `color` | `str` | ✅ | - | 6 桁の 16 進カラーコード | `#` は含めない |
+| 説明 | `description` | `str` | - | `""` | ラベルの説明 | - |
+
+引数例:
+
+```python
+create_label("scope:backend", color="c2e0c6", description="担当サブシステム")
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`CreatedLabelResult`](#ラベル作成結果) | ラベル名と新規作成したかの真偽 | 既存なら `created=False` |
+
+戻り値例:
+
+```python
+CreatedLabelResult(name="scope:backend", created=True)
+```
+
+#### 処理
+
+1. ラベル作成 API を名前・色・説明で呼ぶ
+2. 応答で戻り値を決める
+   - 成功した場合、`created=True` の `CreatedLabelResult` を返す
+     - `[INFO]` ラベルを作成した（`name`）
+   - 同名が既に存在して 422 が返った場合、`created=False` の `CreatedLabelResult` を返す（既存の色と説明は変えない）
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 422 以外の 4xx / 5xx（権限不足 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_create_label` | 正常 | 未作成のラベルを作成 | 作成 API が正常応答 | githubkit | 名前・色・説明が API に渡り `created=True` を返す | - |
+| `test_create_label_when_exists` | 正常 | 同名が既に存在 | 作成 API が 422 を返す | githubkit | `created=False` を返し例外にしない | 冪等 |
+| `test_create_label_when_forbidden` | 異常 | 権限不足 | 作成 API が 403 を返す | githubkit | `RequestFailed` を伝播する | 422 以外は握りつぶさない |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_create_label` | GitHub | ラベル定義の作成 | 名前・色・説明の反映 / 再実行時の `created=False` | 副作用: sandbox にラベル作成 |
 
 ---
 
@@ -3132,6 +3197,28 @@ search_issues_and_prs が返す検索結果 1 件（Pydantic `BaseModel`）。
 | 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Resolve 件数 | `resolved_count` | `int` | 公開 | - | Resolve した件数 | `3` | `node_ids` の件数と一致 |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## ラベル作成結果
+> 物理名: `CreatedLabelResult`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+ラベル作成の結果。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ラベル名 | `name` | `str` | 公開 | - | 対象のラベル名 | `"scope:backend"` | 既存だった場合も同じ名前 |
+| 新規作成 | `created` | `bool` | 公開 | - | 本呼び出しで作成したか | `True` | 既存なら `False` |
 
 ### メソッド
 

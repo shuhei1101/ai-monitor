@@ -12,6 +12,18 @@ epic ブランチ配下の worktree に切り替えて（story ブランチの w
 
 シナリオの結合フローから subsystem（FE / BE / 外部連携 等）を洗い出し、対象システムごとの担当範囲と依存順（例: BE → FE）を決める。
 
+### scope ラベルの用意
+
+`scope:*` はプロジェクトごとに値が違うため `constants.env` に無く、リポジトリに未作成のことがある。
+Issue へのラベル付与 API は未作成のラベルをランダムな色で作ってしまうので、起票の前に用意する。
+
+洗い出した subsystem の `scope` 1 件ごとに MCP `create_label` を呼ぶ:
+- `name`: `scope:{識別子}`（識別子は親 system Issue の `## 構成要件` で割り当てられたもの）
+- `color`: `$AI_MONITOR_LABEL_COLOR_SCOPE` の値
+- `description`: `$AI_MONITOR_LABEL_DESC_SCOPE` の値
+
+既に存在する場合は `created: false` が返るだけで何も変わらない。
+
 ### 先頭グループの起票
 
 依存のない先頭グループの subsystem について、`create_child_issue` を呼ぶ:

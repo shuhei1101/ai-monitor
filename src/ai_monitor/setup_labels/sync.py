@@ -34,6 +34,7 @@ _PREFIX_STYLES: tuple[tuple[str, str], ...] = (
     ("優先度:", "priority"),
 )
 
+
 # 接頭辞を持たない単独ラベルと、体裁設定のフィールド接尾辞の対応
 _EXACT_STYLES: dict[str, str] = {
     "議論中": "in_discussion",

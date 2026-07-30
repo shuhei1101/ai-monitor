@@ -14,6 +14,15 @@ story Issue 本文の `## サブシステム一覧` から `対応 subsystem` �
 
 MCP `resolve_comments` で subsystem-conductor のインターフェース確定報告コメントを Resolve する。
 
+### scope ラベルの用意
+
+起票する subsystem の `scope` について MCP `create_label` を呼ぶ:
+- `name`: `scope:{識別子}`
+- `color`: `$AI_MONITOR_LABEL_COLOR_SCOPE` の値
+- `description`: `$AI_MONITOR_LABEL_DESC_SCOPE` の値
+
+既に存在する場合は `created: false` が返るだけで何も変わらない。
+
 ### subsystem Issue の起票
 
 MCP `create_child_issue` を呼ぶ:
