@@ -192,9 +192,60 @@ def _close_issue_tree(gh_live, owner: str, repo: str, number: int, collected: li
         pass
 
 
+def _close_prs_for(gh_live, owner: str, repo: str, numbers: list[int]) -> list[str]:
+    """指定番号のいずれかを本文で参照している open PR を閉じてリモートブランチを削除する。
+
+    閉じた PR の番号は numbers に積む（後段の tmux セッション掃除で使うため）。
+    判定は呼び出し時点の番号一覧で行い、積んだ PR 番号は判定に混ぜない。
+    """
+    branches: list[str] = []
+    try:
+        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
+    except RequestFailed:
+        return branches
+    targets = list(numbers)
+    for pr in pulls:
+        if not any(f"#{number}" in (pr.body or "") for number in targets):
+            continue
+        numbers.append(pr.number)
+        branches.append(pr.head.ref)
+        try:
+            gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
+        except RequestFailed:
+            pass
+        try:
+            gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
+        except RequestFailed:
+            pass
+    return branches
+
+
+def _remove_worktrees(local_path: str, branches: list[str]) -> None:
+    """エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）。"""
+    for branch in branches:
+        worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
+        subprocess.run(
+            ["git", "-C", local_path, "worktree", "remove", "--force", str(worktree_path)],
+            capture_output=True, text=True, check=False,
+        )
+        subprocess.run(["git", "-C", local_path, "branch", "-D", branch], capture_output=True, text=True, check=False)
+    subprocess.run(["git", "-C", local_path, "worktree", "prune"], capture_output=True, text=True, check=False)
+
+
+def _kill_sessions(sandbox: dict, numbers: list[int]) -> None:
+    """テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）。"""
+    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
+    for name in listed.stdout.splitlines():
+        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in numbers):
+            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+
+
 @pytest.fixture
 def intake_issue_factory(gh_live, repo_ctx, sandbox):
-    """確認ラベル付きの intake Issue を作成し、テスト後に Sub-issue・tmux セッションごと片付ける factory。"""
+    """確認ラベル付きの intake Issue を作成し、テスト後に子孫 Issue・PR・ブランチ・worktree・tmux セッションごと片付ける factory。
+
+    intake から分解された子（epic / chore 等）が PR を作るため、Issue ツリーの番号を指す open PR もまとめて閉じる。
+    """
     owner, repo = repo_ctx
     created: list[int] = []
 
@@ -209,11 +260,9 @@ def intake_issue_factory(gh_live, repo_ctx, sandbox):
     cleanup_numbers: list[int] = []
     for number in reversed(created):
         _close_issue_tree(gh_live, owner, repo, number, cleanup_numbers)
-    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
-    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
-    for name in listed.stdout.splitlines():
-        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
-            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+    branches = _close_prs_for(gh_live, owner, repo, cleanup_numbers)
+    _remove_worktrees(sandbox["local_path"], branches)
+    _kill_sessions(sandbox, cleanup_numbers)
 
 
 @pytest.fixture
@@ -233,11 +282,7 @@ def issue_factory(gh_live, repo_ctx, sandbox):
     cleanup_numbers: list[int] = []
     for number in reversed(created):
         _close_issue_tree(gh_live, owner, repo, number, cleanup_numbers)
-    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
-    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
-    for name in listed.stdout.splitlines():
-        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
-            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+    _kill_sessions(sandbox, cleanup_numbers)
 
 
 @pytest.fixture
@@ -294,21 +339,8 @@ def epic_issue_factory(gh_live, repo_ctx, sandbox):
                 pass
         # intake から子孫（epic → story → subsystem）を辿って子から順にクローズする
         _close_issue_tree(gh_live, owner, repo, pair["intake"], cleanup_numbers)
-    # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
-    local_path = sandbox["local_path"]
-    for branch in branches:
-        worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
-        subprocess.run(
-            ["git", "-C", local_path, "worktree", "remove", "--force", str(worktree_path)],
-            capture_output=True, text=True, check=False,
-        )
-        subprocess.run(["git", "-C", local_path, "branch", "-D", branch], capture_output=True, text=True, check=False)
-    subprocess.run(["git", "-C", local_path, "worktree", "prune"], capture_output=True, text=True, check=False)
-    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
-    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
-    for name in listed.stdout.splitlines():
-        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
-            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+    _remove_worktrees(sandbox["local_path"], branches)
+    _kill_sessions(sandbox, cleanup_numbers)
 
 
 @pytest.fixture
@@ -360,21 +392,8 @@ def story_issue_factory(gh_live, repo_ctx, sandbox):
                 pass
         # story から子孫（エージェントが起票した subsystem）を辿って子から順にクローズする
         _close_issue_tree(gh_live, owner, repo, story_number, cleanup_numbers)
-    # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
-    local_path = sandbox["local_path"]
-    for branch in branches:
-        worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
-        subprocess.run(
-            ["git", "-C", local_path, "worktree", "remove", "--force", str(worktree_path)],
-            capture_output=True, text=True, check=False,
-        )
-        subprocess.run(["git", "-C", local_path, "branch", "-D", branch], capture_output=True, text=True, check=False)
-    subprocess.run(["git", "-C", local_path, "worktree", "prune"], capture_output=True, text=True, check=False)
-    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
-    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
-    for name in listed.stdout.splitlines():
-        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
-            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+    _remove_worktrees(sandbox["local_path"], branches)
+    _kill_sessions(sandbox, cleanup_numbers)
 
 
 @pytest.fixture
@@ -489,21 +508,8 @@ def subsystem_issue_factory(gh_live, repo_ctx, sandbox):
             )
         except RequestFailed:
             pass
-    # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
-    local_path = sandbox["local_path"]
-    for branch in branches:
-        worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
-        subprocess.run(
-            ["git", "-C", local_path, "worktree", "remove", "--force", str(worktree_path)],
-            capture_output=True, text=True, check=False,
-        )
-        subprocess.run(["git", "-C", local_path, "branch", "-D", branch], capture_output=True, text=True, check=False)
-    subprocess.run(["git", "-C", local_path, "worktree", "prune"], capture_output=True, text=True, check=False)
-    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
-    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
-    for name in listed.stdout.splitlines():
-        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
-            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+    _remove_worktrees(sandbox["local_path"], branches)
+    _kill_sessions(sandbox, cleanup_numbers)
 
 
 @pytest.fixture
@@ -529,40 +535,9 @@ def system_issue_factory(gh_live, repo_ctx, sandbox):
     cleanup_numbers: list[int] = []
     for system_number in reversed(created):
         _close_issue_tree(gh_live, owner, repo, system_number, cleanup_numbers)
-    # 集めた Issue 番号のいずれかを指す open PR を閉じてリモートブランチを削除する
-    branches: list[str] = []
-    try:
-        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-    except RequestFailed:
-        pulls = []
-    for pr in pulls:
-        if not any(f"#{number}" in (pr.body or "") for number in cleanup_numbers):
-            continue
-        cleanup_numbers.append(pr.number)
-        branches.append(pr.head.ref)
-        try:
-            gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
-        except RequestFailed:
-            pass
-        try:
-            gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
-        except RequestFailed:
-            pass
-    # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
-    local_path = sandbox["local_path"]
-    for branch in branches:
-        worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
-        subprocess.run(
-            ["git", "-C", local_path, "worktree", "remove", "--force", str(worktree_path)],
-            capture_output=True, text=True, check=False,
-        )
-        subprocess.run(["git", "-C", local_path, "branch", "-D", branch], capture_output=True, text=True, check=False)
-    subprocess.run(["git", "-C", local_path, "worktree", "prune"], capture_output=True, text=True, check=False)
-    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
-    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
-    for name in listed.stdout.splitlines():
-        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
-            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+    branches = _close_prs_for(gh_live, owner, repo, cleanup_numbers)
+    _remove_worktrees(sandbox["local_path"], branches)
+    _kill_sessions(sandbox, cleanup_numbers)
 
 
 @pytest.fixture

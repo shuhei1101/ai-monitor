@@ -1,6 +1,8 @@
 """`src/ai_monitor/features/agents/service.py` の単体テスト。"""
 from __future__ import annotations
 
+import json
+import shlex
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -406,6 +408,33 @@ def test_build_launch_command_when_docs_exceed_arg_limit(agent, io_mocks, mon_pr
     assert huge not in command
     docs_path = Path(tempfile.gettempdir()) / "ai-monitor-sandbox-52-intake-issue-triager.docs"
     assert docs_path.read_text(encoding="utf-8") == huge
+
+
+def test_build_launch_command_when_mcp_config(agent, io_mocks, mon_project):
+    """MCP 接続先がシェル引用付きで起動コマンドに載ることを確認する（正常系）。"""
+    # 実行
+    command = service.build_launch_command(
+        "ai-monitor-sandbox-52-intake-issue-triager", agent, 52, mon_project, "Issue #52 [open]",
+        telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE,
+    )
+    # 検証: シェル分解して取り出した引数が JSON として読め、待受ポートと対象プロジェクトが入る
+    tokens = shlex.split(command)
+    config = tokens[tokens.index("--mcp-config") + 1]
+    server = json.loads(config)["mcpServers"]["ai-monitor-tools"]
+    assert server["url"] == "http://localhost:8765/mcp"
+    assert server["headers"]["X-Project"] == "sandbox"
+
+
+def test_build_mcp_config(mon_project):
+    """MCP 接続先の宣言の組み立てを確認する（正常系）。"""
+    # 実行
+    config = service.build_mcp_config(mon_project, 8765)
+    # 検証: 接続方式・待受ポートの URL・対象プロジェクトのヘッダ・ツール確定待ちが入る
+    server = json.loads(config)["mcpServers"]["ai-monitor-tools"]
+    assert server["type"] == "http"
+    assert server["url"] == "http://localhost:8765/mcp"
+    assert server["headers"]["X-Project"] == "sandbox"
+    assert server["alwaysLoad"] is True
 
 
 def test_reset_session(agent, io_mocks, mon_project, monkeypatch):

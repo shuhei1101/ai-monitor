@@ -269,13 +269,19 @@ def setup_re_target(
     }
 
 
-def watch_numbers(state_path: Path, agent_name: str, primary_number: int) -> list[int]:
-    """モニター台帳から指定セッションの監視面番号一覧を返す。"""
+def session_entry(state_path: Path, agent_name: str, primary_number: int) -> dict | None:
+    """モニター台帳から指定エージェント × 主番号のセッション 1 件を返す。"""
     entries = yaml.safe_load(state_path.read_text(encoding="utf-8")) or []
     for entry in entries:
         if entry["agent_name"] == agent_name and entry["primary_number"] == primary_number:
-            return entry["watch_numbers"]
-    return []
+            return entry
+    return None
+
+
+def watch_numbers(state_path: Path, agent_name: str, primary_number: int) -> list[int]:
+    """モニター台帳から指定セッションの監視面番号一覧を返す。"""
+    entry = session_entry(state_path, agent_name, primary_number)
+    return entry["watch_numbers"] if entry else []
 
 
 def re_branch(number: int) -> str:

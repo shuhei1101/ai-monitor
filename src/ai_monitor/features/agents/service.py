@@ -1,7 +1,9 @@
 """プロジェクト × エージェントの対ごとのポーリング。"""
 from __future__ import annotations
 
+import json
 import logging
+import shlex
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +26,9 @@ logger = logging.getLogger(__name__)
 RESUME_TEXT = "状態が変化しました。最新の Issue/PR 状態と自分宛の未解決コメントを取得し、起動判定からやり直してください。"
 
 RESET_SNAPSHOT = "コンテキスト上限に達したためセッションを作り直しました。最新の Issue/PR 状態は初期処理で取得してください。"
+
+# MCP サーバーの登録名（エージェントが呼ぶツール名 `mcp__{登録名}__{ツール名}` の一部になる）
+MCP_SERVER_NAME = "ai-monitor-tools"
 
 
 
@@ -109,10 +114,32 @@ def build_launch_command(
     # 起動プロンプトも一時ファイルへ書き出してコマンド置換で渡す（本文のバッククォート・$ の再展開を防ぐ）
     prompt_path = tmp_dir / f"{session_name}.prompt"
     prompt_path.write_text(build_launch_prompt(agent, number, snapshot), encoding="utf-8")
+    # MCP の接続先は数百バイトなので一時ファイルにせず引数へ載せる
+    # （プロジェクト名は設定由来の任意の文字列なので、引用符が混ざってもコマンドが壊れないよう引用する）
+    mcp_config = shlex.quote(build_mcp_config(project, port))
     return (
         f"{launch_env}claude --model {agent.model} --dangerously-skip-permissions "
+        f"--mcp-config {mcp_config} "
         f'--append-system-prompt-file {docs_path} "$(cat {prompt_path})"'
     )
+
+
+def build_mcp_config(project: MonitoredProject, port: int) -> str:
+    """エージェントへ渡す MCP サーバーの接続先宣言を JSON 文字列で組み立てて返す。"""
+    config = {
+        "mcpServers": {
+            MCP_SERVER_NAME: {
+                "type": "http",
+                # MCP サーバーはモニターと同じプロセスに同居している
+                "url": f"http://localhost:{port}/mcp",
+                # 1 サーバーが複数プロジェクトを受けるため、対象リポジトリをヘッダで名乗る
+                "headers": {"X-Project": project.name},
+                # ツール一覧が確定するまでセッション開始を待たせる
+                "alwaysLoad": True,
+            }
+        }
+    }
+    return json.dumps(config, ensure_ascii=False)
 
 
 def reset_session(
