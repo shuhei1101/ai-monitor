@@ -48,6 +48,13 @@ MCP `update_body` を呼ぶ:
 MCP `resolve_comments` を呼ぶ:
 - `node_ids`: system Issue の自分宛コメントの `node_id` 配列
 
+### 監視面の整理
+
+system Issue は最上位（親 Issue を持たない）なので、後片付けは本エージェントが担う（共通ルール『最終マージの判定』）。
+起票した epic の進行中は epic 側の conductor が自分の監視面を持つため、ここでは自分の監視面に PR 番号が残っていないことだけを確認する。
+
+- 残っている番号がある場合、MCP `remove_watch_targets` で除去する（`agent_name`: `system-conductor`・`number`: $issue_number）
+
 ### ラベル除去
 
 MCP `transition_phase` を呼ぶ:

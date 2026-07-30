@@ -38,6 +38,7 @@ sequenceDiagram
   activate MON
   MON->>GH: PoC PR 本文（検証対象 / 調査結果 /<br>検証観点）と検証指示コメントを確認
   MON->>REPO: 最小 PoC コードを実装 + commit push
+  MON->>GH: 確認事項 / 補足事項を<br>該当行にインラインコメント投稿
   MON->>REPO: 検証実行（成功条件を満たす）
   MON->>GH: 結果・所感を PoC PR 本文に記録
   MON->>GH: 検証指示コメントを Resolve
@@ -53,6 +54,7 @@ sequenceDiagram
 - 検証指示コメントが Resolve 済み
 - PoC PR に `確認:architect` + 完了報告コメント（@発注元宛・未解決）が付与・投稿されている
 - `確認:library-poc-runner` が除去されている
+- commit した内容に対する補足事項がインラインコメントで残っている（判断を仰ぐ論点がある場合は `@ユーザー` 宛の確認事項として投稿されている）
 
 ## 正常シナリオ（再検証指示）
 

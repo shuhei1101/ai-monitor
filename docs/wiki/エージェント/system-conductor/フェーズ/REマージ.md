@@ -25,6 +25,8 @@ MCP `merge_pr` を呼ぶ:
 
 ### 監視面からの除去
 
+構成確定へ続くため、ここで除去するのは RE PR の番号だけにする（system Issue は最上位なので、監視面の全除去は system Issue の完了時に行う）。
+
 MCP `remove_watch_targets` を呼ぶ:
 - `agent_name`: `system-conductor`
 - `number`: $issue_number
