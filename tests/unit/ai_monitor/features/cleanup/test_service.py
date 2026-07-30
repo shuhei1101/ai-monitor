@@ -89,7 +89,7 @@ def test_close_completed_intakes_when_no_children(io_mocks, mon_project):
     io_mocks.close_issue.assert_not_called()
 
 
-def test_release_closed_roots(io_mocks, registry, mon_project):
+def test_release_closed_roots(io_mocks, registry, mon_project, notify):
     """配下の一括解放を確認する（正常系）。"""
     # 準備
     prev_targets = [_issue(35, labels=["layer:epic"])]
@@ -103,13 +103,13 @@ def test_release_closed_roots(io_mocks, registry, mon_project):
     for number, agent in [(30, "intake-issue-triager"), (35, "epic-conductor"), (40, "story-conductor")]:
         registry.register(_session(agent=agent, number=number))
     # 実行
-    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
     # 検証
     assert registry.sessions == []
     assert io_mocks.kill_session.call_count == 3
 
 
-def test_release_closed_roots_when_confirm_remains(io_mocks, registry, mon_project):
+def test_release_closed_roots_when_confirm_remains(io_mocks, registry, mon_project, notify):
     """確認ラベル残存の見送りを確認する（正常系）。"""
     # 準備
     prev_targets = [_issue(35, labels=["layer:epic"])]
@@ -119,13 +119,13 @@ def test_release_closed_roots_when_confirm_remains(io_mocks, registry, mon_proje
     io_mocks.get_parent_number.return_value = None
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
 
 
-def test_release_closed_roots_when_parent_remains(io_mocks, registry, mon_project):
+def test_release_closed_roots_when_parent_remains(io_mocks, registry, mon_project, notify):
     """上位レイヤーが残る Issue の見送りを確認する（正常系）。"""
     # 準備: 親が layer:system（報告先の conductor を持つ）
     prev_targets = [_issue(35, labels=["layer:epic"])]
@@ -136,32 +136,32 @@ def test_release_closed_roots_when_parent_remains(io_mocks, registry, mon_projec
     io_mocks.get_parent_number.return_value = 10
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
     io_mocks.list_sub_issue_numbers.assert_not_called()
 
 
-def test_release_closed_roots_when_still_open(io_mocks, registry, mon_project):
+def test_release_closed_roots_when_still_open(io_mocks, registry, mon_project, notify):
     """open のままの見送りを確認する（正常系）。"""
     # 準備
     prev_targets = [_issue(35, labels=["layer:epic"])]
     io_mocks.get_issue.side_effect = lambda project, number: _issue(35, labels=["layer:epic"], state="open")
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
 
 
-def test_release_closed_roots_when_no_diff(io_mocks, registry, mon_project):
+def test_release_closed_roots_when_no_diff(io_mocks, registry, mon_project, notify):
     """差分なしの見送りを確認する（正常系）。"""
     # 準備
     epic = _issue(35, labels=["layer:epic"])
     # 実行
-    cleanup.release_closed_roots(mon_project, [epic], [epic], registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, [epic], [epic], registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
     # 検証
     io_mocks.get_issue.assert_not_called()
 
@@ -252,48 +252,48 @@ def test_release_closed_standalone_when_workflow_agent(io_mocks, registry, mon_p
     assert len(registry.sessions) == 1
 
 
-def test_reap_timed_out_sessions(io_mocks, registry, mon_project, rate_limit_gate):
+def test_reap_timed_out_sessions(io_mocks, registry, mon_project, rate_limit_gate, notify):
     """超過セッションの回収を確認する（正常系）。"""
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect", "処理中:architect"])]
     agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate)
+    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate, notify=notify)
     # 検証
     assert io_mocks.remove_label.call_args.args[2] == "処理中:architect"
     io_mocks.kill_session.assert_called_once_with("ai-monitor-sandbox-52-architect")
     assert registry.sessions == []
 
 
-def test_reap_timed_out_sessions_when_waiting(io_mocks, registry, mon_project, rate_limit_gate):
+def test_reap_timed_out_sessions_when_waiting(io_mocks, registry, mon_project, rate_limit_gate, notify):
     """待機中の対象外を確認する（正常系）。"""
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect"])]
     agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate)
+    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate, notify=notify)
     # 検証
     io_mocks.kill_session.assert_not_called()
     io_mocks.remove_label.assert_not_called()
     assert len(registry.sessions) == 1
 
 
-def test_reap_timed_out_sessions_when_session_gone(io_mocks, registry, mon_project, rate_limit_gate):
+def test_reap_timed_out_sessions_when_session_gone(io_mocks, registry, mon_project, rate_limit_gate, notify):
     """実体消失の台帳修復を確認する（正常系）。"""
     # 準備
     registry.register(_session(agent="architect", number=52))
     io_mocks.has_session.return_value = False
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, [], registry=registry, agents=[], timeout_min=30, gate=rate_limit_gate)
+    cleanup.reap_timed_out_sessions(mon_project, [], registry=registry, agents=[], timeout_min=30, gate=rate_limit_gate, notify=notify)
     # 検証
     assert registry.sessions == []
     io_mocks.kill_session.assert_not_called()
     io_mocks.remove_label.assert_not_called()
 
 
-def test_reap_timed_out_sessions_when_label_error(io_mocks, registry, mon_project, request_failed, rate_limit_gate):
+def test_reap_timed_out_sessions_when_label_error(io_mocks, registry, mon_project, request_failed, rate_limit_gate, notify):
     """ラベル除去失敗の見送りを確認する（異常系）。"""
     # 準備
     registry.register(_session(agent="architect", number=52))
@@ -301,13 +301,13 @@ def test_reap_timed_out_sessions_when_label_error(io_mocks, registry, mon_projec
     agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
     io_mocks.remove_label.side_effect = request_failed(500)
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate)
+    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate, notify=notify)
     # 検証
     io_mocks.kill_session.assert_not_called()
     assert len(registry.sessions) == 1
 
 
-def test_reap_timed_out_sessions_when_rate_limited(io_mocks, registry, mon_project, rate_limit_gate):
+def test_reap_timed_out_sessions_when_rate_limited(io_mocks, registry, mon_project, rate_limit_gate, notify):
     """レートリミット待機中の見送りを確認する（正常系）。"""
     # 準備: 回収条件を満たすセッションを用意したうえで関門を待機中にする
     registry.register(_session(agent="architect", number=52))
@@ -317,7 +317,7 @@ def test_reap_timed_out_sessions_when_rate_limited(io_mocks, registry, mon_proje
         "ai-monitor-sandbox-52-architect", datetime.now(timezone.utc) + timedelta(minutes=30)
     )
     # 実行
-    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate)
+    cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate, notify=notify)
     # 検証: 止まっているのはハングではないので kill しない
     io_mocks.remove_label.assert_not_called()
     io_mocks.kill_session.assert_not_called()

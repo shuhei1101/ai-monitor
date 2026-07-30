@@ -15,10 +15,14 @@ from ai_monitor.features.cleanup.service import (
     release_closed_roots,
     release_closed_standalone,
 )
+from ai_monitor.features.health.service import check_dependencies
+from ai_monitor.features.notify.gates import notify_open_gates
+from ai_monitor.features.notify.types import NotifyFn
 from ai_monitor.features.rate_limit.gate import RateLimitGate
 from ai_monitor.features.rate_limit.service import resume_blocked_sessions
 from ai_monitor.features.sessions.registry import SessionRegistry
-from ai_monitor.integrations.github.client import get_client
+from ai_monitor.integrations.github.client import check_github, get_client
+from ai_monitor.integrations.webhook.client import check_webhook
 from ai_monitor.integrations.github.search import list_open_targets
 from ai_monitor.observability import configure
 from ai_monitor.server.app import create_app
@@ -57,6 +61,7 @@ def run_cycle(
     last_heartbeat_at: str,
     labels: LabelSettings,
     gate: RateLimitGate,
+    notify: NotifyFn,
 ) -> tuple[dict[str, list[MonitorTarget]], str]:
     """ポーリング + クリーンアップ検知 + heartbeat 判定の 1 周期を実行する。"""
     standalone_names = {agent.name for agent in agents if agent.standalone}
@@ -85,6 +90,13 @@ def run_cycle(
                     priority_low=labels.priority_low,
                     gate=gate,
                 )
+            # ユーザーの番になった対象を通知する（開いたゲートごとに 1 度だけ）
+            notify_open_gates(
+                targets,
+                [s for s in registry.sessions if s.project == project.name],
+                discussion_label=labels.in_discussion,
+                notify=notify,
+            )
             # クリーンアップ検知を実行する
             close_completed_intakes(project, targets, intake_label=labels.layer_intake)
             release_closed_roots(
@@ -94,6 +106,7 @@ def run_cycle(
                 registry=registry,
                 intake_label=labels.layer_intake,
                 confirm_prefix=labels.confirm_prefix,
+                notify=notify,
             )
             release_closed_standalone(project, targets, registry=registry, standalone_names=standalone_names)
             # heartbeat 間隔が経過していれば再開送信 → タイムアウト回収の順に実行する
@@ -107,6 +120,7 @@ def run_cycle(
                     agents=agents,
                     timeout_min=settings.session_timeout_min,
                     gate=gate,
+                    notify=notify,
                 )
         except Exception:
             logger.exception("プロジェクトの周期を見送ります: project=%s", project.name)
@@ -117,11 +131,22 @@ def run_cycle(
 
 
 def main() -> int:
-    """設定読込 → 台帳復元 → FastAPI アプリ起動を行う。"""
+    """設定読込 → 依存確認 → 台帳復元 → FastAPI アプリ起動を行う。"""
     settings = Settings()
     labels = LabelSettings()
     get_client(settings)
     configure("monitor")
+    # 外部 API へ疎通し、必須依存が繋がらなければ起動しない
+    results = check_dependencies(
+        settings.notifies, check_github_fn=check_github, check_webhook_fn=check_webhook
+    )
+    blocked = [r for r in results if r.required and not r.ok]
+    if blocked:
+        logger.error(
+            "必須依存へ繋がらないため起動を中止します: %s",
+            " / ".join(f"{r.name}: {r.reason}" for r in blocked),
+        )
+        return 1
     agents = build_agents(labels, agent_models=settings.agents)
     registry = SessionRegistry(Path(settings.state_path))
     app = create_app(settings, registry=registry, agents=agents, label_settings=labels)

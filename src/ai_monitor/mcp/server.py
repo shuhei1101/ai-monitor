@@ -19,6 +19,8 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
 from ai_monitor.features.agents.types import Agent
+from ai_monitor.features.notify.service import build_targets, send_notification
+from ai_monitor.features.notify.types import SendResult
 from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.integrations.github.labels import remove_label
 from ai_monitor.mcp.models import (
@@ -1181,6 +1183,26 @@ def remove_watch_targets(
     return MonitorAck(ok=True)
 
 
+@_log_tool_call
+def notify(
+    sender: str,
+    title: str,
+    body: str,
+    number: int | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
+) -> SendResult:
+    """設定した Webhook（Discord / Slack）へメッセージを送る。"""
+    # 対象プロジェクトを解決する（対象へのリンク生成に使う）
+    project = _resolve_project(ctx, projects=settings.projects)
+    # 有効な送信先を組み立てて全件へ送る（契機の可否はモニター側の判定なので参照しない）
+    targets = build_targets(settings.notifies)
+    return send_notification(
+        sender, title, body, targets=targets, repo=project.repo, number=number,
+    )
+
+
 def build_mcp_app(
     settings: Settings, *, registry: SessionRegistry, agents: list[Agent], label_settings: LabelSettings
 ) -> Any:
@@ -1220,6 +1242,7 @@ def build_mcp_app(
         (report_completion, "作業完了報告", None),
         (add_watch_targets, "監視対象追加", None),
         (remove_watch_targets, "監視対象除去", _DESTRUCTIVE),
+        (notify, "通知送出", None),
     ):
         # 登録するのはツールそのものではなく、ワーカースレッドで実行する非同期の包み
         mcp.add_tool(

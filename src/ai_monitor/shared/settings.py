@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import (
@@ -56,6 +57,22 @@ class TelemetrySettings(BaseModel):
     otlp_endpoint: str = "http://localhost:4317"
 
 
+class WebhookNotifySettings(BaseModel):
+    """Webhook（Discord / Slack）方式の送信先 1 件分の設定。"""
+
+    type: Literal["webhook"] = "webhook"
+    enabled: bool = True
+    name: str | None = None
+    webhook_url: SecretStr
+    kind: Literal["discord", "slack"]
+    # 契機ごとの送出可否（書かれていない契機は送る扱い）
+    events: dict[str, bool] = {}
+
+
+# 送出方式ごとの設定を type で判別する。方式を増やすときは Union に足す
+type NotifySettings = Annotated[WebhookNotifySettings, Field(discriminator="type")]
+
+
 class MonitoredProject(BaseModel):
     """監視対象プロジェクト 1 件分の設定。"""
 
@@ -81,6 +98,7 @@ class Settings(BaseSettings):
     projects: list[MonitoredProject] = []
     agents: dict[str, AgentModel]
     telemetry: TelemetrySettings | None = None
+    notifies: list[NotifySettings] = []
 
     @model_validator(mode="after")
     def _validate_agents_completeness(self):

@@ -77,14 +77,14 @@ def cycle_env(tmp_state_path, monkeypatch, mon_project, label_settings, agent_mo
     return settings, agents, registry
 
 
-def test_run_cycle(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
+def test_run_cycle(cycle_mocks, cycle_env, label_settings, rate_limit_gate, notify):
     """1 周期の配線を確認する（正常系）。"""
     # 準備
     settings, agents, registry = cycle_env
     # 実行
     targets_by_project, _ = main_mod.run_cycle(
         settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
-    )
+    , notify=notify)
     # 検証
     assert cycle_mocks.list_open_targets.call_count == 1
     assert cycle_mocks.poll.call_count == len(agents)
@@ -94,20 +94,20 @@ def test_run_cycle(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
     assert targets_by_project["sandbox"] == cycle_mocks.list_open_targets.return_value
 
 
-def test_run_cycle_when_heartbeat_elapsed(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
+def test_run_cycle_when_heartbeat_elapsed(cycle_mocks, cycle_env, label_settings, rate_limit_gate, notify):
     """heartbeat 経過時のタイムアウト回収を確認する（正常系）。"""
     # 準備
     settings, agents, registry = cycle_env
     # 実行
     _, heartbeat_at = main_mod.run_cycle(
         settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2000-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
-    )
+    , notify=notify)
     # 検証
     cycle_mocks.reap_timed_out_sessions.assert_called_once()
     assert heartbeat_at != "2000-01-01T00:00:00+00:00"
 
 
-def test_run_cycle_when_heartbeat_not_elapsed(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
+def test_run_cycle_when_heartbeat_not_elapsed(cycle_mocks, cycle_env, label_settings, rate_limit_gate, notify):
     """heartbeat 未経過のスキップを確認する（正常系）。"""
     # 準備
     settings, agents, registry = cycle_env
@@ -116,13 +116,13 @@ def test_run_cycle_when_heartbeat_not_elapsed(cycle_mocks, cycle_env, label_sett
     _, heartbeat_at = main_mod.run_cycle(
         settings, agents, registry=registry, prev_targets={}, last_heartbeat_at=now,
         labels=label_settings, gate=rate_limit_gate,
-    )
+     notify=notify)
     # 検証
     cycle_mocks.reap_timed_out_sessions.assert_not_called()
     assert heartbeat_at == now
 
 
-def test_run_cycle_when_list_error(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
+def test_run_cycle_when_list_error(cycle_mocks, cycle_env, label_settings, rate_limit_gate, notify):
     """一覧取得失敗の周期見送りを確認する（異常系）。"""
     # 準備
     settings, agents, registry = cycle_env
@@ -132,7 +132,7 @@ def test_run_cycle_when_list_error(cycle_mocks, cycle_env, label_settings, rate_
     # 実行
     targets_by_project, _ = main_mod.run_cycle(
         settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
-    )
+    , notify=notify)
     # 検証
     cycle_mocks.poll.assert_not_called()
     assert targets_by_project == {}

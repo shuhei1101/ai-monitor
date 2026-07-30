@@ -19,3 +19,5 @@ class AgentSession:
     primary_number: int
     watch_numbers: list[int] = field(default_factory=list)
     last_seen_at: str = field(default_factory=_now_iso)
+    # ユーザー確認ゲートを通知済みの番号（開いたままのゲートを毎周期送らないために持つ）
+    notified_gates: list[int] = field(default_factory=list)

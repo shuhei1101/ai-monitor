@@ -67,6 +67,7 @@ EXPECTED_TOOLS = {
     "report_completion",
     "add_watch_targets",
     "remove_watch_targets",
+    "notify",
 }
 
 

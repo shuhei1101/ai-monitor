@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from githubkit.exception import RequestFailed
 
 from ai_monitor.features.agents.types import Agent
+from ai_monitor.features.notify.types import NotifyFn
 from ai_monitor.integrations.github.issues import (
     close_issue,
     get_issue,
@@ -51,6 +52,7 @@ def release_closed_roots(
     registry: SessionRegistry,
     intake_label: str,
     confirm_prefix: str,
+    notify: NotifyFn,
 ) -> None:
     """前周期との差分で最上位 Issue のクローズを検知し、配下の全セッションを一括解放する。"""
     open_numbers = {t.number for t in targets}
@@ -106,6 +108,11 @@ def release_closed_roots(
             project.name,
             closed.number,
             released,
+        )
+        notify(
+            "epic_done",
+            f"#{closed.number} が完了しました",
+            f"プロジェクト: {project.name}\n解放したセッション: {len(released)} 本",
         )
 
 
@@ -178,6 +185,7 @@ def reap_timed_out_sessions(
     agents: list[Agent],
     timeout_min: int,
     gate: RateLimitGate,
+    notify: NotifyFn,
 ) -> None:
     """処理中のまま超過したセッションを kill して回収し、実体消失の台帳を修復する。"""
     processing_by_agent = {agent.name: agent.processing_label for agent in agents}
@@ -221,9 +229,15 @@ def reap_timed_out_sessions(
             continue
         kill_session(session.session_name)
         registry.remove(session.session_name)
+        elapsed_min = int(elapsed.total_seconds() // 60)
         logger.warning(
             "タイムアウトしたセッションを kill しました: project=%s session_name=%s elapsed_min=%s",
             project.name,
             session.session_name,
-            int(elapsed.total_seconds() // 60),
+            elapsed_min,
+        )
+        notify(
+            "timeout_kill",
+            f"#{session.primary_number} のセッションをタイムアウトで停止しました",
+            f"セッション: {session.session_name}\n経過: {elapsed_min} 分",
         )

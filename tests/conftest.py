@@ -246,8 +246,24 @@ def mon_settings(mon_project):
         rate_limit_fallback_min=60,
         port=8765,
         telemetry=None,
+        notifies=[],
         ai_monitor_wiki_base="https://example.com/ai-monitor-wiki",
     )
+
+
+@pytest.fixture
+def notify():
+    """契機通知のスタブを返す（呼び出しを記録する）。"""
+    from ai_monitor.features.notify.types import SendResult
+
+    calls: list[tuple[str, str, str]] = []
+
+    def _notify(event, title, body):
+        calls.append((event, title, body))
+        return SendResult(sent=True)
+
+    _notify.calls = calls
+    return _notify
 
 
 @pytest.fixture

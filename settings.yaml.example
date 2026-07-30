@@ -24,6 +24,19 @@ rate_limit_fallback_min: 60
 # セッション台帳の永続化先
 state_path: data/state.yaml
 
+# 通知の送信先（複数指定可・丸ごと省略すると通知しない）
+notifies:
+  - type: webhook              # 送出方式の判別子
+    enabled: true              # false にすると設定を残したまま止められる
+    name: 開発 Discord         # ログと送出結果で使う表示名（省略時は {type}:{kind}）
+    webhook_url: https://discord.com/api/webhooks/xxxxxxxx
+    kind: discord              # discord / slack でペイロードのキーが変わる
+    events:                    # 契機ごとの送出可否（書かなかった契機は送る）
+      rate_limit: true
+      user_gate: true
+      timeout_kill: true
+      epic_done: true
+
 # ai-monitor 自身の Wiki の場所（フェーズページ・共通対応表・共通ルールの取得元）
 # raw URL（https:// 始まり）またはローカル絶対パスのどちらでもよい
 # ローカルを指す場合は worktree ではなくメインリポジトリを指定する

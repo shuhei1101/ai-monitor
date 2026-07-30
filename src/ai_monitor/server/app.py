@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from ai_monitor.features.agents.service import reset_session
 from ai_monitor.features.agents.types import Agent
+from ai_monitor.features.notify.service import build_notifier
 from ai_monitor.features.rate_limit.gate import RateLimitGate
 from ai_monitor.features.rate_limit.service import resolve_reset_at
 from ai_monitor.mcp.server import build_mcp_app
@@ -49,6 +50,8 @@ def create_app(
     mcp_app = build_mcp_app(settings, registry=registry, agents=agents, label_settings=label_settings)
     # 上限の待機状態は到達通知の受信とポーリングループで共有する（上限はアカウント単位なので 1 つだけ持つ）
     gate = RateLimitGate()
+    # 通知の送出先を 1 回だけ解決する（未設定なら送らない関数になる）
+    notify = build_notifier(settings.notifies)
 
     # lifespan で MCP のセッション管理を開始し、その内側でポーリングループを起動する
     @asynccontextmanager
@@ -69,6 +72,7 @@ def create_app(
                     last_heartbeat_at=heartbeat_at,
                     labels=label_settings,
                     gate=gate,
+                    notify=notify,
                 )
                 stop.wait(settings.poll_interval_sec)
 
@@ -134,6 +138,11 @@ def create_app(
             "レートリミットの待機を開始しました: session_name=%s resets_at=%s",
             session.session_name,
             resets_at.isoformat(),
+        )
+        notify(
+            "rate_limit",
+            "Claude の利用上限に達しました",
+            f"セッション: {session.session_name}\nリセット: {resets_at.isoformat()}",
         )
         return {"resets_at": resets_at.isoformat()}
 

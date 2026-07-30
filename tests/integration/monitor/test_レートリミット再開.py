@@ -48,15 +48,15 @@ def blocked_session(mon_registry):
     )
 
 
-def _cycle(mon_settings, label_settings, agent_models, mon_registry, gate):
+def _cycle(mon_settings, label_settings, agent_models, mon_registry, gate, notify):
     agents = build_agents(label_settings, agent_models=agent_models)
     return run_cycle(
         mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=PAST,
         labels=label_settings, gate=gate,
-    )
+     notify=notify)
 
 
-def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, blocked_session):
+def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, blocked_session, notify):
     """解除時刻の到達検知 → 応答と定型文の送信を確認する（正常系）。"""
     # 準備: 解除済みの関門と、回収条件を満たす処理中の対象
     gate = RateLimitGate()
@@ -65,7 +65,7 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
         _resp([_target_ns(1069, ["確認:epic-conductor", "処理中:epic-conductor"])])
     ]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, gate)
+    _cycle(mon_settings, label_settings, agent_models, mon_registry, gate, notify)
     # 検証: Enter と再開の定型文がこの順に送られている
     sent = [c[3] for c in tmux_calls.calls if c[0] == "send-keys" and c[2] == SESSION]
     assert sent[: sent.index(RESUME_TEXT)].count("Enter") >= 1
@@ -76,7 +76,7 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
     assert gate.take_resumable(datetime.now(timezone.utc)) == []
 
 
-def test_normal_when_blocked(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, blocked_session):
+def test_normal_when_blocked(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, blocked_session, notify):
     """解除時刻の前は何もしないことを確認する（正常系）。"""
     # 準備
     gate = RateLimitGate()
@@ -85,14 +85,14 @@ def test_normal_when_blocked(gh_mon, tmux_calls, mon_settings, label_settings, a
         _resp([_target_ns(1069, ["確認:epic-conductor", "処理中:epic-conductor"])])
     ]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, gate)
+    _cycle(mon_settings, label_settings, agent_models, mon_registry, gate, notify)
     # 検証: 送信が発生せず、待機状態が残っている
     assert not any(c[0] == "send-keys" for c in tmux_calls.calls)
     assert gate.is_blocked(datetime.now(timezone.utc)) is True
     assert mon_registry.sessions[0].last_seen_at == PAST
 
 
-def test_normal_when_session_gone(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, blocked_session):
+def test_normal_when_session_gone(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, blocked_session, notify):
     """tmux にセッションが無い対象の読み飛ばしを確認する（正常系）。"""
     # 準備: 解放済みセッション
     gate = RateLimitGate()
@@ -100,7 +100,7 @@ def test_normal_when_session_gone(gh_mon, tmux_calls, mon_settings, label_settin
     tmux_calls.has_session_rc = 1
     gh_mon.rest.issues.list_for_repo.side_effect = [_resp([])]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, gate)
+    _cycle(mon_settings, label_settings, agent_models, mon_registry, gate, notify)
     # 検証: 送信も生存時刻の更新も行わず、待機状態は消えている
     assert not any(c[0] == "send-keys" for c in tmux_calls.calls)
     assert gate.is_blocked(datetime.now(timezone.utc)) is False
