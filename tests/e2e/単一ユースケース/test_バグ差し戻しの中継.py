@@ -17,6 +17,8 @@ BUG_HANDOVER = """> from: @epic-conductor
 
 修正方針: `update_task` のタイトル検証を「1 文字以上 100 文字以内」に戻す。
 該当する subsystem へ差し戻してください。
+
+---
 """
 
 FIX_DONE_REPORT = """> from: @subsystem-conductor
@@ -29,6 +31,8 @@ FIX_DONE_REPORT = """> from: @subsystem-conductor
 | `src/tasks/service.py` | タイトル検証を 1 文字以上 100 文字以内に修正 |
 
 修正用 PR は epic ブランチへ merge 済みで、subsystem Issue は close しました。
+
+---
 """
 
 

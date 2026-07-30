@@ -49,6 +49,8 @@ INTERFACE_REPORT = """> from: @architect
 
 後続の frontend subsystem はこのインターフェースで着手できます。
 設計は続行中です。
+
+---
 """
 
 

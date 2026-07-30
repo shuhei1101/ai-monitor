@@ -50,6 +50,8 @@ STORY_ESCALATION_REPORT = """> from: @subsystem-conductor
 
 論点:
 - 同期前提のシナリオを維持するのか、非同期の結末に変えるのかを決められない
+
+---
 """
 
 SCENARIO_FIX_DONE = """> from: @single-scenario-writer
@@ -62,6 +64,8 @@ SCENARIO_FIX_DONE = """> from: @single-scenario-writer
 | `設計図/シナリオ/単一ユースケース/タスク編集.md` | 保存完了を待たずに受付完了を表示する非同期の結末へ変更 |
 
 修正はユーザー確認を経て確定済みです。
+
+---
 """
 
 

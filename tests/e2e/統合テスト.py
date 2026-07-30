@@ -270,6 +270,8 @@ TESTER_PASS_REPORT = """> from: @single-scenario-tester
 | --- | --- |
 | `tests/e2e/単一ユースケース/test_タスク編集.py` | ✅ |
 | `tests/unit/tasks/test_service.py` | ✅ |
+
+---
 """
 
 TESTER_FAIL_REPORT = """> from: @single-scenario-tester
@@ -283,6 +285,8 @@ TESTER_FAIL_REPORT = """> from: @single-scenario-tester
 | `tests/unit/tasks/test_service.py` | 全実行 | ✅ |
 
 失敗内容: タイトルを空文字にして保存しても `ValidationError` が送出されず、ストアが更新される。
+
+---
 """
 
 TESTER_DONE_REPORT = """> from: @single-scenario-tester
@@ -297,12 +301,16 @@ TESTER_DONE_REPORT = """> from: @single-scenario-tester
 | commit | 内容 |
 | --- | --- |
 | seed | 単一UC の E2E テストを追加 |
+
+---
 """
 
 RUN_INSTRUCTION = """> from: @single-scenario-writer
 > to: @single-scenario-tester
 
 レビューが完了しました。テスト結果表の全行（新規 + 回帰）を実行して、結果列を埋めてください。
+
+---
 """
 
 SCENARIO_INDEX_PATH = "docs/wiki/設計図/シナリオ/README.md"
@@ -491,12 +499,16 @@ COMPLEX_TESTER_DONE_REPORT = """> from: @complex-scenario-tester
 | commit | 内容 |
 | --- | --- |
 | seed | 複合UC の E2E テストを追加 |
+
+---
 """
 
 COMPLEX_RUN_INSTRUCTION = """> from: @complex-scenario-writer
 > to: @complex-scenario-tester
 
 レビューが完了しました。テスト結果表の全行（新規 + 回帰）を実行して、結果列を埋めてください。
+
+---
 """
 
 _COMPLEX_NEW_ROW = (
@@ -526,6 +538,8 @@ COMPLEX_TESTER_PASS_REPORT = """> from: @complex-scenario-tester
 | --- | --- |
 | `tests/e2e/複合ユースケース/test_タスク編集から一覧反映.py` | ✅ |
 | `tests/e2e/単一ユースケース/test_タスク編集.py` | ✅ |
+
+---
 """
 
 COMPLEX_TESTER_FAIL_REPORT = """> from: @complex-scenario-tester
@@ -539,6 +553,8 @@ COMPLEX_TESTER_FAIL_REPORT = """> from: @complex-scenario-tester
 | `tests/e2e/単一ユースケース/test_タスク編集.py` | 全実行 | ✅ |
 
 失敗内容: タイトルを空文字にして保存しても `ValidationError` が送出されず、一覧に反映される。
+
+---
 """
 
 

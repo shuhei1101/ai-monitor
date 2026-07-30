@@ -127,6 +127,8 @@ SCENARIO_DONE_REPORT = """> from: @single-scenario-writer
 - 異常シナリオ（必須項目が空）: タスク名を空にして保存するとインラインエラー
 
 確認後に本コメントの Resolve をお願いします。
+
+---
 """
 
 INTERFACE_DONE_REPORT = """> from: @subsystem-conductor
@@ -139,6 +141,8 @@ subsystem #{subsystem_number} のインターフェースが確定しました�
 - レスポンス: 更新後のタスク（`id` / `title` / `content` / `updated_at`）
 
 後続 subsystem の起票をお願いします。
+
+---
 """
 
 SUBSYSTEM_TITLE_BE = "タスク編集 バックエンド"

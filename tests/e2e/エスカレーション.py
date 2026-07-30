@@ -77,6 +77,8 @@ CONSULT_COMMENT = """> from: @architect
 | B | subsystem レイヤーでは決められないため上位へ相談する | 判断が降りてくるまで設計が止まる |
 
 推奨: B（ライセンス方針の判断は subsystem の裁量を超えるため）
+
+---
 """
 
 ESCALATE_INSTRUCTION = (
@@ -101,6 +103,8 @@ ESCALATION_REPORT = """> from: @architect
 検討済みの選択肢と却下理由:
 - subsystem 内での待ち合わせ実装: 応答時間の前提を満たせないため却下
 - 承認基盤の同期 API への変更: 外部システムのため subsystem からは変更できない
+
+---
 """
 
 LOCAL_RESOLUTION = (

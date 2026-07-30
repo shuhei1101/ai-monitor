@@ -65,6 +65,8 @@ MERGE_REQUEST = """> from: @subsystem-conductor
 | 単体テスト | 全 pass |
 
 - 問題なければ `議論中` ラベルを外して assignee を外してください
+
+---
 """
 
 WRITER_PASS_REPORT = """> from: @{writer}
@@ -77,6 +79,8 @@ WRITER_PASS_REPORT = """> from: @{writer}
 | 新規 + 回帰の全行 | ✅ |
 
 マージをお願いします。
+
+---
 """
 
 SYSTEM_TITLE = "タスク管理システム"

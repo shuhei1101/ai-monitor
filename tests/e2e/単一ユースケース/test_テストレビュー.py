@@ -45,6 +45,8 @@ TESTER_REPORT = """> from: @tester
 | commit | 内容 |
 | --- | --- |
 | seed | 単体テストを追加 |
+
+---
 """
 
 

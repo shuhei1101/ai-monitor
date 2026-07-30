@@ -39,6 +39,8 @@ SINGLE_CANDIDATE_COMPARISON = """> from: @architect
 | 型の往復 | `str` / `int` / `None` が書き込み時と同じ型で取り出せる |
 
 - 候補と検証観点で問題なければ、このコメントに合意の返信をして assignee を外してください
+
+---
 """
 
 # 実績のある既知ライブラリのみ（PoC 要否判定に非該当 = PoC スキップを誘発）
@@ -55,6 +57,8 @@ KNOWN_CANDIDATE_COMPARISON = """> from: @architect
 推奨: uuid（追加依存なし・衝突確率が実用上無視できる）
 
 - この推奨で問題なければ採用決定の返信をして assignee を外してください
+
+---
 """
 
 # 要件を満たす候補が残らないケース（相談を誘発する）
@@ -70,6 +74,8 @@ NO_CANDIDATE_COMPARISON = """> from: @architect
 | validate-c | 不可 | メンテナンス停止（最終リリースが 4 年前） |
 
 対応の方向性をご相談させてください。
+
+---
 """
 
 AGREE_SINGLE = (

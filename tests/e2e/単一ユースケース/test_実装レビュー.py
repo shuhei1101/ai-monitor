@@ -55,6 +55,8 @@ IMPLEMENTER_REPORT = """> from: @implementer
 | commit | 内容 |
 | --- | --- |
 | seed | update_task を実装 |
+
+---
 """
 
 

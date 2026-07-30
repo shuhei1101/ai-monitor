@@ -70,6 +70,8 @@ RUNNER_REPORT = """> from: @epic-poc-runner
 | 外部依存 | 標準ライブラリのみ | ✅ |
 
 結論: 成立（epic を進めてよい）。結果は epic Issue 本文の `## PoC 結果` に記録済みです。
+
+---
 """
 
 # 本文の実測値と矛盾する結論（疑問ありを誘発する）
@@ -83,6 +85,8 @@ INCONSISTENT_REPORT = """> from: @epic-poc-runner
 | 書き込み | 1 秒以内に 10000 件を書き込める | 42 秒 | ✅ |
 
 結論: 成立（epic を進めてよい）。
+
+---
 """
 
 CONTINUE_ANSWER = (

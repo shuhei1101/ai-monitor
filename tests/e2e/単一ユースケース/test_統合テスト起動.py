@@ -18,6 +18,8 @@ STORY_DONE_REPORT = """> from: @story-conductor
 > to: @epic-conductor
 
 story #{story_number} のマージが完了しました（story PR は epic ブランチへ merged 済み・story Issue は自動 close）。
+
+---
 """
 
 FAIL_REPORT = """> from: @complex-scenario-writer
@@ -28,6 +30,8 @@ FAIL_REPORT = """> from: @complex-scenario-writer
 - fail した UC: 期限通知メールの受信
 - fail 内容: 通知メールの送信時刻が期限の 24 時間前を超過している（story #{story_number} の実装範囲）
 - 修正方針案: 通知スケジューラの起動条件を修正する
+
+---
 """
 
 
@@ -178,5 +182,7 @@ def test_normal_bug_return(monitor, gh_live, repo_ctx, epic_issue_factory, epic_
 
     # 検証: 失敗報告コメントに返信追記のうえ Resolve 済み
     updated_report = gh_live.rest.issues.get_comment(owner=owner, repo=repo, comment_id=report.id).parsed_data
-    assert "---" in (updated_report.body or ""), "失敗報告コメントに差し戻し結果が返信追記されていない"
+    assert "> from: @epic-conductor" in (updated_report.body or ""), (
+        "失敗報告コメントに差し戻し結果が返信追記されていない"
+    )
     assert server._is_minimized(report.node_id), "失敗報告コメントが未 Resolve"

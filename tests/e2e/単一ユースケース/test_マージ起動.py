@@ -54,6 +54,8 @@ ARCHITECT_DONE_REPORT = """> from: @architect
 | 実装レビュー | 指摘なし・単体テスト 6 ケース全 pass |
 
 タスク一覧は全てチェック済みです。マージの起動をお願いします。
+
+---
 """
 
 def test_normal(

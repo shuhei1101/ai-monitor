@@ -65,6 +65,8 @@ SCENARIO_FAIL_REPORT = """> from: @{tester}
 
 失敗内容: シナリオ設計書の `## 正常シナリオ（タイトルが空）` に沿って
 「タイトルが空でも保存される」ことを検証しましたが、`ValidationError` が送出されました。
+
+---
 """
 
 TESTCODE_FAIL_REPORT = """> from: @{tester}
@@ -78,6 +80,8 @@ TESTCODE_FAIL_REPORT = """> from: @{tester}
 
 失敗内容: 本文を `新本文` に更新した直後に `旧本文` であることを検証しており、
 `AssertionError: '新本文' != '旧本文'` になります。
+
+---
 """
 
 
@@ -117,6 +121,8 @@ SCENARIO_DONE_REPORT = """> from: @{writer}
 | ファイル | 内容 |
 | --- | --- |
 | `設計図/シナリオ/` 配下 | 対象シナリオを作成し、索引にも行を追加 |
+
+---
 """
 
 
