@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.0.0
 ---
 
 # 外部API
@@ -9,6 +9,6 @@ template_version: 1.0.0
 
 ## 目次
 
-| API | ページ | 概要 | 補足 |
+| ページ | 概要 | 使用箇所 | 補足 |
 | --- | --- | --- | --- |
-| GitHub API | [GitHub](./GitHub.md) | Issue / PR / コメント / Sub-issue の操作 | REST + GraphQL |
+| [GitHub](./GitHub.md) | Issue / PR / コメント / Sub-issue の操作 | `src/ai_monitor/integrations/github/` | REST + GraphQL |
