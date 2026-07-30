@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ai_monitor.mcp.server as server
+from tests.e2e.エスカレーション import supplement_review_comments
 from tests.e2e.ライブラリPoC import (
     POC_CODE,
     POC_CODE_PATH,
@@ -117,6 +118,11 @@ def test_normal(
     ).parsed_data
     changed = [f.filename for f in (compare.files or [])]
     assert changed, "PoC コードの commit が積まれていない"
+
+    # 検証: commit 内容に対する補足事項がインラインコメントで残っている
+    assert supplement_review_comments(gh_live, owner, repo, ctx["poc_pr"].number), (
+        "補足事項のインラインコメントが投稿されていない"
+    )
 
     # 検証: 確認ラベルが architect の 1 つだけで、ユーザーとの会話を持たない
     assert _confirm_labels(data) == ["確認:architect"], (

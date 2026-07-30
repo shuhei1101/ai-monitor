@@ -6,6 +6,7 @@ UC は単一 UC（story レベル）で代表して書かれているが、読�
 from __future__ import annotations
 
 import ai_monitor.mcp.server as server
+from tests.e2e.エスカレーション import supplement_review_comments
 from tests.e2e.統合テスト import (
     EPIC_PR_BODY,
     STORY_PR_BODY,
@@ -88,6 +89,9 @@ def _assert_implemented(gh_live, owner, repo, branch, seed_sha, data, level) -> 
     assert len(rows) >= 2, f"新規 + 回帰の行が並んでいない: {rows}"
     assert any(f in body for f in e2e_files), f"新規テストの行がない: {e2e_files}"
     assert "✅" not in body and "❌" not in body, "結果列が記入されている（記入は実行フェーズ）"
+    assert supplement_review_comments(gh_live, owner, repo, data.number), (
+        "補足事項のインラインコメントが投稿されていない"
+    )
     assert "議論中" not in {label.name for label in data.labels}, "議論中 が付与されている"
     assert not data.assignees, "assignee が設定されている"
 

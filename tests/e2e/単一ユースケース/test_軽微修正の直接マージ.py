@@ -6,6 +6,7 @@ import base64
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
+from tests.e2e.エスカレーション import supplement_review_comments
 
 CHORE_TITLE = "typo 修正: recieve → receive"
 CHORE_BODY_TEMPLATE = """`{path}` に typo があるので直してください。
@@ -58,15 +59,16 @@ def test_normal(monitor, gh_live, repo_ctx, issue_factory, commit_file, wait_unt
 
     data, pr = wait_until(_requested, timeout_sec=1800, message="修正 + PR 作成の確認依頼（議論中 + assignee）")
 
-    # 検証: PR がレビュー工程に出ていない（確認ラベルもレビューコメントもない）
+    # 検証: PR がレビュー工程に出ていない（レビュー担当の確認ラベルが付いていない）
     pr_labels = {label.name for label in pr.labels}
     assert not [name for name in pr_labels if name.startswith("確認:")], (
         f"PR に確認ラベルが付いている: {sorted(pr_labels)}"
     )
-    review_comments = gh_live.rest.pulls.list_review_comments(
-        owner=owner, repo=repo, pull_number=pr.number
-    ).parsed_data
-    assert not review_comments, "PR にレビューコメントが付いている（レビュー工程は経由しない）"
+
+    # 検証: commit 内容に対する補足事項がインラインコメントで残っている
+    assert supplement_review_comments(gh_live, owner, repo, pr.number), (
+        "補足事項のインラインコメントが投稿されていない"
+    )
 
     # 検証: PR 本文に紐づく Issue と概要が入っている
     pr_body = (pr.body or "").replace("\r\n", "\n")

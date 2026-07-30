@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ai_monitor.mcp.server as server
+from tests.e2e.エスカレーション import supplement_review_comments
 from tests.e2e.実装対象 import (
     RED_TEST_PATH,
     run_branch_tests,
@@ -129,6 +130,11 @@ def test_normal(
     reports = [c for c in comments if (c.body or "").lstrip().startswith("> from: @implementer")]
     assert reports, "implementer の完了報告コメントが投稿されていない"
     assert not server._is_minimized(reports[-1].node_id), "完了報告が Resolve されている（Resolve は architect の担当）"
+
+    # 検証: commit 内容に対する補足事項がインラインコメントで残っている
+    assert supplement_review_comments(gh_live, owner, repo, ctx["pr"].number), (
+        "補足事項のインラインコメントが投稿されていない"
+    )
 
     # 検証: 議論中 / assignee なし（ユーザーとの会話を持たない）
     labels = {label.name for label in data.labels}

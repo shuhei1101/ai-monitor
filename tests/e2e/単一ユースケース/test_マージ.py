@@ -4,6 +4,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import yaml
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
@@ -78,6 +79,35 @@ WRITER_PASS_REPORT = """> from: @{writer}
 マージをお願いします。
 """
 
+SYSTEM_TITLE = "タスク管理システム"
+SYSTEM_BODY = """## 概要
+
+タスクの登録・編集・通知を行う個人向けのタスク管理システム。
+
+## 背景
+
+紙とメモアプリに散らばっているタスクを 1 箇所に集約したい。
+
+## 構成要件
+
+| カテゴリ | 内容 | 補足 |
+| --- | --- | --- |
+| リポジトリ | モノレポ | - |
+| サブシステム | バックエンドのみ | 画面は次フェーズ |
+| 言語 | Python 3.12 | - |
+| 外部システム | なし | - |
+
+## エピック一覧
+
+| エピック名 | 概要 | 対応 Issue |
+| --- | --- | --- |
+| タスク編集機能 | 既存タスクを一覧から選択して編集する | 起票済み |
+| タスク通知機能 | 期限が近いタスクを通知する | 起票済み |
+"""
+
+SIBLING_EPIC_TITLE = "タスク通知機能"
+SIBLING_EPIC_BODY = "期限が近いタスクを通知する（未着手）。"
+
 
 def _worktree(local_path: str, branch: str) -> Path:
     """ブランチに対応する worktree のパスを返す。"""
@@ -115,6 +145,15 @@ def _wait_cleaned_up(gh_live, owner, repo, sandbox, branch, wait_until, *, messa
         return True if not _worktree(sandbox["local_path"], branch).exists() else None
 
     return wait_until(_done, timeout_sec=1800, message=message)
+
+
+def _watch_numbers(state_path: Path, epic_number: int) -> list[int]:
+    """モニター台帳から epic-conductor セッションの監視面番号一覧を返す。"""
+    entries = yaml.safe_load(state_path.read_text(encoding="utf-8")) or []
+    for entry in entries:
+        if entry["agent_name"] == "epic-conductor" and entry["primary_number"] == epic_number:
+            return entry["watch_numbers"]
+    return []
 
 
 def test_normal_subsystem(
@@ -312,6 +351,93 @@ def test_normal_epic(
     # 検証: テスト結果表が全 pass のまま残っている
     rows = complex_result_rows((issue(gh_live, owner, repo, ctx["pr"].number).body or ""))
     assert rows and all("✅" in row for row in rows), f"テスト結果表が全 pass でない: {rows}"
+
+
+def test_normal_epic_with_parent(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, story_issue_factory,
+    issue_factory, commit_file, wait_until, sandbox, master_baseline, e2e_state_path,
+):
+    """親 system Issue がある epic PR のマージと上位への完了報告を確認する（正常系・上位レイヤーあり）。"""
+    owner, repo = repo_ctx
+    ctx = setup_epic(
+        gh_live, owner, repo, epic_issue_factory, epic_pr_factory, commit_file,
+        pr_body=EPIC_PR_BODY_ALL_PASSED,
+        files=epic_branch_files(complex_e2e_test=COMPLEX_E2E_TEST_PY),
+        parent_title=SYSTEM_TITLE, parent_body=SYSTEM_BODY,
+        parent_labels=["layer:system", "type:feat"],
+    )
+    # parent_labels を layer:system にしているので intake キーの実体は system Issue
+    system = ctx["intake"]
+    # 全 story がマージ済み（closed）の状態にする（子story起票 フェーズを避けるため）
+    story = story_issue_factory(
+        ctx["epic"].number, STORY_TITLE,
+        body=STORY_BODY_TEMPLATE.format(epic_number=ctx["epic"].number),
+        labels=["layer:story", "type:feat"],
+    )
+    gh_live.rest.issues.update(
+        owner=owner, repo=repo, issue_number=story.number, state="closed", state_reason="completed"
+    )
+    # 未着手の兄弟 epic を system にぶら下げる（一括解放が走らないことの確認用）
+    sibling = issue_factory(SIBLING_EPIC_TITLE, SIBLING_EPIC_BODY, ["layer:epic", "type:feat"])
+    gh_live.rest.issues.add_sub_issue(
+        owner=owner, repo=repo, issue_number=system.number, sub_issue_id=sibling.id
+    )
+    add_worktree(sandbox["local_path"], ctx["epic_branch"])
+
+    # 準備: writer の全 pass 完了報告 → 確認ラベル付与（マージの起動トリガー）
+    report = gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=ctx["epic"].number,
+        body=WRITER_PASS_REPORT.format(writer="complex-scenario-writer", conductor="epic-conductor"),
+    ).parsed_data
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["epic"].number, labels=["確認:epic-conductor"]
+    )
+
+    merged = _wait_merged(
+        gh_live, owner, repo, ctx["pr"].number, wait_until, message="epic PR の master へのマージ"
+    )
+
+    # 検証: master へマージされ、ブランチ・worktree とも削除済み
+    assert merged.base.ref == "master", f"base が master でない: {merged.base.ref}"
+    _wait_cleaned_up(
+        gh_live, owner, repo, sandbox, ctx["epic_branch"], wait_until,
+        message="epic ブランチ / worktree の削除",
+    )
+
+    # 実行: 親 system への完了報告を待つ
+    def _reported():
+        system_now = issue(gh_live, owner, repo, system.number)
+        if "確認:system-conductor" not in label_names(system_now):
+            return None
+        reports = comments_from(gh_live, owner, repo, system.number, "epic-conductor")
+        return reports[-1] if reports else None
+
+    system_report = wait_until(_reported, timeout_sec=1800, message="親 system への完了報告")
+
+    # 検証: 完了報告は未解決（受領は system-conductor）で、writer の報告は Resolve 済み
+    assert not server._is_minimized(system_report.node_id), "完了報告が Resolve されている"
+    assert server._is_minimized(report.node_id), "writer の全 pass 報告が未 Resolve"
+    epic_now = issue(gh_live, owner, repo, ctx["epic"].number)
+    assert "確認:epic-conductor" not in label_names(epic_now), "確認:epic-conductor が残っている"
+
+    # 検証: 監視面から epic PR の番号だけが除去され、epic Issue の番号は残っている
+    def _watch_updated():
+        numbers = _watch_numbers(e2e_state_path, ctx["epic"].number)
+        return numbers if ctx["pr"].number not in numbers else None
+
+    numbers = wait_until(_watch_updated, timeout_sec=900, message="epic PR の番号が監視面から除去")
+    assert ctx["epic"].number in numbers, f"epic Issue の番号が監視面から消えている: {numbers}"
+
+    # 検証: 一括解放が走っておらず、epic 配下のセッションが常駐している
+    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
+    alive = [
+        name for name in listed.stdout.splitlines()
+        if name.startswith(f"ai-monitor-{sandbox['name']}-{ctx['epic'].number}-")
+    ]
+    assert alive, "epic 配下のセッションが解放されている（一括解放が走った）"
+
+    # 検証: 兄弟 epic が open のまま残っている
+    assert issue(gh_live, owner, repo, sibling.number).state == "open", "兄弟 epic が close されている"
 
 
 def test_error_conflict(

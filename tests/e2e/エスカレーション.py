@@ -163,6 +163,17 @@ def unresolved_review_threads(gh_live, owner: str, repo: str, pr_number: int) ->
     ]
 
 
+def supplement_review_comments(gh_live, owner: str, repo: str, pr_number: int) -> list:
+    """補足事項のインラインコメント（宛先なし）だけを返す。
+
+    確認事項は receiver 指定で `> to: ` 行が入るため、その行の有無で補足事項と分ける。
+    """
+    reviews = gh_live.rest.pulls.list_review_comments(
+        owner=owner, repo=repo, pull_number=pr_number
+    ).parsed_data
+    return [c for c in reviews if "> to: " not in (c.body or "")]
+
+
 def waiting_for_user(data) -> bool:
     """エージェントがターンを終えてユーザー待ちに入っているかを返す。
 

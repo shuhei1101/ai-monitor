@@ -674,12 +674,19 @@ def epic_branch_files(*, service: str = SERVICE_PY, complex_e2e_test: str | None
 def setup_epic(
     gh_live, owner, repo, epic_issue_factory, epic_pr_factory, commit_file,
     *, pr_body: str, files: dict[str, str],
+    parent_title: str | None = None, parent_body: str | None = None,
+    parent_labels: list[str] | None = None,
 ):
-    """全 story マージ済みの epic（Issue + PR + ブランチ）を用意する。"""
+    """全 story マージ済みの epic（Issue + PR + ブランチ）を用意する。
+
+    既定の親は intake Issue。
+    上位レイヤーありの経路を再現する場合は parent_* に system Issue の値を渡す。
+    """
     from tests.e2e.実装対象 import EPIC_BODY, EPIC_TITLE, INTAKE_BODY, INTAKE_TITLE
 
     intake, epic = epic_issue_factory(
-        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
+        parent_title or INTAKE_TITLE, parent_body or INTAKE_BODY, EPIC_TITLE,
+        epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"], parent_labels=parent_labels,
     )
     epic_branch = f"feat/epic/task-edit-{epic.number}"
     pr = epic_pr_factory(

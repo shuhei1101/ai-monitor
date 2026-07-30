@@ -253,10 +253,13 @@ def epic_issue_factory(gh_live, repo_ctx, sandbox):
         *,
         epic_body: str = "",
         epic_labels: list[str] | None = None,
+        parent_labels: list[str] | None = None,
     ) -> tuple[object, object]:
         # 親 intake（分解済み想定のため確認ラベルなし）を作成する
+        # 上位レイヤーありの検証では parent_labels に layer:system を渡して system Issue にする
+        parent_labels_ = parent_labels if parent_labels is not None else ["layer:intake", "type:feat"]
         intake = gh_live.rest.issues.create(
-            owner=owner, repo=repo, title=intake_title, body=intake_body, labels=["layer:intake", "type:feat"]
+            owner=owner, repo=repo, title=intake_title, body=intake_body, labels=parent_labels_
         ).parsed_data
         # epic Issue を作成して親 intake に Sub-issue リンクする（既定は本文空 + 確認ラベル付き）
         labels = epic_labels if epic_labels is not None else ["layer:epic", "確認:epic-conductor"]
