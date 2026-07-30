@@ -16,6 +16,9 @@ rules:
   - rule: wiki/テンプレート/アーキテクチャ図.md
     paths:
       - "**/docs/wiki/設計図/アーキテクチャ図.md"
+  - rule: wiki/テンプレート/非機能要件.md
+    paths:
+      - "**/docs/wiki/設計図/非機能要件.md"
   - rule: wiki/テンプレート/コンテナ構成.md
     paths:
       - "**/docs/wiki/設計図/コンテナ構成/**/*.md"
