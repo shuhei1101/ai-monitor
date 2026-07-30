@@ -89,60 +89,110 @@ def test_close_completed_intakes_when_no_children(io_mocks, mon_project):
     io_mocks.close_issue.assert_not_called()
 
 
-def test_release_closed_epics(io_mocks, registry, mon_project):
+def test_release_closed_roots(io_mocks, registry, mon_project):
     """配下の一括解放を確認する（正常系）。"""
     # 準備
     prev_targets = [_issue(35, labels=["layer:epic"])]
     targets = []
-    io_mocks.get_issue.return_value = _issue(35, labels=["layer:epic"], state="closed")
+    io_mocks.get_issue.side_effect = lambda project, number: {
+        35: _issue(35, labels=["layer:epic"], state="closed"),
+        30: _issue(30, labels=["layer:intake"]),
+    }[number]
     io_mocks.list_sub_issue_numbers.side_effect = lambda project, number: {35: [40], 40: []}[number]
     io_mocks.get_parent_number.return_value = 30
     for number, agent in [(30, "intake-issue-triager"), (35, "epic-conductor"), (40, "story-conductor")]:
         registry.register(_session(agent=agent, number=number))
     # 実行
-    cleanup.release_closed_epics(mon_project, targets, prev_targets, registry=registry, epic_label="layer:epic", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
     # 検証
     assert registry.sessions == []
     assert io_mocks.kill_session.call_count == 3
 
 
-def test_release_closed_epics_when_confirm_remains(io_mocks, registry, mon_project):
+def test_release_closed_roots_when_confirm_remains(io_mocks, registry, mon_project):
     """確認ラベル残存の見送りを確認する（正常系）。"""
     # 準備
     prev_targets = [_issue(35, labels=["layer:epic"])]
     targets = [_issue(40, labels=["layer:subsystem", "確認:subsystem-conductor"])]
-    io_mocks.get_issue.return_value = _issue(35, labels=["layer:epic"], state="closed")
+    io_mocks.get_issue.side_effect = lambda project, number: _issue(35, labels=["layer:epic"], state="closed")
     io_mocks.list_sub_issue_numbers.side_effect = lambda project, number: {35: [40], 40: []}[number]
     io_mocks.get_parent_number.return_value = None
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_epics(mon_project, targets, prev_targets, registry=registry, epic_label="layer:epic", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
 
 
-def test_release_closed_epics_when_still_open(io_mocks, registry, mon_project):
+def test_release_closed_roots_when_parent_remains(io_mocks, registry, mon_project):
+    """上位レイヤーが残る Issue の見送りを確認する（正常系）。"""
+    # 準備: 親が layer:system（報告先の conductor を持つ）
+    prev_targets = [_issue(35, labels=["layer:epic"])]
+    io_mocks.get_issue.side_effect = lambda project, number: {
+        35: _issue(35, labels=["layer:epic"], state="closed"),
+        10: _issue(10, labels=["layer:system"]),
+    }[number]
+    io_mocks.get_parent_number.return_value = 10
+    registry.register(_session(number=35))
+    # 実行
+    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
+    # 検証
+    assert len(registry.sessions) == 1
+    io_mocks.kill_session.assert_not_called()
+    io_mocks.list_sub_issue_numbers.assert_not_called()
+
+
+def test_release_closed_roots_when_still_open(io_mocks, registry, mon_project):
     """open のままの見送りを確認する（正常系）。"""
     # 準備
     prev_targets = [_issue(35, labels=["layer:epic"])]
-    io_mocks.get_issue.return_value = _issue(35, labels=["layer:epic"], state="open")
+    io_mocks.get_issue.side_effect = lambda project, number: _issue(35, labels=["layer:epic"], state="open")
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_epics(mon_project, [], prev_targets, registry=registry, epic_label="layer:epic", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
 
 
-def test_release_closed_epics_when_no_diff(io_mocks, registry, mon_project):
+def test_release_closed_roots_when_no_diff(io_mocks, registry, mon_project):
     """差分なしの見送りを確認する（正常系）。"""
     # 準備
     epic = _issue(35, labels=["layer:epic"])
     # 実行
-    cleanup.release_closed_epics(mon_project, [epic], [epic], registry=registry, epic_label="layer:epic", confirm_prefix="確認:")
+    cleanup.release_closed_roots(mon_project, [epic], [epic], registry=registry, intake_label="layer:intake", confirm_prefix="確認:")
     # 検証
     io_mocks.get_issue.assert_not_called()
+
+
+def test_is_root(io_mocks, mon_project):
+    """親なしの最上位判定を確認する（正常系）。"""
+    # 準備
+    io_mocks.get_parent_number.return_value = None
+    # 実行
+    result = cleanup._is_root(mon_project, 35, intake_label="layer:intake")
+    # 検証
+    assert result is True
+    io_mocks.get_issue.assert_not_called()
+
+
+def test_is_root_when_parent_is_intake(io_mocks, mon_project):
+    """親が intake のときの最上位判定を確認する（正常系）。"""
+    # 準備
+    io_mocks.get_parent_number.return_value = 30
+    io_mocks.get_issue.return_value = _issue(30, labels=["layer:intake"])
+    # 実行・検証
+    assert cleanup._is_root(mon_project, 35, intake_label="layer:intake") is True
+
+
+def test_is_root_when_parent_is_upper_layer(io_mocks, mon_project):
+    """親が上位レイヤーのときの判定を確認する（正常系）。"""
+    # 準備
+    io_mocks.get_parent_number.return_value = 10
+    io_mocks.get_issue.return_value = _issue(10, labels=["layer:system"])
+    # 実行・検証
+    assert cleanup._is_root(mon_project, 35, intake_label="layer:intake") is False
 
 
 def test_collect_family_numbers(io_mocks, mon_project):

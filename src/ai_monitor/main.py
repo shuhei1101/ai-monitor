@@ -12,7 +12,7 @@ from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.cleanup.service import (
     close_completed_intakes,
     reap_timed_out_sessions,
-    release_closed_epics,
+    release_closed_roots,
     release_closed_standalone,
 )
 from ai_monitor.features.rate_limit.gate import RateLimitGate
@@ -87,12 +87,12 @@ def run_cycle(
                 )
             # クリーンアップ検知を実行する
             close_completed_intakes(project, targets, intake_label=labels.layer_intake)
-            release_closed_epics(
+            release_closed_roots(
                 project,
                 targets,
                 prev_targets.get(project.name, []),
                 registry=registry,
-                epic_label=labels.layer_epic,
+                intake_label=labels.layer_intake,
                 confirm_prefix=labels.confirm_prefix,
             )
             release_closed_standalone(project, targets, registry=registry, standalone_names=standalone_names)

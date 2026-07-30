@@ -13,13 +13,7 @@ MCP `resolve_comments` で完了報告コメントを Resolve する。
 
 ### 最終マージかの判定
 
-初期処理で取得した epic Issue の `parent` を見て、どちらの経路かを決める（共通ルール『最終マージの判定』）。
-
-| 親 Issue | 判定 | この後やること |
-| --- | --- | --- |
-| なし、または `layer:intake` | 最終マージ | マージ後に監視面を全て除去する（上位報告なし） |
-| `layer:system` の system Issue | 通常マージ | マージ後に epic PR の番号だけを監視面から除去し、親へ完了報告する |
-| 上記以外 | 通常マージ | 同上（報告先は親 Issue の `layer:` に対応する conductor） |
+初期処理で取得した epic Issue の `parent` から、最終マージか通常マージかを決める（共通ルール『最終マージの判定』）。
 
 ### マージ
 
@@ -34,31 +28,9 @@ MCP `merge_pr` を呼ぶ:
 続けて MCP `worktree_remove` を呼ぶ:
 - `branch`: epic ブランチ
 
-### 監視面の除去
+### 監視面の除去と上位への完了報告
 
-MCP `remove_watch_targets` を呼ぶ:
-- `agent_name`: `epic-conductor`
-- `number`: $issue_number
-- `watch_numbers`: 最終マージの場合は監視面に残っている全番号、通常マージの場合は epic PR の番号のみ
-
-### 親への完了報告
-
-最終マージの場合は本手順を実行しない。
-
-MCP `comment` を呼ぶ:
-- `number`: 親 Issue 番号
-- `is_pr`: false
-- `sender`: `epic-conductor`
-- `receiver`: 親 Issue の `layer:` に対応する conductor（`layer:system` なら `system-conductor`）
-- `format`:
-  - `type`: `plain`
-  - `body`: epic のマージ完了報告（対象 epic Issue 番号 + 実装内容の要約）
-
-続けて MCP `add_labels` を呼ぶ:
-- `number`: 親 Issue 番号
-- `is_pr`: false
-- `labels`:
-  - 報告先 conductor の確認ラベルの値
+判定に応じて共通ルール『最終マージの判定』の「判定後にやること」を実行する。
 
 ### ラベル除去
 

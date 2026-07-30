@@ -1,4 +1,4 @@
-"""周期の検知 4 種（intake 自動クローズ・epic 一括解放・個別解放・タイムアウト回収）。"""
+"""周期の検知 4 種（intake 自動クローズ・一括解放・個別解放・タイムアウト回収）。"""
 from __future__ import annotations
 
 import logging
@@ -43,31 +43,39 @@ def close_completed_intakes(
             )
 
 
-def release_closed_epics(
+def release_closed_roots(
     project: MonitoredProject,
     targets: list[MonitorTarget],
     prev_targets: list[MonitorTarget],
     *,
     registry: SessionRegistry,
-    epic_label: str,
+    intake_label: str,
     confirm_prefix: str,
 ) -> None:
-    """前周期との差分で epic のクローズを検知し、配下の全セッションを一括解放する。"""
+    """前周期との差分で最上位 Issue のクローズを検知し、配下の全セッションを一括解放する。"""
     open_numbers = {t.number for t in targets}
-    for epic in prev_targets:
-        # 前周期に居て今周期に居ない layer:epic をクローズ候補にする
-        if not isinstance(epic, Issue) or epic_label not in epic.labels or epic.number in open_numbers:
+    for closed in prev_targets:
+        # 前周期に居て今周期に居ない Issue をクローズ候補にする
+        if not isinstance(closed, Issue) or closed.number in open_numbers:
             continue
         # 単体取得で closed を確認する（open は一覧の取りこぼし）
-        if get_issue(project, epic.number).state != "closed":
+        if get_issue(project, closed.number).state != "closed":
             logger.debug(
-                "一覧から消えましたが open のため見送ります: project=%s epic_number=%s",
+                "一覧から消えましたが open のため見送ります: project=%s number=%s",
                 project.name,
-                epic.number,
+                closed.number,
             )
             continue
-        logger.info("epic のクローズを検知しました: project=%s epic_number=%s", project.name, epic.number)
-        family = _collect_family_numbers(project, epic.number)
+        # 上位レイヤーが残っている Issue は解放しない（最上位の close まで配下を常駐させる）
+        if not _is_root(project, closed.number, intake_label=intake_label):
+            logger.info(
+                "上位レイヤーが残っているため解放を見送ります: project=%s number=%s",
+                project.name,
+                closed.number,
+            )
+            continue
+        logger.info("最上位 Issue のクローズを検知しました: project=%s number=%s", project.name, closed.number)
+        family = _collect_family_numbers(project, closed.number)
         family_set = set(family)
         # 配下の Issue / 紐づく PR に 確認:* が残っていれば解放しない（次周期で再判定）
         remaining = None
@@ -81,9 +89,9 @@ def release_closed_epics(
                 break
         if remaining is not None:
             logger.info(
-                "確認ラベルが残っているため解放を見送ります: project=%s epic_number=%s remaining=%s",
+                "確認ラベルが残っているため解放を見送ります: project=%s number=%s remaining=%s",
                 project.name,
-                epic.number,
+                closed.number,
                 remaining,
             )
             continue
@@ -94,25 +102,35 @@ def release_closed_epics(
                 kill_session(session.session_name)
                 released.append(session.session_name)
         logger.info(
-            "epic 配下のセッションを解放しました: project=%s epic_number=%s sessions=%s",
+            "配下のセッションを解放しました: project=%s number=%s sessions=%s",
             project.name,
-            epic.number,
+            closed.number,
             released,
         )
 
 
-def _collect_family_numbers(project: MonitoredProject, epic_number: int) -> list[int]:
-    """epic 配下（全子孫）と親 intake の Issue 番号を収集する。"""
-    numbers = [epic_number]
+def _is_root(project: MonitoredProject, number: int, *, intake_label: str) -> bool:
+    """報告先の conductor を持つ親がない（= 最上位）かを返す。"""
+    parent = get_parent_number(project, number)
+    # 親なしは最上位
+    if parent is None:
+        return True
+    # intake は起票専用で以降の会話を持たないため、親であっても最上位として扱う
+    return intake_label in get_issue(project, parent).labels
+
+
+def _collect_family_numbers(project: MonitoredProject, root_number: int) -> list[int]:
+    """最上位配下（全子孫）と親 intake の Issue 番号を収集する。"""
+    numbers = [root_number]
     # Sub-issue の子番号を再帰取得して集める
-    stack = [epic_number]
+    stack = [root_number]
     while stack:
         for child in list_sub_issue_numbers(project, stack.pop()):
             if child not in numbers:
                 numbers.append(child)
                 stack.append(child)
     # 親 Issue（intake）を加える（親なしは加えない）
-    parent = get_parent_number(project, epic_number)
+    parent = get_parent_number(project, root_number)
     if parent is not None and parent not in numbers:
         numbers.append(parent)
     return numbers

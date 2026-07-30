@@ -58,7 +58,7 @@ def cycle_mocks(monkeypatch):
     monkeypatch.setattr(main_mod, "list_open_targets", mocks.list_open_targets)
     monkeypatch.setattr(main_mod, "poll", mocks.poll)
     monkeypatch.setattr(main_mod, "close_completed_intakes", mocks.close_completed_intakes)
-    monkeypatch.setattr(main_mod, "release_closed_epics", mocks.release_closed_epics)
+    monkeypatch.setattr(main_mod, "release_closed_roots", mocks.release_closed_roots)
     monkeypatch.setattr(main_mod, "release_closed_standalone", mocks.release_closed_standalone)
     monkeypatch.setattr(main_mod, "reap_timed_out_sessions", mocks.reap_timed_out_sessions)
     return mocks
@@ -89,7 +89,7 @@ def test_run_cycle(cycle_mocks, cycle_env, label_settings, rate_limit_gate):
     assert cycle_mocks.list_open_targets.call_count == 1
     assert cycle_mocks.poll.call_count == len(agents)
     cycle_mocks.close_completed_intakes.assert_called_once()
-    cycle_mocks.release_closed_epics.assert_called_once()
+    cycle_mocks.release_closed_roots.assert_called_once()
     cycle_mocks.release_closed_standalone.assert_called_once()
     assert targets_by_project["sandbox"] == cycle_mocks.list_open_targets.return_value
 
