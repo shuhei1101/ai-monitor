@@ -9,6 +9,15 @@ from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import comments, comments_from, issue, label_names, waiting_for_user
+from tests.e2e.システム import (
+    BUILD_DONE_REPORT,
+    FOUNDATION_FILES,
+    SYSTEM_ISSUE_BODY,
+    SYSTEM_PR_BODY_DONE,
+    SYSTEM_TITLE,
+    system_branch,
+    watch_numbers,
+)
 from tests.e2e.実装対象 import (
     IMPLEMENTED_SERVICE_PY,
     STORY_BODY_TEMPLATE,
@@ -81,32 +90,6 @@ WRITER_PASS_REPORT = """> from: @{writer}
 マージをお願いします。
 
 ---
-"""
-
-SYSTEM_TITLE = "タスク管理システム"
-SYSTEM_BODY = """## 概要
-
-タスクの登録・編集・通知を行う個人向けのタスク管理システム。
-
-## 背景
-
-紙とメモアプリに散らばっているタスクを 1 箇所に集約したい。
-
-## 構成要件
-
-| カテゴリ | 内容 | 補足 |
-| --- | --- | --- |
-| リポジトリ | モノレポ | - |
-| サブシステム | バックエンドのみ | 画面は次フェーズ |
-| 言語 | Python 3.12 | - |
-| 外部システム | なし | - |
-
-## エピック一覧
-
-| エピック名 | 概要 | 対応 Issue |
-| --- | --- | --- |
-| タスク編集機能 | 既存タスクを一覧から選択して編集する | 起票済み |
-| タスク通知機能 | 期限が近いタスクを通知する | 起票済み |
 """
 
 SIBLING_EPIC_TITLE = "タスク通知機能"
@@ -367,7 +350,7 @@ def test_normal_epic_with_parent(
         gh_live, owner, repo, epic_issue_factory, epic_pr_factory, commit_file,
         pr_body=EPIC_PR_BODY_ALL_PASSED,
         files=epic_branch_files(complex_e2e_test=COMPLEX_E2E_TEST_PY),
-        parent_title=SYSTEM_TITLE, parent_body=SYSTEM_BODY,
+        parent_title=SYSTEM_TITLE, parent_body=SYSTEM_ISSUE_BODY,
         parent_labels=["layer:system", "type:feat"],
     )
     # parent_labels を layer:system にしているので intake キーの実体は system Issue
@@ -442,6 +425,69 @@ def test_normal_epic_with_parent(
 
     # 検証: 兄弟 epic が open のまま残っている
     assert issue(gh_live, owner, repo, sibling.number).state == "open", "兄弟 epic が close されている"
+
+
+def test_normal_system(
+    monitor, gh_live, repo_ctx, system_issue_factory, draft_pr_factory, commit_file,
+    wait_until, sandbox, master_baseline, e2e_state_path,
+):
+    """土台生成後の system PR 自動マージと子epic起票への引き継ぎを確認する（正常系・system レベル）。"""
+    owner, repo = repo_ctx
+    login = gh_live.rest.users.get_authenticated().parsed_data.login
+    system = system_issue_factory(
+        SYSTEM_TITLE, SYSTEM_ISSUE_BODY, labels=["layer:system", "type:feat"],
+    )
+    branch = system_branch(system.number)
+    pr = draft_pr_factory(
+        branch, SYSTEM_TITLE, SYSTEM_PR_BODY_DONE.format(system_number=system.number)
+    )
+    # 土台生成済みの成果物を system ブランチに積む
+    for path, content in FOUNDATION_FILES.items():
+        commit_file(branch, path, content, f"docs: e2e 用に {path} を配置")
+    add_worktree(sandbox["local_path"], branch)
+
+    # 準備: system-architect の完了報告 → 確認:system-conductor 付与（自動マージの起動トリガー）
+    report = gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=pr.number, body=BUILD_DONE_REPORT.format(login=login)
+    ).parsed_data
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=pr.number, labels=["確認:system-conductor"]
+    )
+
+    merged = _wait_merged(
+        gh_live, owner, repo, pr.number, wait_until, message="system PR の master へのマージ"
+    )
+
+    # 検証: master へマージされ、ブランチ・worktree とも削除済み
+    assert merged.base.ref == "master", f"base が master でない: {merged.base.ref}"
+    _wait_cleaned_up(
+        gh_live, owner, repo, sandbox, branch, wait_until, message="system ブランチ / worktree の削除",
+    )
+
+    # 検証: 土台が master に入っている
+    for path in FOUNDATION_FILES:
+        assert gh_live.rest.repos.get_content(owner=owner, repo=repo, path=path, ref="master"), (
+            f"master に {path} が入っていない"
+        )
+
+    # 実行: 子epic起票への引き継ぎ（system Issue への確認ラベル付与）を待つ
+    def _handed_off():
+        data = issue(gh_live, owner, repo, system.number)
+        return data if "確認:system-conductor" in label_names(data) else None
+
+    wait_until(_handed_off, timeout_sec=1800, message="子epic起票への引き継ぎ")
+
+    # 検証: PR 側の確認ラベルは除去され、完了報告は Resolve 済み
+    pr_now = issue(gh_live, owner, repo, pr.number)
+    assert "確認:system-conductor" not in label_names(pr_now), "system PR に確認ラベルが残っている"
+    assert server._is_minimized(report.node_id), "system-architect の完了報告が未 Resolve"
+
+    # 検証: system PR の番号が監視面から除去されている
+    def _watch_updated():
+        numbers = watch_numbers(e2e_state_path, "system-conductor", system.number)
+        return True if pr.number not in numbers else None
+
+    wait_until(_watch_updated, timeout_sec=900, message="system PR の番号が監視面から除去")
 
 
 def test_error_conflict(

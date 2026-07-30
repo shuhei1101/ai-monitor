@@ -9,6 +9,7 @@ import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import supplement_review_comments
 from tests.e2e.統合テスト import (
     EPIC_PR_BODY,
+    SCENARIO_MD_CONFLICTING,
     STORY_PR_BODY,
     epic_branch_files,
     result_rows,
@@ -16,7 +17,7 @@ from tests.e2e.統合テスト import (
     setup_story,
     story_branch_files,
 )
-from tests.e2e.実装対象 import add_worktree, branch_sha
+from tests.e2e.実装対象 import SCENARIO_PATH, add_worktree, branch_sha
 
 # 読み替え表（UC の「図の表記 / 複合 UC での読み替え」に対応）
 SINGLE = {
@@ -150,3 +151,51 @@ def test_normal_complex(
     # 検証
     _assert_implemented(gh_live, owner, repo, ctx["epic_branch"], seed_sha, data, COMPLEX)
     _assert_handed_back(data, report, COMPLEX)
+
+
+def test_error_revision_needed(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, commit_file, wait_until, sandbox,
+):
+    """シナリオ設計書の構造問題を検知したときの差し戻しを実環境で確認する（異常系・設計書の見直しが必要）。"""
+    owner, repo = repo_ctx
+    ctx = setup_story(
+        gh_live, owner, repo,
+        epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
+        pr_body=STORY_PR_BODY, files=story_branch_files(),
+    )
+    # story のユースケース要件と矛盾したシナリオを置き、設計書どおりに書けない状態を誘発する
+    commit_file(
+        ctx["story_branch"], SCENARIO_PATH, SCENARIO_MD_CONFLICTING,
+        "docs: 単一UC シナリオを要件と矛盾した内容に差し替え",
+    )
+    add_worktree(sandbox["local_path"], ctx["story_branch"])
+    seed_sha = branch_sha(gh_live, owner, repo, ctx["story_branch"])
+
+    # 準備: 指揮役の割り当て（確認ラベルのみ = 実装フェーズ）
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=[f"確認:{SINGLE['tester']}"]
+    )
+
+    # 実行: 指揮役への差し戻し報告を待つ
+    data, report = _wait_handed_back(
+        gh_live, owner, repo, ctx["pr"].number, wait_until, SINGLE, message="シナリオ差し戻しの報告",
+    )
+
+    # 検証: E2E テストコードが commit されていない
+    compare = gh_live.rest.repos.compare_commits(
+        owner=owner, repo=repo, basehead=f"{seed_sha}...{ctx['story_branch']}"
+    ).parsed_data
+    changed = [f.filename for f in (compare.files or [])]
+    e2e_files = [
+        f for f in changed
+        if f.startswith(SINGLE["e2e_dir"]) and f.endswith(".py") and not f.endswith("__init__.py")
+    ]
+    assert not e2e_files, f"差し戻しなのに E2E テストコードが commit されている: {e2e_files}"
+
+    # 検証: 差し戻し報告に理由が書かれ、未解決のまま指揮役へ渡っている
+    body = report.body or ""
+    assert any(word in body for word in ("シナリオ", "設計書", "矛盾")), (
+        f"差し戻しの理由が報告に書かれていない: {body[:200]}"
+    )
+    _assert_handed_back(data, report, SINGLE)

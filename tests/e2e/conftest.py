@@ -507,6 +507,65 @@ def subsystem_issue_factory(gh_live, repo_ctx, sandbox):
 
 
 @pytest.fixture
+def system_issue_factory(gh_live, repo_ctx, sandbox):
+    """system Issue を作成し、テスト後に子孫 Issue・PR・ブランチ・worktree・tmux セッションごと片付ける factory。
+
+    system 配下は epic / story / subsystem まで連鎖するため、
+    Issue ツリーを先に辿って番号を集め、その番号を指す open PR をまとめて閉じる。
+    """
+    owner, repo = repo_ctx
+    created: list[int] = []
+
+    def _create(title: str, body: str, *, labels: list[str] | None = None) -> object:
+        # 既定はユーザーが起票した直後（確認ラベルだけ・layer:system はエージェントが付ける）
+        labels_ = labels if labels is not None else ["確認:system-conductor"]
+        system = gh_live.rest.issues.create(
+            owner=owner, repo=repo, title=title, body=body, labels=labels_
+        ).parsed_data
+        created.append(system.number)
+        return system
+
+    yield _create
+    cleanup_numbers: list[int] = []
+    for system_number in reversed(created):
+        _close_issue_tree(gh_live, owner, repo, system_number, cleanup_numbers)
+    # 集めた Issue 番号のいずれかを指す open PR を閉じてリモートブランチを削除する
+    branches: list[str] = []
+    try:
+        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
+    except RequestFailed:
+        pulls = []
+    for pr in pulls:
+        if not any(f"#{number}" in (pr.body or "") for number in cleanup_numbers):
+            continue
+        cleanup_numbers.append(pr.number)
+        branches.append(pr.head.ref)
+        try:
+            gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
+        except RequestFailed:
+            pass
+        try:
+            gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
+        except RequestFailed:
+            pass
+    # エージェントが作成した worktree とローカルブランチを削除する（sandbox クローン側）
+    local_path = sandbox["local_path"]
+    for branch in branches:
+        worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
+        subprocess.run(
+            ["git", "-C", local_path, "worktree", "remove", "--force", str(worktree_path)],
+            capture_output=True, text=True, check=False,
+        )
+        subprocess.run(["git", "-C", local_path, "branch", "-D", branch], capture_output=True, text=True, check=False)
+    subprocess.run(["git", "-C", local_path, "worktree", "prune"], capture_output=True, text=True, check=False)
+    # テスト中に作られたエージェントセッションを kill する（sandbox の該当番号のみ）
+    listed = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, check=False)
+    for name in listed.stdout.splitlines():
+        if any(name.startswith(f"ai-monitor-{sandbox['name']}-{n}-") for n in cleanup_numbers):
+            subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
+
+
+@pytest.fixture
 def epic_body() -> str:
     """5 セクション確定済みの epic Issue 本文（要件確定済み状態の再現用）。"""
     return """## 前提条件
