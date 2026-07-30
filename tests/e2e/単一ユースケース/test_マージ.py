@@ -143,7 +143,7 @@ def _watch_numbers(state_path: Path, epic_number: int) -> list[int]:
     return []
 
 
-def test_normal_subsystem(
+def test_normal_when_subsystem(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -215,7 +215,7 @@ def test_normal_subsystem(
     assert server._is_minimized(request.node_id), "最終確認の依頼コメントが未 Resolve"
 
 
-def test_normal_story(
+def test_normal_when_story(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -269,7 +269,7 @@ def test_normal_story(
     assert server._is_minimized(report.node_id), "writer の全 pass 報告が未 Resolve"
 
 
-def test_normal_epic(
+def test_normal_when_epic(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, story_issue_factory,
     commit_file, wait_until, sandbox, master_baseline,
 ):
@@ -340,7 +340,7 @@ def test_normal_epic(
     assert rows and all("✅" in row for row in rows), f"テスト結果表が全 pass でない: {rows}"
 
 
-def test_normal_epic_with_parent(
+def test_normal_when_epic_with_parent(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, story_issue_factory,
     issue_factory, commit_file, wait_until, sandbox, master_baseline, e2e_state_path,
 ):
@@ -427,7 +427,7 @@ def test_normal_epic_with_parent(
     assert issue(gh_live, owner, repo, sibling.number).state == "open", "兄弟 epic が close されている"
 
 
-def test_normal_system(
+def test_normal_when_system(
     monitor, gh_live, repo_ctx, system_issue_factory, draft_pr_factory, commit_file,
     wait_until, sandbox, master_baseline, e2e_state_path,
 ):
@@ -490,7 +490,7 @@ def test_normal_system(
     wait_until(_watch_updated, timeout_sec=900, message="system PR の番号が監視面から除去")
 
 
-def test_error_conflict(
+def test_error_when_conflict(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):

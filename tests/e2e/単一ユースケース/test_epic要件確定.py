@@ -10,6 +10,7 @@ from tests.e2e.epic起動 import (
 )
 from tests.e2e.ゲート応答 import open_prs_for
 from tests.e2e.システム import watch_numbers
+from tests.e2e.システム import SYSTEM_ISSUE_BODY, SYSTEM_TITLE
 from tests.e2e.エスカレーション import comments
 
 INTAKE_TITLE = "タスク期限のメール通知機能"
@@ -30,7 +31,7 @@ def _assert_requirements(gh_live, owner, repo, epic_number: int, first) -> None:
     assert comments(gh_live, owner, repo, epic_number), "完了報告・確認質問コメントが投稿されていない"
 
 
-def test_normal_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
+def test_normal_when_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
     """epic 本文確定 → 承認 → epic Draft PR 作成 + complex-scenario-writer 引き継ぎを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
     # 準備: 親 intake + 本文空の epic Issue（確認ラベル付き・assignee なし）
@@ -60,7 +61,7 @@ def test_normal_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wai
     assert_comments_resolved(gh_live, owner, repo, epic.number)
 
 
-def test_normal_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
+def test_normal_when_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
     """epic 本文確定 → 承認 → epic Draft PR 作成 + mock-designer 引き継ぎと指示コメントを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
     # 準備: 親 intake + 本文空の epic Issue（確認ラベル付き・assignee なし）
@@ -92,7 +93,7 @@ def test_normal_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_factory, w
     assert pr.number in watch_numbers(e2e_state_path, "epic-conductor", epic.number)
 
 
-def test_normal_poc_required(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
+def test_normal_when_poc_required(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
     """epic 本文確定 → 承認 → PoC Draft PR 作成 + epic-poc-runner 引き継ぎ（epic Draft PR なし）を実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
     # 準備: 親 intake + 本文空の epic Issue（確認ラベル付き・assignee なし）
@@ -124,3 +125,73 @@ def test_normal_poc_required(monitor, gh_live, repo_ctx, epic_issue_factory, wai
 
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
     assert pr.number in watch_numbers(e2e_state_path, "epic-conductor", epic.number)
+
+
+# RE 経路の起点になる epic Issue 本文（前提条件とユースケース一覧は起票時に記入済み）
+RE_EPIC_BODY = """## 前提条件
+
+- 既存のタスク管理コードが動いている
+
+## ユースケース一覧
+
+| UC 名 | 概要 | 対応 story |
+| --- | --- | --- |
+| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 未起票 |
+"""
+
+# master にある現状の複合 UC シナリオ（RE PR がマージ済みの状態）
+CURRENT_COMPLEX_SCENARIO_PATH = "docs/wiki/設計図/シナリオ/複合ユースケース/タスク編集から一覧反映.md"
+CURRENT_COMPLEX_SCENARIO_MD = """# タスク編集から一覧反映
+
+現状の実装から起こした複合 UC。
+タスクを編集して保存し、一覧に反映されるまでを扱う。
+
+## 正常シナリオ
+
+### 期待値
+
+- 一覧に編集後のタイトルと本文が並んでいる
+"""
+
+CURRENT_MOCK_PATH = "docs/mock/pages/タスク編集画面/current/index.html"
+CURRENT_MOCK_HTML = "<html><body><h1>タスク編集（現状）</h1></body></html>\n"
+
+
+def test_normal_when_reverse(
+    monitor, gh_live, repo_ctx, epic_issue_factory, commit_file, wait_until, e2e_state_path,
+    master_baseline,
+):
+    """現状の設計書を入力にした epic 要件確定を実環境で確認する（正常系・リバースエンジニアリング）。"""
+    owner, repo = repo_ctx
+    # 準備: エピック一覧 確定済みの親 system Issue + RE 経路の epic Issue
+    system, epic = epic_issue_factory(
+        SYSTEM_TITLE, SYSTEM_ISSUE_BODY, EPIC_TITLE,
+        epic_body=RE_EPIC_BODY,
+        epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング", "確認:epic-conductor"],
+        parent_labels=["layer:system", "type:docs", "リバースエンジニアリング"],
+    )
+    # 準備: RE PR がマージ済み（現状の設計書とモックが master にある）状態を再現する
+    commit_file("master", CURRENT_COMPLEX_SCENARIO_PATH, CURRENT_COMPLEX_SCENARIO_MD, "docs: 現状の複合UC シナリオを追加")
+    commit_file("master", CURRENT_MOCK_PATH, CURRENT_MOCK_HTML, "docs: 現状モックを追加")
+
+    # 実行: 要件確定フローをユーザー役として進める
+    first, _ = drive_requirements(
+        gh_live, owner, repo, wait_until, epic.number,
+        answer_body="現状の設計書どおりで問題ありません。乖離している箇所は現状に合わせてください。",
+    )
+    _assert_requirements(gh_live, owner, repo, epic.number, first)
+
+    # 検証: epic Draft PR が 1 件作成され mock-designer へ引き継がれている
+    prs = open_prs_for(gh_live, owner, repo, epic.number)
+    assert len(prs) == 1, f"epic Draft PR が 1 件でない: {[pr.number for pr in prs]}"
+    pr = prs[0]
+    assert pr.draft is True
+    assert_linked_issue_only_body(pr)
+    assert "確認:mock-designer" in {label.name for label in pr.labels}
+
+    # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
+    assert pr.number in watch_numbers(e2e_state_path, "epic-conductor", epic.number)
+
+    # 検証: エージェント投稿の自分宛コメントが全て Resolve 済み
+    assert_comments_resolved(gh_live, owner, repo, epic.number)
+    assert system is not None and master_baseline

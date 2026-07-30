@@ -13,6 +13,7 @@ template_version: 1.1.0
 | --- | --- | --- | --- | --- | --- | --- |
 | 共通 | クライアント生成 | `integrations/github/client.py` | 関数 | [`get_client`](#クライアント生成) | 設定の `github_token` から githubkit クライアントを生成・共有 | - |
 | 共通 | 対象列挙 | `integrations/github/search.py` | 関数 | [`list_open_targets`](#オープン対象一覧) | open の Issue / PR を全件取得して変換 | ポーリング 1 周期 1 回 |
+| 共通 | 変換 | `integrations/github/search.py` | 関数 | [`to_target`](#監視対象へ変換) | API 応答の 1 要素をドメインモデルに変換 | 一覧取得と単体取得の両方が使う |
 | 共通 | 内部処理 | `integrations/github/search.py` | 関数 | [`_parse_linked_issue_numbers`](#紐づく-issue-解析) | PR 本文の `## 紐づく Issue` から Issue 番号を抽出 | - |
 | 共通 | ラベル操作 | `integrations/github/labels.py` | 関数 | [`add_label`](#ラベル付与) | ラベルを 1 つ付与 | 処理中ラベルの付与に使用 |
 | 共通 | ラベル操作 | `integrations/github/labels.py` | 関数 | [`remove_label`](#ラベル除去) | ラベルを 1 つ除去（未付与は無視） | 処理中ラベルの除去に使用 |
@@ -26,7 +27,7 @@ template_version: 1.1.0
 ```
 src/ai_monitor/integrations/github/
 ├── client.py    # get_client（githubkit クライアントの生成・共有）
-├── search.py    # list_open_targets / _parse_linked_issue_numbers
+├── search.py    # list_open_targets / to_target / _parse_linked_issue_numbers
 ├── labels.py    # add_label / remove_label
 └── issues.py    # close_issue / get_issue / get_parent_number / list_sub_issue_numbers
 ```
@@ -37,13 +38,15 @@ src/ai_monitor/integrations/github/
 classDiagram
   direction LR
   オープン対象一覧 ..> クライアント生成 : 利用
-  オープン対象一覧 ..> 紐づくIssue解析 : PR 本文解析
+  オープン対象一覧 ..> 監視対象へ変換 : 応答を変換
+  Issue単体取得 ..> 監視対象へ変換 : 応答を変換
+  監視対象へ変換 ..> 紐づくIssue解析 : PR 本文解析
   ラベル付与 ..> クライアント生成 : 利用
   ラベル除去 ..> クライアント生成 : 利用
   Issueクローズ ..> クライアント生成 : 利用
   Issue単体取得 ..> クライアント生成 : 利用
   親Issue番号取得 ..> クライアント生成 : 利用
-  SubIssue番号一覧 ..> クライアント生成 : 利用
+  Sub-issue番号一覧 ..> クライアント生成 : 利用
 
   class クライアント生成 {
     <<function>>
@@ -52,6 +55,10 @@ classDiagram
   class オープン対象一覧 {
     <<function>>
     +オープン対象一覧(プロジェクト) list~監視対象~
+  }
+  class 監視対象へ変換 {
+    <<function>>
+    +監視対象へ変換(応答要素) 監視対象
   }
   class 紐づくIssue解析 {
     <<function>>
@@ -77,20 +84,21 @@ classDiagram
     <<function>>
     +親Issue番号取得(プロジェクト, 番号) int | None
   }
-  class SubIssue番号一覧 {
+  class Sub-issue番号一覧 {
     <<function>>
-    +SubIssue番号一覧(プロジェクト, 番号) list~int~
+    +Sub-issue番号一覧(プロジェクト, 番号) list~int~
   }
 
   click クライアント生成 href "#クライアント生成"
   click オープン対象一覧 href "#オープン対象一覧"
+  click 監視対象へ変換 href "#監視対象へ変換"
   click 紐づくIssue解析 href "#紐づく-issue-解析"
   click ラベル付与 href "#ラベル付与"
   click ラベル除去 href "#ラベル除去"
   click Issueクローズ href "#issue-クローズ"
   click Issue単体取得 href "#issue-単体取得"
   click 親Issue番号取得 href "#親-issue-番号取得"
-  click SubIssue番号一覧 href "#sub-issue-番号一覧"
+  click Sub-issue番号一覧 href "#sub-issue-番号一覧"
 ```
 
 ## `integrations/github/client.py`
@@ -186,9 +194,7 @@ list_open_targets(project)
 #### 処理
 
 1. `state=open` の Issue / PR 一覧をページネーションで全件取得する（`rest.issues.list`。PR も Issue として返る）
-2. 各要素をドメインモデルに変換して返す
-   - `pull_request` キーを持つ場合、本文から `linked_issue_numbers` を抽出して[プルリクエスト](./エージェント管理.py.md#プルリクエスト)にする（[紐づく Issue 解析](#紐づく-issue-解析)）
-   - 持たない場合、[イシュー](./エージェント管理.py.md#イシュー)にする（応答の `sub_issues_summary` の件数も変換する）
+2. 各要素をドメインモデルに変換して返す（[監視対象へ変換](#監視対象へ変換)）
 
 #### 例外
 
@@ -203,6 +209,55 @@ list_open_targets(project)
 | `test_list_open_targets_when_multi_page` | 正常 | ページ跨ぎの全件取得 | 2 ページ分の open 応答 | githubkit | `state=open` で照会され、ページを跨いだ全件が返る | - |
 | `test_list_open_targets_when_pr_mixed` | 正常 | Issue / PR の判別変換 | `pull_request` キーの有無が混在する応答 | githubkit | PR は `PullRequest`（`linked_issue_numbers` 解決済み）・それ以外は `Issue` になる | - |
 | `test_list_open_targets_when_sub_issues_summary` | 正常 | Sub-issue 件数の変換 | `sub_issues_summary`（total=2, completed=1）付きの Issue 応答 | githubkit | `Issue` の `sub_issues_total=2` / `sub_issues_completed=1` になる | - |
+
+---
+
+### 監視対象へ変換
+> 物理名: `to_target`<br>
+> 種別: 関数
+
+GitHub API 応答の 1 要素を[監視対象](./エージェント管理.py.md#監視対象)へ変換する。
+
+一覧取得（[オープン対象一覧](#オープン対象一覧)）と単体取得（[Issue 単体取得](#issue-単体取得)）が同じ変換規則を通るように切り出している。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 応答要素 | `item` | `object` | ✅ | - | githubkit が返した Issue / PR 1 件 | PR も Issue として返る |
+
+引数例:
+
+```python
+to_target(item)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`MonitorTarget`](./エージェント管理.py.md#監視対象) | 変換したドメインモデル | Issue か PullRequest のいずれか |
+
+戻り値例:
+
+```python
+PullRequest(number=52, state="open", draft=True, labels=["確認:tester"], assignees=[], linked_issue_numbers=[50])
+```
+
+#### 処理
+
+1. ラベル名と assignee のログイン名を取り出す
+2. 応答の種別で変換先を分ける
+   - `pull_request` キーを持つ場合、本文から `linked_issue_numbers` を抽出して[プルリクエスト](./エージェント管理.py.md#プルリクエスト)にする（[紐づく Issue 解析](#紐づく-issue-解析)）
+   - 持たない場合、[イシュー](./エージェント管理.py.md#イシュー)にする（応答の `sub_issues_summary` の件数も変換する）
+
+#### 例外
+
+なし
+
+#### 単体テスト
+
+なし（同一ファイルの[オープン対象一覧](#オープン対象一覧)の単体テストで実物のまま検証する）
 
 ---
 

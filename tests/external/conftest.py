@@ -61,6 +61,44 @@ def gh_live():
 
 
 @pytest.fixture
+def label_name(gh_live, repo_ctx) -> str:
+    """未使用のラベル名を払い出し、テスト後に sandbox から削除する。"""
+    owner, repo = repo_ctx
+    name = f"ext:{uuid.uuid4().hex[:8]}"
+    yield name
+    try:
+        gh_live.rest.issues.delete_label(owner=owner, repo=repo, name=name)
+    except RequestFailed:
+        pass
+
+
+@pytest.fixture
+def webhook_url_factory(e2e_settings_path):
+    """設定の `notifies` から指定種別の Webhook URL を引く factory を返す（未設定なら skip）。"""
+    settings = yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8"))
+
+    def _url(kind: str) -> str:
+        for entry in settings.get("notifies") or []:
+            if entry.get("type") == "webhook" and entry.get("kind") == kind and entry.get("enabled", True):
+                return entry["webhook_url"]
+        pytest.skip(f"settings.e2e.yaml の notifies に有効な {kind} の Webhook がない")
+
+    return _url
+
+
+@pytest.fixture
+def discord_webhook_url(webhook_url_factory) -> str:
+    """Discord Webhook の URL を返す。"""
+    return webhook_url_factory("discord")
+
+
+@pytest.fixture
+def slack_webhook_url(webhook_url_factory) -> str:
+    """Slack Webhook の URL を返す。"""
+    return webhook_url_factory("slack")
+
+
+@pytest.fixture
 def repo_ctx(sandbox) -> tuple[str, str]:
     """sandbox の (owner, repo) を返す。"""
     owner, repo = sandbox["repo"].split("/", 1)

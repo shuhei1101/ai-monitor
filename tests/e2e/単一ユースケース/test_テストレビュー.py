@@ -132,7 +132,7 @@ def test_normal(
     )
 
 
-def test_error_pointed_out(
+def test_error_when_pointed_out(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):

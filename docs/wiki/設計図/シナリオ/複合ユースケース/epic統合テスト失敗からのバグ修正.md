@@ -76,7 +76,7 @@ flowchart TD
 - 該当 story / subsystem Issue が reopen を経て再び close 済み（新規のバグ Issue は存在しない）
 - 修正用 PR（base=epic ブランチ）が epic ブランチへ merge 済み
 - epic PR の `## 複合ユースケースシナリオテスト結果` が再実行後の結果（全 ✅）になっている
-- fail → pass の経過が epic PR のコメント（writer の fail トリアージ報告 → 全 pass の報告）に残っている
+- fail → pass の経過が親 epic Issue のコメント（complex-scenario-writer の失敗報告 → 全 pass の完了報告）に残っている
 - epic PR が master へ merged 状態になっている
 
 ## 異常シナリオ

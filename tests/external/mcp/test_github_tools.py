@@ -209,6 +209,16 @@ def test_ext_resolve_review_threads(pr_factory, api):
 # ---- ラベル / assignee ----
 
 
+def test_ext_create_label(label_name, api):
+    """ラベル定義の作成と、同名での再実行が created=False になることを確認する（正常系）。"""
+    # 実行
+    created = api.create_label(label_name, "0e8a16", "外部疎通テスト用")
+    again = api.create_label(label_name, "0e8a16", "外部疎通テスト用")
+    # 検証
+    assert (created.name, created.created) == (label_name, True)
+    assert again.created is False
+
+
 def test_ext_add_labels(issue_factory, api):
     """定義済みラベルの付与と現況返却を確認する（正常系）。"""
     # 準備

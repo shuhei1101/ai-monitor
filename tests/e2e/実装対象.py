@@ -486,6 +486,34 @@ def update_task(store: dict[str, Task], task_id: str, title: str, content: str =
     return updated
 '''
 
+# タイトルの検証を落とした実装（設計 Wiki・テストコードは正しい）。
+# レビュー済みテストの異常系 2 ケースが落ちるため、実装レビューで「実装側の問題」と判定される
+UNVALIDATED_SERVICE_PY = IMPLEMENTED_SERVICE_PY.replace(
+    """    # タイトルを検証する
+    if not (TITLE_MIN_LENGTH <= len(title) <= TITLE_MAX_LENGTH):
+        raise ValidationError(
+            f"title は {TITLE_MIN_LENGTH} 文字以上 {TITLE_MAX_LENGTH} 文字以内"
+        )
+""",
+    "",
+)
+
+# 戻り値を返さない実装（IMPL_CONFLICT_MODULE_MD の設計どおり）。
+# レビュー済みテストは戻り値のタスクを検証するため落ちる。原因は設計側にある
+NO_RETURN_SERVICE_PY = IMPLEMENTED_SERVICE_PY.replace(
+    "def update_task(store: dict[str, Task], task_id: str, title: str, content: str = \"\") -> Task:\n"
+    "    \"\"\"登録済みタスクのタイトルと本文を更新して返す。\"\"\"",
+    "def update_task(store: dict[str, Task], task_id: str, title: str, content: str = \"\") -> None:\n"
+    "    \"\"\"登録済みタスクのタイトルと本文を更新する。\"\"\"",
+).replace(
+    """    updated = Task(id=task.id, title=title, content=content)
+    store[task_id] = updated
+    return updated
+""",
+    """    store[task_id] = Task(id=task.id, title=title, content=content)
+""",
+)
+
 PROJECT_FILES = {
     ".gitignore": "__pycache__/\n*.pyc\n",
     "src/tasks/__init__.py": "",
@@ -582,6 +610,25 @@ if __name__ == "__main__":
     unittest.main()
 '''
 
+
+# 本文省略時の期待値を取り違えたテストコード（設計 Wiki・実装は正しい）。
+# 実装レビューで「テストコード側の問題」と判定される
+WRONG_EXPECTATION_TEST_PY = RED_TEST_PY.replace(
+    """        """ + '"""本文を省略すると空文字になる（正常系）。"""' + """
+        # 準備
+        store = _store()
+        # 実行
+        result = update_task(store, "t1", "新タイトル")
+        # 検証
+        self.assertEqual(result.content, "")""",
+    """        """ + '"""本文を省略すると元の本文が残る（正常系）。"""' + """
+        # 準備
+        store = _store()
+        # 実行
+        result = update_task(store, "t1", "新タイトル")
+        # 検証
+        self.assertEqual(result.content, "旧本文")""",
+)
 
 # 異常系 3 ケース（title_too_long / content_too_long / task_missing）が欠落した状態。
 # architect のテストレビューで「設計 Wiki の単体テスト表との不整合」として指摘されることを狙う。

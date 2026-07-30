@@ -24,7 +24,8 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | クライアント生成 | `mcp/server.py` | 関数 | [`_get_client`](#クライアント生成) | 設定の `github_token` から githubkit クライアントを生成・共有 | - |
 | 共通 | プロジェクト解決 | `mcp/server.py` | 関数 | [`_resolve_project`](#プロジェクト解決) | リクエストヘッダから対象プロジェクトを解決 | 対象リポジトリの出所 |
 | 共通 | 例外 | `mcp/server.py` | クラス | `ProjectNotFoundError` | 対象プロジェクトを解決できない | 仕様は[プロジェクト解決](#プロジェクト解決)の例外表 |
-| 共通 | 配線 | `mcp/server.py` | 関数 | [`アプリ組み立て`](#アプリ組み立て) | ツールを登録した ASGI アプリを返す | モニターの FastAPI にマウントする |
+| 共通 | 配線 | `mcp/server.py` | 関数 | [`build_mcp_app`](#アプリ組み立て) | ツールを登録した ASGI アプリを返す | モニターの FastAPI にマウントする |
+| 共通 | 依存の束ね | `mcp/server.py` | 関数 | [`_bind`](#依存の束ね) | ツール関数に依存を束ね、公開シグネチャから隠す | 登録時に全ツールへ適用する |
 | 共通 | スレッド実行 | `mcp/server.py` | 関数 | [`_to_thread`](#スレッド実行) | 同期のツール関数をワーカースレッドで実行する非同期関数に包む | 登録時に全ツールへ適用する |
 | 共通 | ログイン解決 | `mcp/server.py` | 関数 | [`_get_current_login`](#ログイン解決) | 認証中ユーザーのログイン名を返す | assignee 操作の対象解決 |
 | 共通 | ラベル再取得 | `mcp/server.py` | 関数 | [`_get_labels`](#ラベル再取得) | 操作後の現在ラベル一覧を返す | - |
@@ -251,6 +252,427 @@ classDiagram
 
   click 質問 href "#質問"
   click 選択肢 href "#選択肢"
+```
+
+---
+
+### 基盤
+
+```mermaid
+classDiagram
+  direction TD
+  アプリ組み立て ..> 依存の束ね : 依存を束ねる
+  アプリ組み立て ..> スレッド実行 : 非同期に包む
+  アプリ組み立て ..> ツール定義群 : 登録する
+  ツール定義群 ..> ツール呼び出しログ : 全ツールをラップ
+  ツール定義群 ..> クライアント生成 : GitHub 系の共通入口
+  ツール定義群 ..> プロジェクト解決 : 対象リポジトリの解決
+  プロジェクト解決 ..> ProjectNotFoundError : 解決できないとき
+
+  class アプリ組み立て {
+    <<function>>
+    +アプリ組み立て(全体設定, セッション台帳, エージェント一覧, ラベル設定) ASGIApp
+  }
+  class 依存の束ね {
+    <<function>>
+    +依存の束ね(ツール, 依存一覧) Callable
+  }
+  class スレッド実行 {
+    <<function>>
+    +スレッド実行(ツール) Callable
+  }
+  class ツール呼び出しログ {
+    <<function>>
+    +ツール呼び出しログ(ツール) Callable
+  }
+  class クライアント生成 {
+    <<function>>
+    +クライアント生成() GitHub
+  }
+  class プロジェクト解決 {
+    <<function>>
+    +プロジェクト解決(コンテキスト, プロジェクト一覧) 監視対象プロジェクト
+  }
+  class ProjectNotFoundError {
+  }
+  class ツール定義群 {
+  }
+
+  click アプリ組み立て href "#アプリ組み立て"
+  click 依存の束ね href "#依存の束ね"
+  click スレッド実行 href "#スレッド実行"
+  click ツール呼び出しログ href "#ツール呼び出しログ"
+  click クライアント生成 href "#クライアント生成"
+  click プロジェクト解決 href "#プロジェクト解決"
+  click ツール定義群 href "#ツール定義群"
+```
+
+---
+
+### コメントの組み立てと投稿
+
+```mermaid
+classDiagram
+  direction TD
+  コメント投稿 ..> コメント投稿実体 : 投稿する
+  質問投稿 ..> コメント投稿実体 : 投稿する
+  コメント返信 ..> コメント解析 : 既存本文の解析
+  コメント返信 ..> 定型ブロック組立 : 追記ブロックの生成
+  コメント投稿 ..> 定型ブロック組立 : 本文の組み立て
+  質問投稿 ..> 定型ブロック組立 : 本文の組み立て
+  定型ブロック組立 ..> アット付与 : 宛先の整形
+  定型ブロック組立 ..> 本文レンダリング : 表を含む本文
+  コメント返信 ..> 区切り線判定 : 区切り線の重複回避
+  本文レンダリング ..> 本文フォーマット : 形式で分岐
+  本文フォーマット <|.. プレーン形式 : 実装
+  コメント投稿 --> コメント結果 : 返す
+  質問投稿 --> コメント結果 : 返す
+  コメント返信 --> コメント結果 : 返す
+
+  class コメント投稿 {
+    <<function>>
+    +コメント投稿(番号, PRか, 送信者, 宛先, 本文フォーマット) コメント結果
+  }
+  class 質問投稿 {
+    <<function>>
+    +質問投稿(番号, PRか, 送信者, 質問一覧) コメント結果
+  }
+  class コメント返信 {
+    <<function>>
+    +コメント返信(コメントnode_id, 送信者, 宛先, 本文フォーマット) コメント結果
+  }
+  class コメント投稿実体 {
+    <<function>>
+    +コメント投稿実体(オーナー, リポジトリ, 番号, 本文) コメントエントリ
+  }
+  class コメント解析 {
+    <<function>>
+    +コメント解析(本文) list~コメントブロック~
+  }
+  class 定型ブロック組立 {
+    <<function>>
+    +定型ブロック組立(送信者, 宛先, 本文, 区切り要否) str
+  }
+  class 本文レンダリング {
+    <<function>>
+    +本文レンダリング(本文フォーマット) str
+  }
+  class 区切り線判定 {
+    <<function>>
+    +区切り線判定(本文) bool
+  }
+  class アット付与 {
+    <<function>>
+    +アット付与(名前) str
+  }
+  class 本文フォーマット {
+    <<type>>
+  }
+  class プレーン形式 {
+    +種別: str
+    +本文: str
+  }
+  class コメント結果 {
+    +node_id: str
+    +URL: str
+  }
+
+  click コメント投稿 href "#コメント投稿"
+  click 質問投稿 href "#質問投稿"
+  click コメント返信 href "#コメント返信"
+  click コメント投稿実体 href "#コメント投稿実体"
+  click コメント解析 href "#コメント解析"
+  click 定型ブロック組立 href "#定型ブロック組立"
+  click 本文レンダリング href "#本文レンダリング"
+  click 区切り線判定 href "#区切り線判定"
+  click アット付与 href "#アット付与"
+  click 本文フォーマット href "#本文フォーマット"
+  click プレーン形式 href "#プレーン形式"
+  click コメント結果 href "#コメント結果"
+```
+
+---
+
+### Resolve とレビュースレッド
+
+```mermaid
+classDiagram
+  direction TD
+  コメント一括Resolve ..> Resolve実行 : スレッドを畳む
+  宛先コメント一覧 ..> コメント解析 : ブロックの抽出
+  宛先コメント一覧 ..> Resolved状態取得 : 未解決の絞り込み
+  レビュースレッド一括Resolve ..> Resolve実行 : スレッドを畳む
+  インラインコメント投稿 ..> 定型ブロック組立 : 本文の組み立て
+  レビュースレッド一覧 --> レビュースレッド : 返す
+
+  class コメント一括Resolve {
+    <<function>>
+    +コメント一括Resolve(node_id一覧) dict
+  }
+  class 宛先コメント一覧 {
+    <<function>>
+    +宛先コメント一覧(番号, PRか, 宛先, 解決済み含む) list~宛先コメント~
+  }
+  class インラインコメント投稿 {
+    <<function>>
+    +インラインコメント投稿(PR番号, パス, 行, 送信者, 宛先, 本文) コメント結果
+  }
+  class レビュースレッド一覧 {
+    <<function>>
+    +レビュースレッド一覧(PR番号, 解決済み含む) list~レビュースレッド~
+  }
+  class レビュースレッド一括Resolve {
+    <<function>>
+    +レビュースレッド一括Resolve(スレッドnode_id一覧) dict
+  }
+  class Resolve実行["Resolve 実行"] {
+    <<function>>
+    +Resolve実行(node_id) None
+  }
+  class Resolved状態取得["Resolved 状態取得"] {
+    <<function>>
+    +Resolved状態取得(node_id) bool
+  }
+  class コメント解析 {
+  }
+  class 定型ブロック組立 {
+  }
+  class レビュースレッド {
+  }
+
+  click コメント一括Resolve href "#コメント一括resolve"
+  click 宛先コメント一覧 href "#宛先コメント一覧"
+  click インラインコメント投稿 href "#インラインコメント投稿"
+  click レビュースレッド一覧 href "#レビュースレッド一覧"
+  click レビュースレッド一括Resolve href "#レビュースレッド一括resolve"
+  click Resolve実行 href "#resolve-実行"
+  click Resolved状態取得 href "#resolved-状態取得"
+  click コメント解析 href "#コメント解析"
+  click 定型ブロック組立 href "#定型ブロック組立"
+  click レビュースレッド href "#レビュースレッド"
+```
+
+---
+
+### ラベルと assignee
+
+```mermaid
+classDiagram
+  direction TD
+  ラベル追加 ..> ラベル再取得 : 操作後の一覧
+  ラベル除去 ..> ラベル再取得 : 操作後の一覧
+  フェーズ遷移 ..> ラベル再取得 : 操作後の一覧
+  assignee設定 ..> ログイン解決 : 対象ユーザーの解決
+  assignee設定 ..> assignee再取得 : 操作後の一覧
+  assignee除去 ..> ログイン解決 : 対象ユーザーの解決
+  assignee除去 ..> assignee再取得 : 操作後の一覧
+  ラベル作成 --> ラベル作成結果 : 返す
+
+  class ラベル作成 {
+    <<function>>
+    +ラベル作成(名前, 色, 説明) ラベル作成結果
+  }
+  class ラベル追加 {
+    <<function>>
+    +ラベル追加(番号, PRか, ラベル一覧) dict
+  }
+  class ラベル除去 {
+    <<function>>
+    +ラベル除去(番号, PRか, ラベル一覧) dict
+  }
+  class フェーズ遷移 {
+    <<function>>
+    +フェーズ遷移(番号, PRか, 除去ラベル, 付与ラベル) dict
+  }
+  class assignee設定 {
+    <<function>>
+    +assignee設定(番号, PRか) dict
+  }
+  class assignee除去 {
+    <<function>>
+    +assignee除去(番号, PRか) dict
+  }
+  class ラベル再取得 {
+    <<function>>
+    +ラベル再取得(オーナー, リポジトリ, 番号) list~str~
+  }
+  class assignee再取得["assignee 再取得"] {
+    <<function>>
+    +assignee再取得(オーナー, リポジトリ, 番号) list~str~
+  }
+  class ログイン解決 {
+    <<function>>
+    +ログイン解決() str
+  }
+  class ラベル作成結果 {
+    +名前: str
+    +作成したか: bool
+  }
+
+  click ラベル作成 href "#ラベル作成"
+  click ラベル追加 href "#ラベル追加"
+  click ラベル除去 href "#ラベル除去"
+  click フェーズ遷移 href "#フェーズ遷移"
+  click assignee設定 href "#assignee設定"
+  click assignee除去 href "#assignee除去"
+  click ラベル再取得 href "#ラベル再取得"
+  click assignee再取得 href "#assignee-再取得"
+  click ログイン解決 href "#ログイン解決"
+  click ラベル作成結果 href "#ラベル作成結果"
+```
+
+---
+
+### Issue / PR の取得と更新
+
+```mermaid
+classDiagram
+  direction TD
+  IssuePR情報取得 --> イシュースナップショット : 返す
+  IssuePR検索 --> 検索結果 : 返す
+  子Issue作成 ..> IssuePR情報取得 : 親の確認
+  新規Issue起票 ..> ラベル追加 : intake ラベルの付与
+
+  class IssuePR情報取得["Issue・PR情報取得"] {
+    <<function>>
+    +IssuePR情報取得(番号, PRか) イシュースナップショット
+  }
+  class IssuePR検索["Issue・PR検索"] {
+    <<function>>
+    +IssuePR検索(検索語, 状態, ラベル一覧) list~検索結果~
+  }
+  class 本文更新 {
+    <<function>>
+    +本文更新(番号, PRか, 本文) dict
+  }
+  class タイトル更新 {
+    <<function>>
+    +タイトル更新(番号, PRか, タイトル) dict
+  }
+  class クローズ {
+    <<function>>
+    +クローズ(番号, PRか, 理由) dict
+  }
+  class Issue再オープン {
+    <<function>>
+    +Issue再オープン(番号) dict
+  }
+  class 子Issue作成 {
+    <<function>>
+    +子Issue作成(親番号, タイトル, 本文, ラベル一覧) dict
+  }
+  class 新規Issue起票 {
+    <<function>>
+    +新規Issue起票(タイトル, 本文) dict
+  }
+  class 検索結果 {
+    +番号: int
+    +タイトル: str
+    +状態: str
+    +URL: str
+  }
+  class イシュースナップショット {
+  }
+  class ラベル追加 {
+  }
+
+  click IssuePR情報取得 href "#issuepr情報取得"
+  click IssuePR検索 href "#issuepr検索"
+  click 本文更新 href "#本文更新"
+  click タイトル更新 href "#タイトル更新"
+  click クローズ href "#クローズ"
+  click Issue再オープン href "#issue再オープン"
+  click 子Issue作成 href "#子issue作成"
+  click 新規Issue起票 href "#新規issue起票"
+  click 検索結果 href "#検索結果"
+  click イシュースナップショット href "#イシュースナップショット"
+  click ラベル追加 href "#ラベル追加"
+```
+
+---
+
+### PR の作成とマージ
+
+```mermaid
+classDiagram
+  direction TD
+  PRマージ ..> マージ可否待ち : mergeable の確定待ち
+
+  class DraftPR作成 {
+    <<function>>
+    +DraftPR作成(headブランチ, baseブランチ, タイトル, 本文) dict
+  }
+  class PR_Ready化 {
+    <<function>>
+    +PR_Ready化(PR番号) dict
+  }
+  class PRマージ {
+    <<function>>
+    +PRマージ(PR番号, ブランチ削除) dict
+  }
+  class マージ可否待ち {
+    <<function>>
+    +マージ可否待ち(オーナー, リポジトリ, PR番号) str
+  }
+
+  click DraftPR作成 href "#draftpr作成"
+  click PR_Ready化 href "#pr_ready化"
+  click PRマージ href "#prマージ"
+  click マージ可否待ち href "#マージ可否待ち"
+```
+
+---
+
+### worktree 操作
+
+```mermaid
+classDiagram
+  direction TD
+  worktree作成 ..> worktreeパス解決 : 配置先の決定
+  worktree作成 ..> ローカルブランチ存在確認 : 新規 / 既存の分岐
+  worktree作成 ..> git実行入口 : git の実行
+  worktree作成 --> worktree作成結果 : 返す
+  worktree削除 ..> worktreeパス解決 : 対象の特定
+  worktree削除 ..> git実行入口 : git の実行
+  worktreeパス解決 ..> リポジトリルート解決 : 起点の解決
+
+  class worktree作成 {
+    <<function>>
+    +worktree作成(ブランチ, baseブランチ) worktree作成結果
+  }
+  class worktree削除 {
+    <<function>>
+    +worktree削除(ブランチ) dict
+  }
+  class git実行入口["git 実行入口"] {
+    <<function>>
+    +git実行入口(引数一覧, 作業ディレクトリ) str
+  }
+  class リポジトリルート解決 {
+    <<function>>
+    +リポジトリルート解決(プロジェクト) Path
+  }
+  class worktreeパス解決["worktree パス解決"] {
+    <<function>>
+    +worktreeパス解決(プロジェクト, ブランチ) Path
+  }
+  class ローカルブランチ存在確認 {
+    <<function>>
+    +ローカルブランチ存在確認(ルート, ブランチ) bool
+  }
+  class worktree作成結果["worktree 作成結果"] {
+    +パス: str
+    +ブランチ: str
+    +作成したか: bool
+  }
+
+  click worktree作成 href "#worktree作成"
+  click worktree削除 href "#worktree削除"
+  click git実行入口 href "#git-実行入口"
+  click リポジトリルート解決 href "#リポジトリルート解決"
+  click worktreeパス解決 href "#worktree-パス解決"
+  click ローカルブランチ存在確認 href "#ローカルブランチ存在確認"
+  click worktree作成結果 href "#worktree-作成結果"
 ```
 
 ## `mcp/server.py`
@@ -2051,7 +2473,7 @@ build_mcp_app(settings, registry=registry, agents=agents)
 #### 処理
 
 1. MCP サーバーのインスタンスを作る
-2. 全ツールに設定・台帳・エージェント一覧を束ねて登録する（束ねた引数は公開シグネチャから隠す）
+2. 全ツールに設定・台帳・エージェント一覧・ラベル設定を束ねる（[依存の束ね](#依存の束ね)）
 3. 登録するのはツールそのものではなく、ワーカースレッドで実行する非同期の包み（[スレッド実行](#スレッド実行)）
 4. Streamable HTTP の ASGI アプリを生成して返す
 
@@ -2066,6 +2488,50 @@ build_mcp_app(settings, registry=registry, agents=agents)
 | `test_build_mcp_app` | 正常 | ツールの登録 | 設定・台帳・エージェント一覧を渡す | なし | 全ツールが登録された ASGI アプリが返る | 名前と個数を確認する |
 | `test_build_mcp_app_when_signature` | 正常 | 内部引数の除去 | 同上 | なし | 公開シグネチャに `settings` / `registry` / `agents` が無い | MCP のスキーマ生成に効く |
 | `test_build_mcp_app_when_async` | 正常 | 非同期での登録 | 登録呼び出しを記録に差し替える | `FastMCP.add_tool` | 登録された全ツールが非同期関数 | イベントループを塞がないことの担保 |
+
+---
+
+### 依存の束ね
+> 物理名: `_bind`<br>
+> 種別: 関数
+
+ツール関数に設定・台帳などの依存を束ね、公開シグネチャからその引数を隠す。
+
+MCP はツールのシグネチャから引数スキーマを作るため、束ねた依存が残っているとエージェントに渡す引数として見えてしまう。
+そのツールが実際に受け取る依存だけを束ね、残りの引数だけを公開する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| ツール | `tool` | `Callable[..., Any]` | ✅ | - | 束ねる対象のツール関数 | - |
+| 依存一覧 | `deps` | `Any` | ✅ | - | 束ねる依存（設定・台帳・エージェント一覧・ラベル設定） | 可変キーワード引数 |
+
+引数例:
+
+```python
+_bind(get_issue_or_pr, settings=settings, registry=registry)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `Callable[..., Any]` | 依存を束ねたツール関数 | 名前・docstring は `tool` のものを引き継ぐ |
+
+#### 処理
+
+1. ツールのシグネチャを読み、`deps` のうちそのツールが受け取るものだけを選ぶ
+2. 選んだ依存を渡して呼び出す包みを作る
+3. 公開シグネチャから束ねた引数を取り除いて返す
+
+#### 例外
+
+なし
+
+#### 単体テスト
+
+なし（同一ファイルの[アプリ組み立て](#アプリ組み立て)の単体テストで公開シグネチャの結果を検証する）
 
 ---
 

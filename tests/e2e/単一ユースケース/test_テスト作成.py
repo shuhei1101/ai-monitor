@@ -4,8 +4,10 @@ from __future__ import annotations
 import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import supplement_review_comments
 from tests.e2e.実装対象 import (
+    MODULE_PATH,
     PROJECT_FILES,
     SUBSYSTEM_PR_BODY,
+    TESTER_CONFLICT_MODULE_MD,
     run_branch_tests,
     seed_subsystem_branch,
     setup_subsystem,
@@ -119,7 +121,7 @@ def test_normal(
     assert assign is not None
 
 
-def test_normal_reverse(
+def test_normal_when_reverse(
     monitor,
     gh_live,
     repo_ctx,
@@ -195,4 +197,70 @@ def test_normal_reverse(
     # 検証: commit 内容に対する補足事項がインラインコメントで残っている
     assert supplement_review_comments(gh_live, owner, repo, ctx["pr"].number), (
         "補足事項のインラインコメントが投稿されていない"
+    )
+
+
+def test_error_when_revision_needed(
+    monitor,
+    gh_live,
+    repo_ctx,
+    epic_issue_factory,
+    epic_pr_factory,
+    draft_pr_factory,
+    story_issue_factory,
+    subsystem_issue_factory,
+    commit_file,
+    wait_until,
+    sandbox,
+):
+    """設計 Wiki の構造問題を検知したときの architect への差し戻しを確認する（異常系・設計の見直しが必要）。"""
+    owner, repo = repo_ctx
+    ctx = setup_subsystem(
+        gh_live, owner, repo,
+        epic_issue_factory, epic_pr_factory, draft_pr_factory,
+        story_issue_factory, subsystem_issue_factory, commit_file,
+        pr_body=SUBSYSTEM_PR_BODY,
+    )
+    # 準備: テストの構造が設計から決められないモジュール構成を積む
+    seed_sha = seed_subsystem_branch(
+        gh_live, owner, repo, commit_file, ctx["subsystem_branch"],
+        design_overrides={MODULE_PATH: TESTER_CONFLICT_MODULE_MD},
+    )
+
+    # 準備: architect のテスト作成の割り当て → 確認:tester 付与（起動トリガー）
+    gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, body=ASSIGN_COMMENT
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:tester"]
+    )
+
+    # 実行: architect への差し戻しを待つ
+    def _bounced():
+        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=ctx["pr"].number).parsed_data
+        labels = {label.name for label in data.labels}
+        if "確認:architect" not in labels or "確認:tester" in labels:
+            return None
+        return data
+
+    wait_until(_bounced, timeout_sec=1800, message="設計の見直しを求める差し戻し")
+
+    # 検証: 差し戻し報告が architect 宛で未解決のまま投稿されている
+    reports = [
+        c for c in gh_live.rest.issues.list_comments(
+            owner=owner, repo=repo, issue_number=ctx["pr"].number
+        ).parsed_data
+        if (c.body or "").lstrip().startswith("> from: @tester")
+    ]
+    assert reports, "tester の差し戻し報告が投稿されていない"
+    assert "> to: @architect" in (reports[-1].body or ""), "差し戻し報告の宛先が architect でない"
+    assert not server._is_minimized(reports[-1].node_id), "差し戻し報告が Resolve されている"
+
+    # 検証: テストコードを commit していない（差し戻しなので着手しない）
+    compare = gh_live.rest.repos.compare_commits(
+        owner=owner, repo=repo, basehead=f"{seed_sha}...{ctx['subsystem_branch']}"
+    ).parsed_data
+    changed = [f.filename for f in (compare.files or [])]
+    assert not [f for f in changed if f.startswith("tests/")], (
+        f"差し戻しなのにテストコードが commit されている: {changed}"
     )

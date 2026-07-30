@@ -169,3 +169,131 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
     for comment in pr_comments:
         assert server._is_minimized(comment.node_id), f"PR コメント {comment.html_url} が未 Resolve"
     assert server._is_minimized(instruction.node_id), "指示コメントが未 Resolve"
+
+
+RE_INSTRUCTION_BODY = """> from: @epic-conductor
+> to: @mock-designer
+
+epic 全体の UI 設計を発注します。
+
+**画面方針の要点:**
+- master にある現状モックを採取し、UC 一覧との対応を整理する
+- 現状にあって UC 一覧に無い画面は確認事項として挙げる
+- モックは 1 案でよい
+
+---
+"""
+
+# master にある現状モック（RE PR がマージ済みの状態）
+CURRENT_MOCK_PATH = "docs/mock/pages/タスク編集画面/current/index.html"
+CURRENT_MOCK_HTML = (
+    "<html><body><h1>タスク編集（現状）</h1>"
+    "<form><input name=\"title\"><textarea name=\"content\"></textarea>"
+    "<button>保存</button></form></body></html>\n"
+)
+
+
+def _approve(gh_live, owner, repo, number, assignees):
+    """ユーザー役の承認操作（議論中 除去 + assignee 外し）。"""
+    try:
+        gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=number, name="議論中")
+    except RequestFailed:
+        pass
+    for assignee in assignees:
+        gh_live.rest.issues.remove_assignees(
+            owner=owner, repo=repo, issue_number=number, assignees=[assignee.login]
+        )
+
+
+def test_normal_when_reverse(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, commit_file, sandbox,
+    wait_until, master_baseline,
+):
+    """現状モックを入力にした全体 UI 設計を実環境で確認する（正常系・リバースエンジニアリング）。"""
+    owner, repo = repo_ctx
+
+    def _get(number):
+        return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
+
+    # 準備: RE 経路の epic Issue + epic Draft PR
+    intake, epic = epic_issue_factory(
+        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
+        epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
+    )
+    branch = f"feat/epic/task-edit-{epic.number}"
+    pr = epic_pr_factory(branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
+    # 準備: RE PR がマージ済み（現状モックが master にある）状態を再現する
+    commit_file("master", CURRENT_MOCK_PATH, CURRENT_MOCK_HTML, "docs: 現状モックを追加")
+    # 準備: epic ブランチのローカル worktree（mock-designer が commit するため）
+    local_path = sandbox["local_path"]
+    worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
+    subprocess.run(["git", "-C", local_path, "fetch", "origin", branch], check=True)
+    subprocess.run(["git", "-C", local_path, "worktree", "add", str(worktree_path), branch], check=True)
+    # 準備: epic-conductor の採取指示コメントを投稿してから確認ラベルを付ける
+    instruction = gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=pr.number, body=RE_INSTRUCTION_BODY
+    ).parsed_data
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=pr.number, labels=["確認:mock-designer"]
+    )
+
+    # 実行: 方針提案（現状モックの採取）の完了を待つ
+    def _plan_done():
+        data = _get(pr.number)
+        labels = {label.name for label in data.labels}
+        body_now = (data.body or "").replace("\r\n", "\n")
+        if "議論中" in labels and data.assignees and "### 画面一覧" in body_now:
+            return data
+        return None
+
+    pr_data = wait_until(_plan_done, timeout_sec=1800, message="現状モックの採取と方針提案の完了")
+
+    # 検証: 画面一覧・画面遷移が現状モックの画面と対応して記入されている
+    body = (pr_data.body or "").replace("\r\n", "\n")
+    assert "## UI 設計" in body and "### 画面一覧" in body and "### 画面遷移" in body
+    assert "タスク編集" in body, "現状モックの画面が画面一覧に反映されていない"
+
+    _approve(gh_live, owner, repo, pr.number, pr_data.assignees)
+
+    # 実行: モック作成の完了を待つ
+    def _mock_done():
+        data = _get(pr.number)
+        labels = {label.name for label in data.labels}
+        body_now = (data.body or "").replace("\r\n", "\n")
+        if "議論中" in labels and data.assignees and "### モック" in body_now:
+            return data
+        return None
+
+    pr_data = wait_until(_mock_done, timeout_sec=2400, message="モック作成の完了")
+
+    # 検証: モックが epic 番号配下へ commit され、URL がコメントで共有されている
+    tree = gh_live.rest.git.get_tree(owner=owner, repo=repo, tree_sha=branch, recursive="1").parsed_data
+    mock_files = [
+        t.path for t in tree.tree
+        if t.path.startswith("docs/mock/pages/") and f"issues/{epic.number}/" in t.path
+    ]
+    assert mock_files, f"epic 番号配下にモックが commit されていない: {epic.number}"
+    pr_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
+    assert [c for c in pr_comments if "raw.githack.com" in (c.body or "")], (
+        "モック URL コメント（raw.githack.com）が投稿されていない"
+    )
+
+    _approve(gh_live, owner, repo, pr.number, pr_data.assignees)
+
+    # 実行: 完了処理の完了を待つ
+    def _wrapped_up():
+        pr_now = _get(pr.number)
+        epic_now = _get(epic.number)
+        if "確認:mock-designer" in {label.name for label in pr_now.labels}:
+            return None
+        return epic_now if "確認:epic-conductor" in {label.name for label in epic_now.labels} else None
+
+    wait_until(_wrapped_up, timeout_sec=1800, message="完了処理の完了")
+
+    # 検証: 親 epic Issue に完了報告（未 Resolve）が投稿され、PR 側のコメントは全て Resolve 済み
+    epic_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=epic.number).parsed_data
+    completion = [c for c in epic_comments if "> to: @epic-conductor" in (c.body or "")]
+    assert completion, "@epic-conductor 宛の完了報告コメントが投稿されていない"
+    assert not server._is_minimized(completion[-1].node_id), "完了報告が Resolve されてしまっている"
+    assert server._is_minimized(instruction.node_id), "採取指示コメントが未 Resolve"
+    assert intake is not None and master_baseline

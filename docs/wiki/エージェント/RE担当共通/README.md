@@ -2,7 +2,7 @@
 template_version: 1.0.0
 ---
 
-# reverse-engineer共通
+# RE担当共通
 
 ## 目次
 

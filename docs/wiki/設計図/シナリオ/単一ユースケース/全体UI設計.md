@@ -39,7 +39,7 @@ sequenceDiagram
   activate MON
   MON->>GH: 親 epic の UC 一覧・横断要件を確認
   MON->>REPO: 既存画面・共通コンポーネント調査
-  MON->>GH: epic PR 本文に方針の草案（`### 画面一覧` +<br>`### 画面遷移`）を追記（update_body）
+  MON->>GH: epic PR 本文に方針の草案（`### 画面一覧` +<br>`### 画面遷移`）を追記
   MON->>GH: epic PR に方針提案の完了報告コメント +<br>議論中 付与 + assignee=ユーザー 設定
   deactivate MON
 
@@ -48,7 +48,7 @@ sequenceDiagram
     ORC-->>GH: polling（ユーザー返信 + assignee なし を検知）
     ORC->>MON: 既存セッションへ送信
     activate MON
-    MON->>GH: epic PR 本文の方針セクション修正<br>（update_body）+<br>assignee=ユーザー 再設定
+    MON->>GH: epic PR 本文の方針セクション修正 +<br>assignee=ユーザー 再設定
     deactivate MON
   end
 
@@ -58,7 +58,7 @@ sequenceDiagram
   activate MON
   MON->>GH: epic PR の方針関連の自分宛コメント一括 Resolve
   MON->>REPO: 確定した方針でモック作成 →<br>docs/mock 配下に commit push
-  MON->>GH: epic PR 本文に `### モック`（画面ごとの URL 一覧）を追記<br>（update_body）
+  MON->>GH: epic PR 本文に `### モック`（画面ごとの URL 一覧）を追記
   MON->>GH: 確認事項を 1 論点 = 1 コメントで投稿<br>（要素に紐づく論点は該当行にインライン・<br>紐づかない論点は会話欄）
   MON->>GH: epic PR に 1 画面 = 1 コメントで<br>モック URL 共有
   MON->>GH: epic PR に 議論中 付与 +<br>assignee=ユーザー 設定
@@ -122,7 +122,7 @@ sequenceDiagram
   activate MON
   MON-->>GH: 親 epic の UC 一覧・横断要件を確認
   MON-->>REPO: master にある現状モックを読み<br>画面と遷移を把握
-  MON->>GH: 採取した `画面一覧` +<br>`画面遷移` を epic PR 本文に追記（update_body）
+  MON->>GH: 採取した `画面一覧` +<br>`画面遷移` を epic PR 本文に追記
   MON->>GH: epic PR に採取結果の完了報告コメントと<br>確認事項コメント（実装にあるが UC 一覧に無い画面・<br>整理したいレイアウト）を投稿 + 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 
@@ -131,7 +131,7 @@ sequenceDiagram
     ORC-->>GH: polling（ユーザー返信 + assignee なし を検知）
     ORC->>MON: 既存セッションへ送信
     activate MON
-    MON->>GH: epic PR 本文の該当セクション修正<br>（update_body）+<br>assignee=ユーザー 再設定
+    MON->>GH: epic PR 本文の該当セクション修正+<br>assignee=ユーザー 再設定
     deactivate MON
   end
 
@@ -141,7 +141,7 @@ sequenceDiagram
   activate MON
   MON->>GH: epic PR の採取結果関連の自分宛コメント一括 Resolve
   MON->>REPO: 確定した画面一覧でモック作成 →<br>docs/mock 配下に commit push
-  MON->>GH: epic PR 本文に `### モック`（画面ごとの URL 一覧）を追記<br>（update_body）
+  MON->>GH: epic PR 本文に `### モック`（画面ごとの URL 一覧）を追記
   MON->>GH: 確認事項を 1 論点 = 1 コメントで投稿<br>（要素に紐づく論点は該当行にインライン・<br>紐づかない論点は会話欄）
   MON->>GH: epic PR に 1 画面 = 1 コメントで<br>モック URL 共有
   MON->>GH: epic PR に 議論中 付与 +<br>assignee=ユーザー 設定

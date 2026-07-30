@@ -39,6 +39,9 @@ classDiagram
   CLI ..> URL正規化 : blob URL の変換
   CLI ..> URL取得 : ドキュメント取得
   CLI ..> frontmatter除去 : 本文の整形
+  ソース読み取り選択 --> ドキュメント読み取り型 : 実装を返す
+  ドキュメント読み取り型 <|.. URL取得 : 実装
+  ドキュメント読み取り型 <|.. ローカル取得 : 実装
 
   class CLI {
     <<function>>
@@ -56,11 +59,26 @@ classDiagram
     <<function>>
     +URL取得(URL) str
   }
+  class ローカル取得 {
+    <<function>>
+    +ローカル取得(場所) str
+  }
+  class ソース読み取り選択 {
+    <<function>>
+    +ソース読み取り選択(場所) ドキュメント読み取り型
+  }
+  class ドキュメント読み取り型 {
+    <<type>>
+    +ドキュメント読み取り型(場所) str
+  }
 
   click CLI href "#cli"
   click URL正規化 href "#url-正規化"
   click frontmatter除去 href "#front-matter-除去"
   click URL取得 href "#url-取得"
+  click ローカル取得 href "#ローカル取得"
+  click ソース読み取り選択 href "#ソース読み取り選択"
+  click ドキュメント読み取り型 href "#ドキュメント読み取り型"
 ```
 
 ## `inject/fetch.py`

@@ -343,6 +343,20 @@ def test_reply_comment(gh, api):
     assert res == CommentResult(node_id="IC_1", url="http://c/1")
 
 
+def test_reply_comment_when_ends_with_separator(gh, api):
+    """末尾が区切り線の本文への追記を確認する（正常系）。"""
+    # 準備
+    gh.graphql.return_value = {"node": {"body": "元コメント\n\n---\n", "databaseId": 111}}
+    gh.rest.issues.update_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
+    # 実行
+    api.reply_comment("IC_1", sender="tester", format=PlainFormat(body="修正しました。"))
+    # 検証
+    posted = gh.rest.issues.update_comment.call_args.kwargs["body"]
+    assert "---\n---" not in posted, f"境目の区切り線が重複している: {posted!r}"
+    assert posted.count("---") == 2, f"区切り線の本数が想定と違う: {posted!r}"
+    assert "> from: @tester" in posted
+
+
 def test_reply_comment_when_commits_format(gh, api):
     """commit 表付きの追記を確認する（正常系）。"""
     # 準備
@@ -1506,6 +1520,51 @@ def test_remove_watch_targets_when_unknown_session(api):
     # 実行・検証
     with pytest.raises(server.SessionNotFoundError):
         api.remove_watch_targets("architect", 52, [60])
+
+
+# ---- 通知送出 ----
+
+
+def test_notify(api, mon_settings, monkeypatch):
+    """通知設定ありでの送信成功を確認する（正常系）。"""
+    # 準備
+    import ai_monitor.features.notify.service as notify_service
+    from ai_monitor.shared.settings import WebhookNotifySettings
+
+    sent: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        notify_service, "post_webhook", lambda url, kind, text: sent.append((url, kind, text)) or ""
+    )
+    mon_settings.notifies = [
+        WebhookNotifySettings(webhook_url="https://example.com/hook", kind="discord")
+    ]
+    # 実行
+    result = api.notify(
+        sender="architect", title="判断をお願いします", body="候補 3 件の PoC が成立しました。", number=1069
+    )
+    # 検証
+    assert result.sent is True
+    assert len(sent) == 1
+    url, kind, text = sent[0]
+    assert (url, kind) == ("https://example.com/hook", "discord")
+    assert "[architect]" in text and "判断をお願いします" in text
+
+
+def test_notify_when_settings_missing(api, mon_settings, monkeypatch):
+    """通知設定なしでの送信見送りを確認する（正常系）。"""
+    # 準備
+    import ai_monitor.features.notify.service as notify_service
+
+    sent: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        notify_service, "post_webhook", lambda url, kind, text: sent.append((url, kind, text)) or ""
+    )
+    mon_settings.notifies = []
+    # 実行
+    result = api.notify(sender="architect", title="判断をお願いします", body="本文")
+    # 検証
+    assert result.sent is False
+    assert sent == []
 
 
 # ---- プロジェクト解決 ----

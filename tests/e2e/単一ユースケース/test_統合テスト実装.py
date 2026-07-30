@@ -153,7 +153,7 @@ def test_normal_complex(
     _assert_handed_back(data, report, COMPLEX)
 
 
-def test_error_revision_needed(
+def test_error_when_revision_needed(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, commit_file, wait_until, sandbox,
 ):

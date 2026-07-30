@@ -203,7 +203,7 @@ def _setup_story(
     return story
 
 
-def test_normal_first(
+def test_normal_when_first(
     monitor,
     gh_live,
     repo_ctx,
@@ -271,7 +271,7 @@ def test_normal_first(
     ), "起票結果の報告コメントが投稿されていない"
 
 
-def test_normal_sequential(
+def test_normal_when_sequential(
     monitor,
     gh_live,
     repo_ctx,

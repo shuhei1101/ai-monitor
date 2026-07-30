@@ -112,7 +112,7 @@ def _wait_gate(gh_live, owner, repo, number, wait_until, *, message):
     return wait_until(_done, timeout_sec=2400, message=message)
 
 
-def test_normal_ask(
+def test_normal_when_ask(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -147,7 +147,7 @@ def test_normal_ask(
         assert not comments(gh_live, owner, repo, number), f"#{number} にコメントが投稿されている"
 
 
-def test_normal_local(
+def test_normal_when_local(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -185,7 +185,7 @@ def test_normal_local(
         )
 
 
-def test_normal_relay(
+def test_normal_when_relay(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -230,7 +230,7 @@ def test_normal_relay(
     assert not comments(gh_live, owner, repo, ctx["epic"].number), "epic Issue にコメントが投稿されている"
 
 
-def test_normal_receive_decision(
+def test_normal_when_receive_decision(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -288,7 +288,7 @@ def test_normal_receive_decision(
     assert not server._is_minimized(instruction.node_id), "再開指示が Resolve されている"
 
 
-def test_normal_scenario_fix(
+def test_normal_when_scenario_fix(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -343,7 +343,7 @@ def test_normal_scenario_fix(
     )
 
 
-def test_normal_notify_decision(
+def test_normal_when_notify_decision(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):

@@ -141,7 +141,7 @@ def test_normal(
     )
 
 
-def test_error_no_target(
+def test_error_when_no_target(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):

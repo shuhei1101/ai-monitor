@@ -7,6 +7,8 @@ import yaml
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
+from tests.e2e.ゲート応答 import drive_gates
+from tests.e2e.エスカレーション import issue, label_names
 
 INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集できる機能を追加する。"
@@ -280,3 +282,96 @@ def test_normal(
         assert agent_comments, f"#{number} にエージェントのコメントが見つからない"
         for comment in agent_comments:
             assert server._is_minimized(comment.node_id), f"コメント {comment.html_url} が未 Resolve"
+
+
+# base（親 story ブランチ）にある現状の設計書（RE PR がマージ済みの状態）
+CURRENT_MODULE_PATH = "docs/wiki/設計図/モジュール構成/バックエンド/タスク.py.md"
+CURRENT_MODULE_MD = """# モジュール構成: バックエンド / タスク
+
+現状の実装から起こしたモジュール構成。
+
+## 一覧
+
+| ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| タスク編集 | サービス | `src/tasks/service.py` | 関数 | `update_task` | タスクのタイトルと本文を更新する | 検証は呼び出し側に散っている |
+"""
+
+
+def test_normal_when_reverse(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until, e2e_state_path,
+):
+    """現状の設計書を入力にした subsystem 要件確定を実環境で確認する（正常系・リバースエンジニアリング）。"""
+    owner, repo = repo_ctx
+    # 準備: RE 経路の epic / story と、現状の設計書が入った story ブランチ
+    intake, epic = epic_issue_factory(
+        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
+        epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
+    )
+    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
+    story = story_issue_factory(
+        epic.number, STORY_TITLE,
+        body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
+        labels=["layer:story", "type:docs", "リバースエンジニアリング"],
+    )
+    story_branch = f"feat/story/task-edit-{story.number}"
+    draft_pr_factory(
+        story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
+    )
+    commit_file(story_branch, SCENARIO_PATH, SCENARIO_MD, "docs: 単一UC シナリオ（タスク編集）を追加")
+    commit_file(story_branch, CURRENT_MODULE_PATH, CURRENT_MODULE_MD, "docs: 現状のモジュール構成を追加")
+    subsystem = subsystem_issue_factory(
+        story.number, SUBSYSTEM_TITLE,
+        labels=["layer:subsystem", "type:docs", "scope:backend", "リバースエンジニアリング",
+                "確認:subsystem-conductor"],
+    )
+
+    def _faces():
+        # subsystem Issue と、作成された subsystem PR が応答対象の面
+        faces = [("subsystem_issue", subsystem.number)]
+        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
+        faces += [("subsystem_pr", p.number) for p in pulls if f"#{subsystem.number}" in (p.body or "")]
+        return faces
+
+    def _handed_to_architect():
+        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
+        for pr in pulls:
+            if f"#{subsystem.number}" not in (pr.body or ""):
+                continue
+            if "確認:architect" in label_names(issue(gh_live, owner, repo, pr.number)):
+                return pr
+        return None
+
+    # 実行: SA 確認 → タスク一覧確認 の各ゲートに応答して architect への引き渡しまで進める
+    history, pr = drive_gates(
+        gh_live, owner, repo,
+        faces=_faces,
+        choices={
+            ("subsystem_issue", "確認:subsystem-conductor"): "現状の設計書どおりの担当範囲で合っています。",
+            ("subsystem_pr", "確認:subsystem-conductor"): None,
+        },
+        terminal=_handed_to_architect,
+        wait_until=wait_until,
+        timeout_sec=3600,
+    )
+    assert history, "ユーザー確認ゲートが 1 度も開いていない"
+
+    # 検証: 本文に 現状 と システム要件（SA）が揃い、現状の設計書が更新対象に挙がっている
+    body = (issue(gh_live, owner, repo, subsystem.number).body or "").replace("\r\n", "\n")
+    assert "## 現状" in body, "本文に ## 現状 がない"
+    assert "## システム要件（SA）" in body, "本文に ## システム要件（SA） がない"
+    assert CURRENT_MODULE_PATH.split("docs/wiki/")[1] in body or "モジュール構成" in body, (
+        "関連ドキュメントに現状の設計書が挙がっていない"
+    )
+
+    # 検証: subsystem Draft PR が base=親 story ブランチで、タスク一覧が記入されている
+    assert pr.draft is True
+    assert pr.base.ref == story_branch, f"subsystem PR の base が親 story ブランチでない: {pr.base.ref}"
+    pr_body = (pr.body or "").replace("\r\n", "\n")
+    assert "## タスク一覧" in pr_body, "PR 本文にタスク一覧がない"
+
+    # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
+    assert pr.number in _watch_numbers(e2e_state_path, subsystem.number)
+    assert intake is not None

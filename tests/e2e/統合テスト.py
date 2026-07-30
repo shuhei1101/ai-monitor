@@ -220,10 +220,11 @@ E2E_TEST_PY_FOLLOWING_CONFLICT = _E2E_HEADER + '''
         self.assertEqual(list_tasks(store)[0].title, "")
 ''' + _E2E_FOOTER
 
-# テストコード側の誤り（正常系の期待値を取り違えている）。シナリオ・実装とも正しい
-E2E_TEST_PY_WRONG_ASSERTION = _E2E_HEADER.replace(
-    'self.assertEqual(listed[0].content, "新本文")',
-    'self.assertEqual(listed[0].content, "旧本文")',
+# テストコード側の誤り（本文の引数を渡し忘れている）。シナリオ・実装とも正しい。
+# 期待値はシナリオどおりなので照合では見抜けず、実行して初めて落ちる
+E2E_TEST_PY_MISSING_ARG = _E2E_HEADER.replace(
+    'update_task(store, "t1", "新タイトル", "新本文")',
+    'update_task(store, "t1", "新タイトル")',
     1,
 ) + _E2E_ERROR_CASE + _E2E_FOOTER
 
@@ -256,38 +257,10 @@ _SINGLE_FAILED_ROW = (
 # 全行 pass を記入済みの story PR 本文（全 pass の完了報告 の起点）
 STORY_PR_BODY_ALL_PASSED = STORY_PR_BODY_WITH_TABLE.replace("| 全実行 | |", "| 全実行 | ✅ |")
 
-# fail を記録済みの story PR 本文（再テストの実行指示 の起点）
+# fail を記録済みの story PR 本文（再テストの実行 の起点）
 STORY_PR_BODY_FAILED = STORY_PR_BODY_WITH_TABLE.replace(
     _SINGLE_NEW_ROW, _SINGLE_FAILED_ROW
 ).replace("| 全実行 | |", "| 全実行 | ✅ |")
-
-TESTER_PASS_REPORT = """> from: @single-scenario-tester
-> to: @single-scenario-writer
-
-テスト結果表の全行を実行しました。新規 + 回帰とも全 pass です。
-
-| ファイル | 結果 |
-| --- | --- |
-| `tests/e2e/単一ユースケース/test_タスク編集.py` | ✅ |
-| `tests/unit/tasks/test_service.py` | ✅ |
-
----
-"""
-
-TESTER_FAIL_REPORT = """> from: @single-scenario-tester
-> to: @single-scenario-writer
-
-テスト結果表の全行を実行しました。1 件 fail です。
-
-| ファイル | ケース | 結果 |
-| --- | --- | --- |
-| `tests/e2e/単一ユースケース/test_タスク編集.py` | `test_error_when_タイトルが空` | ❌ |
-| `tests/unit/tasks/test_service.py` | 全実行 | ✅ |
-
-失敗内容: タイトルを空文字にして保存しても `ValidationError` が送出されず、ストアが更新される。
-
----
-"""
 
 TESTER_DONE_REPORT = """> from: @single-scenario-tester
 > to: @single-scenario-writer
@@ -301,14 +274,6 @@ TESTER_DONE_REPORT = """> from: @single-scenario-tester
 | commit | 内容 |
 | --- | --- |
 | seed | 単一UC の E2E テストを追加 |
-
----
-"""
-
-RUN_INSTRUCTION = """> from: @single-scenario-writer
-> to: @single-scenario-tester
-
-レビューが完了しました。テスト結果表の全行（新規 + 回帰）を実行して、結果列を埋めてください。
 
 ---
 """
@@ -461,10 +426,11 @@ COMPLEX_E2E_TEST_PY_FOLLOWING_CONFLICT = _COMPLEX_E2E_HEADER + '''
         self.assertEqual(listed[0].title, "")
 ''' + _E2E_FOOTER
 
-# テストコード側の誤り（正常系の期待値を取り違えている）。シナリオ・実装とも正しい
-COMPLEX_E2E_TEST_PY_WRONG_ASSERTION = _COMPLEX_E2E_HEADER.replace(
-    'self.assertEqual(listed[0].content, "新本文")',
-    'self.assertEqual(listed[0].content, "旧本文")',
+# テストコード側の誤り（本文の引数を渡し忘れている）。シナリオ・実装とも正しい
+COMPLEX_E2E_TEST_PY_MISSING_ARG = _COMPLEX_E2E_HEADER.replace(
+    'update_task(store, "t1", "新タイトル", "新本文")',
+    'update_task(store, "t1", "新タイトル")',
+    1,
 ) + _COMPLEX_E2E_ERROR_CASE + _E2E_FOOTER
 
 EPIC_PR_BODY = """## 紐づく Issue
@@ -503,14 +469,6 @@ COMPLEX_TESTER_DONE_REPORT = """> from: @complex-scenario-tester
 ---
 """
 
-COMPLEX_RUN_INSTRUCTION = """> from: @complex-scenario-writer
-> to: @complex-scenario-tester
-
-レビューが完了しました。テスト結果表の全行（新規 + 回帰）を実行して、結果列を埋めてください。
-
----
-"""
-
 _COMPLEX_NEW_ROW = (
     "| `tests/e2e/複合ユースケース/test_タスク編集から一覧反映.py` | 全実行 | | "
     "新規・対応シナリオ: `タスク編集から一覧反映` |"
@@ -524,38 +482,10 @@ _COMPLEX_FAILED_ROW = (
 # 全行 pass を記入済みの epic PR 本文（全 pass の完了報告 の起点）
 EPIC_PR_BODY_ALL_PASSED = EPIC_PR_BODY_WITH_TABLE.replace("| 全実行 | |", "| 全実行 | ✅ |")
 
-# fail を記録済みの epic PR 本文（再テストの実行指示 の起点）
+# fail を記録済みの epic PR 本文（再テストの実行 の起点）
 EPIC_PR_BODY_FAILED = EPIC_PR_BODY_WITH_TABLE.replace(
     _COMPLEX_NEW_ROW, _COMPLEX_FAILED_ROW
 ).replace("| 全実行 | |", "| 全実行 | ✅ |")
-
-COMPLEX_TESTER_PASS_REPORT = """> from: @complex-scenario-tester
-> to: @complex-scenario-writer
-
-テスト結果表の全行を実行しました。新規 + 回帰とも全 pass です。
-
-| ファイル | 結果 |
-| --- | --- |
-| `tests/e2e/複合ユースケース/test_タスク編集から一覧反映.py` | ✅ |
-| `tests/e2e/単一ユースケース/test_タスク編集.py` | ✅ |
-
----
-"""
-
-COMPLEX_TESTER_FAIL_REPORT = """> from: @complex-scenario-tester
-> to: @complex-scenario-writer
-
-テスト結果表の全行を実行しました。1 件 fail です。
-
-| ファイル | ケース | 結果 |
-| --- | --- | --- |
-| `tests/e2e/複合ユースケース/test_タスク編集から一覧反映.py` | `test_error_when_タイトルが空` | ❌ |
-| `tests/e2e/単一ユースケース/test_タスク編集.py` | 全実行 | ✅ |
-
-失敗内容: タイトルを空文字にして保存しても `ValidationError` が送出されず、一覧に反映される。
-
----
-"""
 
 
 def story_branch_files(*, service: str = SERVICE_PY, e2e_test: str | None = None) -> dict[str, str]:

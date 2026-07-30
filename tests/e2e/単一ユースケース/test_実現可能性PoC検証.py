@@ -161,3 +161,104 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
         assert server._is_minimized(comment.node_id), f"PoC PR コメント {comment.html_url} が未 Resolve"
     # 指示コメント（instruction）も Resolve 対象に含まれていることを念のため確認
     assert server._is_minimized(instruction.node_id), "指示コメントが未 Resolve"
+
+
+# 標準ライブラリだけでは成立しない検証テーマ（全案 ❌ を決定的に誘発する）
+UNMET_EPIC_BODY = EPIC_BODY.replace(
+    "Python 標準ライブラリで一時ファイルを生成・書き込み・読み戻しできることを確認する。",
+    "Python 標準ライブラリだけで PDF ファイル（有効な PDF 形式）を生成できることを確認する。",
+).replace(
+    "外部依存を最小化するため、標準ライブラリのみで一時ファイルを扱う技術基盤の成立を検証する。",
+    "外部依存を増やせない制約があるため、標準ライブラリのみで PDF を出力できるかを検証する。",
+).replace(
+    "| 一時ファイル生成 | pathlib で一時ファイルを生成する | 未起票 |",
+    "| PDF 出力 | 標準ライブラリだけで PDF を生成する | 未起票 |",
+)
+
+UNMET_INSTRUCTION_BODY = """> from: @epic-conductor
+> to: @epic-poc-runner
+
+epic の実現可能性 PoC を発注します。
+
+**検証テーマ:** Python 3.12 の標準ライブラリのみで、PDF リーダーが開ける有効な PDF ファイルを生成できるか。
+
+**成立条件の想定:**
+- 外部依存パッケージを一切追加しない
+- 生成した PDF が仕様に沿った構造（xref / trailer を含む）で出力できる
+- 日本語テキストを埋め込める
+
+---
+"""
+
+
+def test_error_when_unmet(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, tmp_path
+):
+    """全案 ❌ のときの不成立の記録と相談を実環境で確認する（異常系・核心機構が成立しない結論）。"""
+    owner, repo = repo_ctx
+
+    def _get_issue(number):
+        return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
+
+    # 準備: 成立しない検証テーマの epic Issue + PoC Draft PR
+    intake, epic = epic_issue_factory(
+        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=UNMET_EPIC_BODY, epic_labels=["layer:epic"]
+    )
+    pr = epic_pr_factory(
+        branch=f"poc/epic/pdf-{epic.number}",
+        title=f"PoC: 標準ライブラリでの PDF 生成（epic #{epic.number}）",
+        body=f"## 紐づく Issue\n\n- #{epic.number}\n",
+    )
+    gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=pr.number, body=UNMET_INSTRUCTION_BODY
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=pr.number, labels=["確認:epic-poc-runner"]
+    )
+
+    # 実行: 方針固めの完了（議論中 + assignee）を待って承認する
+    def _plan_done():
+        data = _get_issue(pr.number)
+        labels = {label.name for label in data.labels}
+        return data if "議論中" in labels and data.assignees else None
+
+    pr_data = wait_until(_plan_done, timeout_sec=1800, message="方針固めの完了（議論中 + assignee）")
+    try:
+        gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr.number, name="議論中")
+    except RequestFailed:
+        pass
+    for assignee in pr_data.assignees:
+        gh_live.rest.issues.remove_assignees(
+            owner=owner, repo=repo, issue_number=pr.number, assignees=[assignee.login]
+        )
+
+    # 実行: 検証実行の完了（不成立の結論 + 議論中 + assignee 再セット）を待つ
+    def _result_reported():
+        data = _get_issue(pr.number)
+        labels = {label.name for label in data.labels}
+        body_now = (data.body or "").replace("\r\n", "\n")
+        if "議論中" in labels and data.assignees and "## 検証結果" in body_now:
+            return data
+        return None
+
+    pr_data = wait_until(
+        _result_reported, timeout_sec=2400, message="検証実行の完了（不成立の結論 + 議論中 + assignee）"
+    )
+
+    # 検証: PoC PR 本文に不成立の実測値が記録されている
+    body = (pr_data.body or "").replace("\r\n", "\n")
+    assert "## 検証結果" in body, "PR 本文に ## 検証結果 がない"
+    assert "❌" in body, f"不成立の実測値が記録されていない: {body[-800:]}"
+
+    # 検証: 代替案 or 中止の相談コメントが投稿されている
+    pr_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
+    consult = [c for c in pr_comments if (c.body or "").lstrip().startswith("> from: @epic-poc-runner")]
+    assert consult, "不成立の相談コメントが投稿されていない"
+
+    # 検証: epic Issue の `## PoC 結果` にも不成立が記録され、epic / PoC PR とも open のまま
+    epic_body = (_get_issue(epic.number).body or "").replace("\r\n", "\n")
+    assert "## PoC 結果" in epic_body, "epic 本文に ## PoC 結果 がない"
+    assert "（未記入）" not in epic_body, "epic の PoC 結果が未記入のまま"
+    assert _get_issue(epic.number).state == "open", "epic Issue が close されている"
+    assert _get_issue(pr.number).state == "open", "PoC PR が close されている"
+    assert intake is not None and tmp_path

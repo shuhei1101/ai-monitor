@@ -42,10 +42,10 @@ epic-conductor:
   - エージェント/epic-conductor/フェーズ/初期処理.md
   - エージェント/epic-conductor/フェーズ/要件確定（初回）.md
   - エージェント/epic-conductor/フェーズ/応答ループ.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/リバースエンジニアリング起動.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/RE差し戻し対応.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/RE完了確認.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/REマージ.md
+  - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md
+  - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
+  - エージェント/RE発注共通/フェーズ/RE完了確認.md
+  - エージェント/RE発注共通/フェーズ/REマージ.md
   - エージェント/epic-conductor/フェーズ/要件確定（完了処理）.md
   - エージェント/epic-conductor/フェーズ/PoC結果確認.md
   - エージェント/epic-conductor/フェーズ/モック完了確認.md
@@ -111,10 +111,10 @@ story-conductor:
   - エージェント/story-conductor/フェーズ/初期処理.md
   - エージェント/story-conductor/フェーズ/要件確定（初回）.md
   - エージェント/story-conductor/フェーズ/応答ループ.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/リバースエンジニアリング起動.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/RE差し戻し対応.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/RE完了確認.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/REマージ.md
+  - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md
+  - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
+  - エージェント/RE発注共通/フェーズ/RE完了確認.md
+  - エージェント/RE発注共通/フェーズ/REマージ.md
   - エージェント/story-conductor/フェーズ/要件確定（完了処理）.md
   - エージェント/story-conductor/フェーズ/子subsystem起票（初回）.md
   - エージェント/story-conductor/フェーズ/子subsystem起票（逐次）.md
@@ -134,10 +134,10 @@ subsystem-conductor:
   - エージェント/subsystem-conductor/フェーズ/初期処理.md
   - エージェント/subsystem-conductor/フェーズ/要件確定（初回）.md
   - エージェント/subsystem-conductor/フェーズ/応答ループ.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/リバースエンジニアリング起動.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/RE差し戻し対応.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/RE完了確認.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/REマージ.md
+  - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md
+  - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
+  - エージェント/RE発注共通/フェーズ/RE完了確認.md
+  - エージェント/RE発注共通/フェーズ/REマージ.md
   - エージェント/subsystem-conductor/フェーズ/エスカレーション対応（方針確認）.md
   - エージェント/subsystem-conductor/フェーズ/エスカレーション対応（実行）.md
   - エージェント/subsystem-conductor/フェーズ/エスカレーション結果の中継（下り）.md
@@ -186,10 +186,10 @@ system-conductor:
   - エージェント/system-conductor/README.md
   - エージェント/system-conductor/フェーズ/初期処理.md
   - エージェント/system-conductor/フェーズ/応答ループ.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/リバースエンジニアリング起動.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/RE差し戻し対応.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/RE完了確認.md
-  - エージェント/リバースエンジニアリング共通/フェーズ/REマージ.md
+  - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md
+  - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
+  - エージェント/RE発注共通/フェーズ/RE完了確認.md
+  - エージェント/RE発注共通/フェーズ/REマージ.md
   - エージェント/system-conductor/フェーズ/構成確定（初回）.md
   - エージェント/system-conductor/フェーズ/構成確定（完了処理）.md
   - エージェント/system-conductor/フェーズ/systemマージ.md
@@ -204,25 +204,25 @@ system-architect:
 
 architecture-reverse-engineer:
   - エージェント/architecture-reverse-engineer/README.md
-  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
-  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+  - エージェント/RE担当共通/フェーズ/初期処理.md
+  - エージェント/RE担当共通/フェーズ/現状設計書の起こし.md
 
 mock-reverse-engineer:
   - エージェント/mock-reverse-engineer/README.md
-  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
-  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+  - エージェント/RE担当共通/フェーズ/初期処理.md
+  - エージェント/RE担当共通/フェーズ/現状設計書の起こし.md
 
 complex-scenario-reverse-engineer:
   - エージェント/complex-scenario-reverse-engineer/README.md
-  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
-  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+  - エージェント/RE担当共通/フェーズ/初期処理.md
+  - エージェント/RE担当共通/フェーズ/現状設計書の起こし.md
 
 single-scenario-reverse-engineer:
   - エージェント/single-scenario-reverse-engineer/README.md
-  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
-  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+  - エージェント/RE担当共通/フェーズ/初期処理.md
+  - エージェント/RE担当共通/フェーズ/現状設計書の起こし.md
 
 ss-design-reverse-engineer:
   - エージェント/ss-design-reverse-engineer/README.md
-  - エージェント/reverse-engineer共通/フェーズ/初期処理.md
-  - エージェント/reverse-engineer共通/フェーズ/現状設計書の起こし.md
+  - エージェント/RE担当共通/フェーズ/初期処理.md
+  - エージェント/RE担当共通/フェーズ/現状設計書の起こし.md

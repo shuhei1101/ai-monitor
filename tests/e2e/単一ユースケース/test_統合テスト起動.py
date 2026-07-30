@@ -49,7 +49,7 @@ def _make_story(gh_live, repo_ctx, epic_number: int, title: str, *, closed: bool
     return story
 
 
-def test_normal_delegate(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, epic_body, wait_until):
+def test_normal_when_delegate(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, epic_body, wait_until):
     """全子 story 完了の確認 → complex-scenario-writer への統合テスト委任を実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
@@ -80,7 +80,7 @@ def test_normal_delegate(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr
     assert server._is_minimized(report.node_id), "完了報告コメントが未 Resolve"
 
 
-def test_normal_children_remaining(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, epic_body, wait_until):
+def test_normal_when_children_remaining(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, epic_body, wait_until):
     """未完了の子が残る場合の状況確認の連絡を実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
@@ -122,7 +122,7 @@ def test_normal_children_remaining(monitor, gh_live, repo_ctx, epic_issue_factor
     assert not any(label.name == "確認:complex-scenario-writer" for label in pr_data.labels)
 
 
-def test_normal_bug_return(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, epic_body, wait_until):
+def test_normal_when_bug_return(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, epic_body, wait_until):
     """失敗報告 → 方針確認 → 承認 → 該当 story への差し戻しを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 

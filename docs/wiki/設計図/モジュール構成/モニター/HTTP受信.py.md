@@ -15,15 +15,117 @@ MCP は同一プロセスに同居するため、ツールがセッション台�
 | ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 共通 | アプリ生成 | `server/app.py` | 関数 | [`create_app`](#アプリ生成) | FastAPI アプリの生成（MCP マウント + lifespan） | composition root から呼ぶ |
+| コンテキストリセット | リクエスト DTO | `server/app.py` | データモデル | [`ContextResetRequest`](#リセット要求) | `POST /context_reset` のリクエストボディ | `pydantic.BaseModel` |
 | コンテキストリセット | コンテキストリセット受信 | `server/app.py` | 関数 | [`receive_context_reset`](#コンテキストリセット受信) | `POST /context_reset` を受けてセッションを作り直す | MCP のルートマウントより先に登録 |
+| レートリミット通知 | リクエスト DTO | `server/app.py` | データモデル | [`RateLimitRequest`](#レートリミット要求) | `POST /rate_limit` のリクエストボディ | `pydantic.BaseModel` |
 | レートリミット通知 | レートリミット通知受信 | `server/app.py` | 関数 | [`receive_rate_limit`](#レートリミット通知受信) | `POST /rate_limit` を受けて待機を開始する | 同上 |
 
 ## ディレクトリ構成
 
 ```
 src/ai_monitor/server/
-└── app.py    # create_app
+└── app.py    # create_app / ContextResetRequest / RateLimitRequest
 ```
+
+## 構成図
+
+```mermaid
+classDiagram
+  direction TD
+  アプリ生成 ..> コンテキストリセット受信 : ルート登録
+  アプリ生成 ..> レートリミット通知受信 : ルート登録
+  コンテキストリセット受信 ..> リセット要求 : ボディを受ける
+  レートリミット通知受信 ..> レートリミット要求 : ボディを受ける
+  コンテキストリセット受信 ..> セッション台帳 : セッションを引く
+  レートリミット通知受信 ..> セッション台帳 : セッションを引く
+
+  class アプリ生成 {
+    <<function>>
+    +アプリ生成(全体設定, セッション台帳, エージェント一覧, ラベル設定) FastAPI
+  }
+
+  class コンテキストリセット受信 {
+    <<function>>
+    +コンテキストリセット受信(リセット要求) dict
+  }
+
+  class レートリミット通知受信 {
+    <<function>>
+    +レートリミット通知受信(レートリミット要求) dict
+  }
+
+  class リセット要求 {
+    +プロジェクト名: str
+    +エージェント名: str
+    +主番号: int
+  }
+
+  class レートリミット要求 {
+    +プロジェクト名: str
+    +エージェント名: str
+    +主番号: int
+    +会話ログのパス: str
+  }
+
+  class セッション台帳 {
+  }
+
+  click アプリ生成 href "#アプリ生成"
+  click コンテキストリセット受信 href "#コンテキストリセット受信"
+  click レートリミット通知受信 href "#レートリミット通知受信"
+  click リセット要求 href "#リセット要求"
+  click レートリミット要求 href "#レートリミット要求"
+  click セッション台帳 href "./エージェント管理.py.md#セッション台帳"
+```
+
+## リセット要求
+> 物理名: `ContextResetRequest`<br>
+> 種別: データモデル<br>
+> コンテナ: `server/app.py`
+
+`POST /context_reset` のリクエストボディ（`pydantic.BaseModel`）。
+送り元は[コンテキストリセット](../フック/コンテキストリセット.py.md)のフックで、値は起動時に渡した環境変数から取る。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト名 | `project` | `str` | 公開 | - | 監視対象プロジェクト名 | `"sandbox"` | `AI_MONITOR_PROJECT` の値 |
+| エージェント名 | `agent_name` | `str` | 公開 | - | 対象エージェント名 | `"subsystem-conductor"` | `AI_MONITOR_AGENT` の値 |
+| 主番号 | `number` | `int` | 公開 | - | セッションの主番号 | `170` | `AI_MONITOR_NUMBER` の値 |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## レートリミット要求
+> 物理名: `RateLimitRequest`<br>
+> 種別: データモデル<br>
+> コンテナ: `server/app.py`
+
+`POST /rate_limit` のリクエストボディ（`pydantic.BaseModel`）。
+[リセット要求](#リセット要求)に会話ログのパスを足した形で、リセット時刻はモニター側がそのログから読む。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト名 | `project` | `str` | 公開 | - | 監視対象プロジェクト名 | `"sandbox"` | `AI_MONITOR_PROJECT` の値 |
+| エージェント名 | `agent_name` | `str` | 公開 | - | 対象エージェント名 | `"epic-conductor"` | `AI_MONITOR_AGENT` の値 |
+| 主番号 | `number` | `int` | 公開 | - | セッションの主番号 | `1069` | `AI_MONITOR_NUMBER` の値 |
+| 会話ログのパス | `transcript_path` | `str` | 公開 | - | 対象セッションの会話ログ | `"/home/user/.claude/projects/-mnt-c-repo/5a00ce9c.jsonl"` | フックの入力 JSON の値 |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
 
 ## `server/app.py`
 > 種別: ファイル
@@ -95,14 +197,14 @@ create_app(settings, registry=registry, agents=agents, label_settings=labels)
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| プロジェクト名 | `project` | `str` | ✅ | - | 監視対象プロジェクト名 | リクエストボディ |
-| エージェント名 | `agent_name` | `str` | ✅ | - | 対象エージェント名 | リクエストボディ |
-| 主番号 | `number` | `int` | ✅ | - | セッションの主番号 | リクエストボディ |
+| リセット要求 | `body` | [`ContextResetRequest`](#リセット要求) | ✅ | - | リクエストボディ | FastAPI が JSON から生成する |
 
 引数例:
 
 ```python
-receive_context_reset(project="sandbox", agent_name="subsystem-conductor", number=170)
+receive_context_reset(
+    ContextResetRequest(project="sandbox", agent_name="subsystem-conductor", number=170)
+)
 ```
 
 #### 戻り値
@@ -150,19 +252,18 @@ receive_context_reset(project="sandbox", agent_name="subsystem-conductor", numbe
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| プロジェクト名 | `project` | `str` | ✅ | - | 監視対象プロジェクト名 | リクエストボディ |
-| エージェント名 | `agent_name` | `str` | ✅ | - | 対象エージェント名 | リクエストボディ |
-| 主番号 | `number` | `int` | ✅ | - | セッションの主番号 | リクエストボディ |
-| 会話ログのパス | `transcript_path` | `str` | ✅ | - | 対象セッションの会話ログ | リクエストボディ |
+| レートリミット要求 | `body` | [`RateLimitRequest`](#レートリミット要求) | ✅ | - | リクエストボディ | FastAPI が JSON から生成する |
 
 引数例:
 
 ```python
 receive_rate_limit(
-    project="sandbox",
-    agent_name="epic-conductor",
-    number=1069,
-    transcript_path="/home/user/.claude/projects/-mnt-c-repo/5a00ce9c.jsonl",
+    RateLimitRequest(
+        project="sandbox",
+        agent_name="epic-conductor",
+        number=1069,
+        transcript_path="/home/user/.claude/projects/-mnt-c-repo/5a00ce9c.jsonl",
+    )
 )
 ```
 

@@ -4,14 +4,13 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import ai_monitor.mcp.server as server
 from tests.e2e.ゲート応答 import drive_gates
 from tests.e2e.エスカレーション import comments_from, issue, label_names
 from tests.e2e.実装対象 import STORY_BODY_TEMPLATE, STORY_TITLE, add_worktree
 from tests.e2e.統合テスト import (
     BUGGY_SERVICE_PY,
     COMPLEX_E2E_TEST_PY,
-    COMPLEX_RUN_INSTRUCTION,
+    COMPLEX_TESTER_DONE_REPORT,
     EPIC_PR_BODY_WITH_TABLE,
     add_merged_subsystem,
     complex_result_rows,
@@ -92,12 +91,12 @@ def test_normal(
     epic_number = ctx["epic"].number
     epic_pr_number = ctx["pr"].number
 
-    # 準備: 指揮役の実行指示 → 確認ラベル付与（fail を誘発する起点）
+    # 準備: tester のテスト実装完了報告 → 確認ラベル付与（レビューでの fail を誘発する起点）
     gh_live.rest.issues.create_comment(
-        owner=owner, repo=repo, issue_number=epic_pr_number, body=COMPLEX_RUN_INSTRUCTION
+        owner=owner, repo=repo, issue_number=epic_pr_number, body=COMPLEX_TESTER_DONE_REPORT
     )
     gh_live.rest.issues.add_labels(
-        owner=owner, repo=repo, issue_number=epic_pr_number, labels=["確認:complex-scenario-tester"]
+        owner=owner, repo=repo, issue_number=epic_pr_number, labels=["確認:complex-scenario-writer"]
     )
 
     try:
@@ -186,17 +185,17 @@ def test_normal(
         for row in rows:
             assert "✅" in row, f"再実行後の結果列が ✅ で埋まっていない: {row}"
 
-        # 検証: fail → pass の経過が tester の報告コメントに残っている
+        # 検証: fail → pass の経過が親 epic Issue の writer 報告コメントに残っている
         reports = [
             (c.body or "") for c in comments_from(
-                gh_live, owner, repo, epic_pr_number, "complex-scenario-tester"
+                gh_live, owner, repo, epic_number, "complex-scenario-writer"
             )
         ]
         assert any("❌" in body or "失敗" in body for body in reports), (
-            "tester の失敗報告がコメントに残っていない"
+            "writer の失敗報告が親 epic Issue に残っていない"
         )
         assert any("pass" in body or "✅" in body for body in reports), (
-            "tester の全 pass 報告がコメントに残っていない"
+            "writer の全 pass 完了報告が親 epic Issue に残っていない"
         )
 
         # 検証: epic PR が master へ merged 状態

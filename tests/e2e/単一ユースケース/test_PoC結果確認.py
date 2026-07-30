@@ -186,7 +186,7 @@ def _assert_epic_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path) -> N
     )
 
 
-def test_normal_no_ui(
+def test_normal_when_no_ui(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, e2e_state_path,
 ):
     """結果に疑問なしのとき epic Draft PR を作り complex-scenario-writer へ引き継ぐことを確認する（正常系・画面変更なし）。"""
@@ -209,7 +209,7 @@ def test_normal_no_ui(
         assert server._is_minimized(comment.node_id), f"未 Resolve のコメント: {comment.html_url}"
 
 
-def test_normal_with_ui(
+def test_normal_when_with_ui(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, e2e_state_path,
 ):
     """画面変更ありのとき mock-designer へ指示コメント付きで引き継ぐことを確認する（正常系・画面変更あり）。"""
@@ -238,7 +238,7 @@ def test_normal_with_ui(
     assert not server._is_minimized(directed[-1].node_id), "指示コメントが Resolve されている"
 
 
-def test_error_continue(
+def test_error_when_continue(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, e2e_state_path,
 ):
     """結果への疑問をユーザーが解消したあと次フェーズへ進むことを確認する（異常系・続行指示）。"""
@@ -283,7 +283,7 @@ def test_error_continue(
         assert server._is_minimized(comment.node_id), f"未 Resolve のコメント: {comment.html_url}"
 
 
-def test_error_reverify(
+def test_error_when_reverify(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until,
 ):
     """結果への疑問に対しユーザーが再検証を指示したときの差し戻しを確認する（異常系・再検証指示）。"""

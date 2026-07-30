@@ -43,6 +43,19 @@ def test_read_wiki_pages_when_frontmatter(fake_wiki):
     assert result.pages[0].body == "# 見出し\n"
 
 
+def test_read_wiki_pages_when_local_path(fake_wiki, tmp_path):
+    """ローカルパスの読み取りを確認する（正常系）。"""
+    # 準備
+    page = tmp_path / "コメント.md"
+    page.write_text("# 規約: コメント\n", encoding="utf-8")
+    # 実行
+    result = wiki.read_wiki_pages([str(page)])
+    # 検証
+    assert result.pages[0].url == str(page)
+    assert result.pages[0].body == "# 規約: コメント\n"
+    assert fake_wiki.calls == []
+
+
 def test_read_wiki_pages_when_partial_failure(fake_wiki):
     """一部の取得失敗を確認する（正常系）。"""
     # 準備

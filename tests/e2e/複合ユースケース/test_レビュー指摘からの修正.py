@@ -85,7 +85,7 @@ def _label_and_assignee_events(gh_live, owner, repo, number):
     return labeled, assigned
 
 
-def test_normal_test_review(
+def test_normal_when_test_review(
     monitor,
     gh_live,
     repo_ctx,
@@ -183,7 +183,7 @@ def test_normal_test_review(
     assert not assigned, "assignee が設定された（ユーザー操作を求めている）"
 
 
-def test_normal_impl_review(
+def test_normal_when_impl_review(
     monitor,
     gh_live,
     repo_ctx,

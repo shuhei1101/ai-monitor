@@ -132,7 +132,7 @@ def test_normal(
     assert not data.assignees, "assignee が設定されている"
 
 
-def test_normal_reverify(
+def test_normal_when_reverify(
     monitor,
     gh_live,
     repo_ctx,
@@ -196,7 +196,7 @@ def test_normal_reverify(
     )
 
 
-def test_error_unmet(
+def test_error_when_unmet(
     monitor,
     gh_live,
     repo_ctx,

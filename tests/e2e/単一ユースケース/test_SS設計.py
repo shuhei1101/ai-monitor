@@ -212,7 +212,7 @@ def _add_worktree(local_path: str, branch: str) -> None:
     )
 
 
-def test_normal_no_er(
+def test_normal_when_no_er(
     monitor,
     gh_live,
     repo_ctx,
@@ -338,3 +338,331 @@ def test_normal_no_er(
     assert not server._is_minimized(handoffs[0].node_id), (
         f"tester への割り当てコメント {handoffs[0].html_url} が Resolve されている（受領は tester が行う）"
     )
+
+
+# ER図 の作成タスクを含むタスク一覧（正常シナリオ）
+PR_BODY_WITH_ER = SUBSYSTEM_PR_BODY_TEMPLATE.replace(
+    "- [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成",
+    "- [ ] `設計図/ER図/タスク.md` を新規作成\n"
+    "- [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成",
+)
+DESIGN_TASK_LINES_WITH_ER = ["`設計図/ER図/タスク.md` を新規作成", *DESIGN_TASK_LINES]
+
+# base（story ブランチ）にある現状のモジュール構成（RE 経路の入力）
+CURRENT_MODULE_PATH = "docs/wiki/設計図/モジュール構成/バックエンド/タスク.py.md"
+CURRENT_MODULE_MD = """# モジュール構成: バックエンド / タスク
+
+現状の実装から起こしたモジュール構成。
+
+## 一覧
+
+| ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| タスク編集 | サービス | `src/tasks/service.py` | 関数 | `update_task` | タスクのタイトルと本文を更新する | 検証は呼び出し側に散っている |
+"""
+
+BOUNCE_REPORT = """> from: @tester
+> to: @architect
+
+設計 Wiki どおりにテストを書けない箇所があります。
+
+`設計図/モジュール構成/バックエンド/タスク.py.md` の `#### 単体テスト` 表に「更新履歴を検証する」ケースがありますが、
+プロパティ表にも処理ステップにも更新履歴に相当する定義がありません。
+設計の見直しをお願いします。
+
+---
+"""
+
+
+def _setup_ss_design(
+    gh_live, owner, repo, sandbox, factories, commit_file,
+    *, pr_body: str, re_route: bool = False, base_designs: dict[str, str] | None = None,
+):
+    """タスク一覧承認済みの subsystem Draft PR（確認:architect 付き）まで用意する。"""
+    layer_type = "type:docs" if re_route else "type:feat"
+    re_label = ["リバースエンジニアリング"] if re_route else []
+    intake, epic = factories["epic_issue_factory"](
+        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
+        epic_labels=["layer:epic", layer_type, *re_label],
+    )
+    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    factories["epic_pr_factory"](
+        branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
+    )
+    story = factories["story_issue_factory"](
+        epic.number, STORY_TITLE,
+        body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
+        labels=["layer:story", layer_type, *re_label],
+    )
+    story_branch = f"feat/story/task-edit-{story.number}"
+    factories["draft_pr_factory"](
+        story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
+    )
+    commit_file(story_branch, SCENARIO_PATH, SCENARIO_MD, "docs: 単一UC シナリオ（タスク編集）を追加")
+    for path, content in (base_designs or {}).items():
+        commit_file(story_branch, path, content, f"docs: 現状の設計書 {path} を追加")
+    subsystem = factories["subsystem_issue_factory"](
+        story.number, SUBSYSTEM_TITLE,
+        body=SUBSYSTEM_BODY_TEMPLATE.format(story_number=story.number),
+        labels=["layer:subsystem", layer_type, "scope:backend", *re_label],
+    )
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/update-api"
+    pr = factories["draft_pr_factory"](
+        subsystem_branch, SUBSYSTEM_TITLE,
+        pr_body.format(subsystem_number=subsystem.number), base_branch=story_branch,
+    )
+    _add_worktree(sandbox["local_path"], subsystem_branch)
+    seed = gh_live.rest.repos.get_branch(
+        owner=owner, repo=repo, branch=subsystem_branch
+    ).parsed_data.commit.sha
+    return {
+        "intake": intake, "epic": epic, "story": story, "subsystem": subsystem, "pr": pr,
+        "subsystem_branch": subsystem_branch, "story_branch": story_branch, "seed": seed,
+    }
+
+
+def _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, subsystem_issue_factory):
+    """セットアップに渡す factory 群をまとめる。"""
+    return {
+        "epic_issue_factory": epic_issue_factory,
+        "epic_pr_factory": epic_pr_factory,
+        "draft_pr_factory": draft_pr_factory,
+        "story_issue_factory": story_issue_factory,
+        "subsystem_issue_factory": subsystem_issue_factory,
+    }
+
+
+def _drive_design(gh_live, owner, repo, pr_number, wait_until, *, max_rounds: int) -> int:
+    """設計ページごとの「提案 → 承認」を tester へ引き渡されるまで繰り返し、往復回数を返す。"""
+
+    def _gate_or_handoff():
+        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=pr_number).parsed_data
+        labels = {label.name for label in data.labels}
+        if "確認:tester" in labels:
+            return ("handoff", data)
+        return ("gate", data) if "議論中" in labels and data.assignees else None
+
+    rounds = 0
+    for _ in range(max_rounds):
+        kind, data = wait_until(
+            _gate_or_handoff, timeout_sec=1800, message="設計ページの提案待機 または tester への引き渡し"
+        )
+        if kind == "handoff":
+            return rounds
+        rounds += 1
+        try:
+            gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr_number, name="議論中")
+        except RequestFailed:
+            pass
+        for assignee in data.assignees:
+            gh_live.rest.issues.remove_assignees(
+                owner=owner, repo=repo, issue_number=pr_number, assignees=[assignee.login]
+            )
+    raise AssertionError(f"{max_rounds} 往復しても tester へ引き渡されなかった")
+
+
+def test_normal(
+    monitor, gh_live, repo_ctx, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until,
+):
+    """ER図 を含む設計ページの確定と tester への引き渡しを実環境で確認する（正常系）。"""
+    owner, repo = repo_ctx
+    ctx = _setup_ss_design(
+        gh_live, owner, repo, sandbox,
+        _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, subsystem_issue_factory),
+        commit_file, pr_body=PR_BODY_WITH_ER,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
+    )
+
+    rounds = _drive_design(gh_live, owner, repo, ctx["pr"].number, wait_until, max_rounds=MAX_ROUNDS + 2)
+    assert rounds >= len(DESIGN_TASK_LINES_WITH_ER), (
+        f"設計ページごとの確認ゲートが足りない: {rounds} 回（設計タスクは {len(DESIGN_TASK_LINES_WITH_ER)} 件）"
+    )
+
+    # 検証: 担当分の設計 Wiki（ER図 含む）が上流順に commit されている
+    paths = _design_paths(gh_live, owner, repo, ctx["subsystem_branch"])
+    assert [p for p in paths if p.startswith("docs/wiki/設計図/ER図/")], f"ER図 が未作成: {paths}"
+    assert [p for p in paths if p.startswith("docs/wiki/設計図/インターフェース定義/バックエンド/")], (
+        f"インターフェース定義（バックエンド）が未作成: {paths}"
+    )
+    assert [p for p in paths if p.startswith("docs/wiki/設計図/モジュール構成/")], f"モジュール構成が未作成: {paths}"
+
+    # 検証: タスク一覧の設計タスクがチェック済みで、tester へ引き渡されている
+    pr_final = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=ctx["pr"].number).parsed_data
+    pr_body = (pr_final.body or "").replace("\r\n", "\n")
+    for task in DESIGN_TASK_LINES_WITH_ER:
+        assert f"- [x] {task}" in pr_body, f"設計タスクがチェックされていない: {task}"
+    labels = {label.name for label in pr_final.labels}
+    assert "確認:tester" in labels and "確認:architect" not in labels
+
+    # 検証: tester への割り当てコメントに確定したページ名と commit 範囲が載っている
+    comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number
+    ).parsed_data
+    handoffs = [c for c in comments if "> to: @tester" in (c.body or "")]
+    assert handoffs, "tester への割り当てコメントが投稿されていない"
+    assert "設計図/" in (handoffs[-1].body or ""), "割り当てコメントに設計ページ名がない"
+
+
+def test_normal_when_interface_report(
+    monitor, gh_live, repo_ctx, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until,
+):
+    """インターフェース確定時の中間報告を実環境で確認する（正常系・インターフェース確定報告）。"""
+    owner, repo = repo_ctx
+    ctx = _setup_ss_design(
+        gh_live, owner, repo, sandbox,
+        _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, subsystem_issue_factory),
+        commit_file, pr_body=SUBSYSTEM_PR_BODY_TEMPLATE,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
+    )
+
+    # 実行: インターフェース確定報告（確認:subsystem-conductor 付与）を待つ
+    def _reported():
+        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=ctx["pr"].number).parsed_data
+        labels = {label.name for label in data.labels}
+        if "確認:subsystem-conductor" not in labels:
+            return None
+        comments = gh_live.rest.issues.list_comments(
+            owner=owner, repo=repo, issue_number=ctx["pr"].number
+        ).parsed_data
+        reports = [c for c in comments if "> to: @subsystem-conductor" in (c.body or "")]
+        return (data, reports) if reports else None
+
+    data, reports = wait_until(
+        _reported, timeout_sec=2400, message="インターフェース確定報告（確認:subsystem-conductor 付与）"
+    )
+
+    # 検証: インターフェース定義が commit され、確認:architect は保持されている（設計続行中）
+    paths = _design_paths(gh_live, owner, repo, ctx["subsystem_branch"])
+    assert [p for p in paths if p.startswith("docs/wiki/設計図/インターフェース定義/バックエンド/")], (
+        f"インターフェース定義が commit されていない: {paths}"
+    )
+    assert "確認:architect" in {label.name for label in data.labels}, (
+        "確認:architect が除去されている（設計は続行中）"
+    )
+
+    # 検証: 中間報告が未 Resolve のまま投稿されている
+    assert not server._is_minimized(reports[-1].node_id), "インターフェース確定報告が Resolve されている"
+
+
+def test_normal_when_bounced(
+    monitor, gh_live, repo_ctx, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until,
+):
+    """worker の差し戻しを受けた設計修正と再開指示を実環境で確認する（正常系・差し戻しからの設計修正）。"""
+    owner, repo = repo_ctx
+    ctx = _setup_ss_design(
+        gh_live, owner, repo, sandbox,
+        _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, subsystem_issue_factory),
+        commit_file, pr_body=SUBSYSTEM_PR_BODY_TEMPLATE,
+    )
+    # 準備: 設計確定済みの状態（設計 Wiki が subsystem ブランチにある）を再現する
+    commit_file(
+        ctx["subsystem_branch"], CURRENT_MODULE_PATH, CURRENT_MODULE_MD, "docs: モジュール構成を追加"
+    )
+    seed = gh_live.rest.repos.get_branch(
+        owner=owner, repo=repo, branch=ctx["subsystem_branch"]
+    ).parsed_data.commit.sha
+    # 準備: tester の差し戻し報告 → 確認ラベル付与（起動トリガー）
+    bounce = gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, body=BOUNCE_REPORT
+    ).parsed_data
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
+    )
+
+    # 実行: 設計修正 → tester への再開指示を待つ（途中のユーザー確認ゲートには承認で応答する）
+    def _resumed():
+        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=ctx["pr"].number).parsed_data
+        labels = {label.name for label in data.labels}
+        if "確認:tester" in labels and "確認:architect" not in labels:
+            return ("done", data)
+        return ("gate", data) if "議論中" in labels and data.assignees else None
+
+    for _ in range(MAX_ROUNDS):
+        kind, data = wait_until(_resumed, timeout_sec=1800, message="設計修正の承認ゲート または 再開指示")
+        if kind == "done":
+            break
+        try:
+            gh_live.rest.issues.remove_label(
+                owner=owner, repo=repo, issue_number=ctx["pr"].number, name="議論中"
+            )
+        except RequestFailed:
+            pass
+        for assignee in data.assignees:
+            gh_live.rest.issues.remove_assignees(
+                owner=owner, repo=repo, issue_number=ctx["pr"].number, assignees=[assignee.login]
+            )
+    else:
+        raise AssertionError("設計修正から tester への再開指示に到達しなかった")
+
+    # 検証: 設計 Wiki の修正 commit が積まれている
+    compare = gh_live.rest.repos.compare_commits(
+        owner=owner, repo=repo, basehead=f"{seed}...{ctx['subsystem_branch']}"
+    ).parsed_data
+    changed = [f.filename for f in (compare.files or [])]
+    assert [f for f in changed if f.startswith("docs/wiki/設計図/")], (
+        f"設計 Wiki の修正 commit が積まれていない: {changed}"
+    )
+
+    # 検証: 差し戻し報告スレッドに再開指示が返信追記され、未解決のまま残っている
+    thread = next(
+        c for c in gh_live.rest.issues.list_comments(
+            owner=owner, repo=repo, issue_number=ctx["pr"].number
+        ).parsed_data if c.node_id == bounce.node_id
+    )
+    assert "> to: @tester" in (thread.body or ""), "再開指示が返信追記されていない"
+    assert not server._is_minimized(bounce.node_id), (
+        "差し戻し報告スレッドが Resolve されている（Resolve は差し戻し元 worker）"
+    )
+
+
+def test_normal_when_reverse(
+    monitor, gh_live, repo_ctx, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until,
+):
+    """現状の設計書を入力にした SS 設計を実環境で確認する（正常系・リバースエンジニアリング）。"""
+    owner, repo = repo_ctx
+    ctx = _setup_ss_design(
+        gh_live, owner, repo, sandbox,
+        _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, subsystem_issue_factory),
+        commit_file, pr_body=SUBSYSTEM_PR_BODY_TEMPLATE, re_route=True,
+        base_designs={CURRENT_MODULE_PATH: CURRENT_MODULE_MD},
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
+    )
+
+    rounds = _drive_design(gh_live, owner, repo, ctx["pr"].number, wait_until, max_rounds=MAX_ROUNDS)
+    assert rounds >= len(DESIGN_TASK_LINES), (
+        f"設計ページごとの確認ゲートが足りない: {rounds} 回"
+    )
+
+    # 検証: 現状の設計書を起点にした差分（あるべき姿への変更）が積まれている
+    compare = gh_live.rest.repos.compare_commits(
+        owner=owner, repo=repo, basehead=f"{ctx['seed']}...{ctx['subsystem_branch']}"
+    ).parsed_data
+    changed = [f.filename for f in (compare.files or [])]
+    assert CURRENT_MODULE_PATH in changed, f"現状のモジュール構成が更新されていない: {changed}"
+
+    # 検証: 実装の物理名と対応づいている（現状の設計書にある物理名が残っている）
+    content = gh_live.rest.repos.get_content(
+        owner=owner, repo=repo, path=CURRENT_MODULE_PATH, ref=ctx["subsystem_branch"]
+    ).parsed_data
+    import base64
+
+    module_md = base64.b64decode(content.content).decode("utf-8")
+    assert "update_task" in module_md, "実装の物理名が設計書に残っていない"
+
+    # 検証: tester へ引き渡され、確認:architect が除去されている
+    labels = {
+        label.name for label in gh_live.rest.issues.get(
+            owner=owner, repo=repo, issue_number=ctx["pr"].number
+        ).parsed_data.labels
+    }
+    assert "確認:tester" in labels and "確認:architect" not in labels

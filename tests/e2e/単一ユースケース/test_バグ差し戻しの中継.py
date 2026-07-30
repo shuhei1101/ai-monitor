@@ -49,7 +49,7 @@ def _setup_tree(gh_live, owner, repo, epic_issue_factory, story_issue_factory, s
     return intake, epic, story, subsystem
 
 
-def test_normal_handover(
+def test_normal_when_handover(
     monitor, gh_live, repo_ctx, epic_issue_factory, story_issue_factory, subsystem_issue_factory, wait_until,
 ):
     """epic からのバグ差し戻しを該当 subsystem へ中継することを確認する（正常系・差し戻しの中継）。"""
@@ -96,7 +96,7 @@ def test_normal_handover(
     assert "議論中" not in label_names(story_now), "議論中 が付与されている（自動完了のはず）"
 
 
-def test_normal_completion(
+def test_normal_when_completion(
     monitor, gh_live, repo_ctx, epic_issue_factory, story_issue_factory, subsystem_issue_factory, wait_until,
 ):
     """subsystem の修正完了を親 epic へ中継し story を再クローズすることを確認する（正常系・修正完了の中継）。"""

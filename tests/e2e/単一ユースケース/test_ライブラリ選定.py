@@ -171,7 +171,7 @@ def _new_architect_comment(gh_live, owner, repo, number, seen: set[str]):
     return None
 
 
-def test_normal_with_poc(
+def test_normal_when_with_poc(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -224,7 +224,7 @@ def test_normal_with_poc(
         _cleanup_poc(gh_live, owner, repo, sandbox, ctx["subsystem"].number)
 
 
-def test_normal_reverify(
+def test_normal_when_reverify(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -284,7 +284,7 @@ def test_normal_reverify(
         _cleanup_poc(gh_live, owner, repo, sandbox, ctx["subsystem"].number)
 
 
-def test_normal_without_poc(
+def test_normal_when_without_poc(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -338,7 +338,7 @@ def test_normal_without_poc(
     assert server._is_minimized(report.node_id), "Wiki 反映報告が未 Resolve"
 
 
-def test_error_no_candidate(
+def test_error_when_no_candidate(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):
@@ -382,7 +382,7 @@ def test_error_no_candidate(
     assert "確認:architect" in label_names(data), "確認:architect が保持されていない"
 
 
-def test_error_escalate(
+def test_error_when_escalate(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
 ):

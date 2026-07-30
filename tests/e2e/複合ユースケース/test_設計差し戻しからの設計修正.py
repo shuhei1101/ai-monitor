@@ -121,7 +121,7 @@ def _assert_bounce_thread(thread_body: str, worker: str) -> None:
     assert SHA_PATTERN.search(after_first_reply), "修正 commit の ID が返信追記に含まれていない"
 
 
-def test_normal_test_bounce(
+def test_normal_when_test_bounce(
     monitor,
     gh_live,
     repo_ctx,
@@ -260,7 +260,7 @@ def test_normal_test_bounce(
     assert "議論中" not in _label_names(data), "議論中 が残っている"
 
 
-def test_normal_impl_bounce(
+def test_normal_when_impl_bounce(
     monitor,
     gh_live,
     repo_ctx,

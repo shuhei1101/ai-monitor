@@ -78,7 +78,7 @@ def _assert_handed_off(gh_live, owner, repo, system_number, pr, e2e_state_path) 
     assert not server._is_minimized(requests[-1].node_id), "依頼コメントが Resolve されている"
 
 
-def test_normal(
+def test_normal_when_new_project(
     monitor, gh_live, repo_ctx, system_issue_factory, wait_until, sandbox, e2e_state_path,
 ):
     """新規プロジェクトの構成要件確定と system Draft PR の作成を実環境で確認する（正常系）。"""
@@ -122,7 +122,7 @@ def test_normal(
         assert server._is_minimized(comment.node_id), f"自分宛コメントが未 Resolve: {comment.html_url}"
 
 
-def test_normal_missing_config(
+def test_normal_when_missing_config(
     monitor, gh_live, repo_ctx, system_issue_factory, wait_until, sandbox,
 ):
     """技術構成に触れていない入力での不足の洗い出しを実環境で確認する（正常系・構成の情報が不足）。"""
@@ -158,7 +158,7 @@ def test_normal_missing_config(
     )
 
 
-def test_normal_migration(
+def test_normal_when_migration(
     monitor, gh_live, repo_ctx, system_issue_factory, commit_file, wait_until, sandbox,
     e2e_state_path, master_baseline,
 ):

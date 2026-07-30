@@ -32,6 +32,7 @@ plugins/ai-monitor/inject/
 ```mermaid
 classDiagram
   direction LR
+  ドキュメント読み取り型 <|.. URL取得 : 実装
   メイン ..> Wiki再帰探索 : 全ページの収集
   Wiki再帰探索 ..> 目次表解析 : 行の抽出
   Wiki再帰探索 ..> ドキュメント読み取り型 : README 取得
@@ -58,6 +59,8 @@ classDiagram
     <<type>>
     +ドキュメント読み取り型(場所) str
   }
+  class URL取得 {
+  }
   class Wikiページ {
     <<pydantic>>
     +raw_url: str
@@ -68,6 +71,7 @@ classDiagram
   click Wiki再帰探索 href "#wiki-再帰探索"
   click 目次表解析 href "#目次表解析"
   click ドキュメント読み取り型 href "./URLドキュメント.py.md#ドキュメント読み取り型"
+  click URL取得 href "./URLドキュメント.py.md#url-取得"
   click Wikiページ href "#wiki-ページ"
 ```
 
