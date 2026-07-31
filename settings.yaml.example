@@ -91,11 +91,11 @@ projects:
     wiki_base: /mnt/c/Users/shuhe/repo/myapp/docs/wiki
 
 # エージェント別の起動設定
-# model の推奨は「頭を使う工程は claude-opus / 機械的な工程は sonnet」
+# model の推奨は「頭を使う工程は claude-opus / 機械的な工程は sonnet / 軽量な分類作業は haiku」
 # effort は low / medium / high / xhigh / max のいずれか（省略時は high）
 agents:
   intake-issue-triager:
-    model: claude-opus      # Issue の分解・種別判定
+    model: haiku            # Issue の分解・種別判定
     effort: high
   system-conductor:
     model: claude-opus      # 構成要件の整理・エピック分割
