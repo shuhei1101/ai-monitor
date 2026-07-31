@@ -112,12 +112,29 @@ PYTHONPATH=src uv run python -m ai_monitor.setup_labels --repo owner/name
 ### 2.6. モニターの起動
 
 ```bash
-PYTHONPATH=src uv run python -m ai_monitor.main
+PYTHONPATH=src uv run python -m ai_monitor
 ```
+
+起動すると監視役（`python -m ai_monitor.watchdog`）も一緒に立ち上がり、以降は互いの生存を見張る。
+片方が落ちたらもう片方が再起動し、Webhook へ通知する（一定期間内の再起動が上限に達したら通知だけになる。設定は `watchdog`）。
 
 `projects[]` を書き換えたときは再起動が必要。
 エージェントはモニターが tmux セッションとして起動する（手動でのスキル呼び出しは行わない）。
 どのフェーズページを起動プロンプトに載せるかは [`config/agent_phases.yaml`](./config/agent_phases.yaml) が持つ。
+
+Claude Code から tmux 上で起動・再起動する手順は [`CLAUDE.md`](./CLAUDE.md) にある。
+
+### 2.7. ログの見方
+
+モニターとエージェントのログは OTel Collector へ送っており、バックエンドの UI で検索する（手順は `docs/wiki/設計図/シナリオ/単一ユースケース/ログ確認.md`）。
+
+| 見たいもの | 場所 |
+| --- | --- |
+| モニター / エージェントのログ | OTel バックエンド（`ai_monitor.project` / `ai_monitor.agent` / `ai_monitor.number` 属性で絞る） |
+| uvicorn のアクセスログとプロセスの異常終了 | `data/monitor.log`（追記。再起動しても消えない） |
+| 監視役のログ | `data/watchdog.log` |
+| tmux セッションの画面 | `tmux capture-pane -p -t ai-monitor-server -S -100` |
+| 再起動の履歴 | `data/restarts.yaml` |
 
 ## 3. リンク
 
