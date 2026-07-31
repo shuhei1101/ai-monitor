@@ -283,6 +283,9 @@ def _process_one(
         session.session_name,
         "新規起動" if is_new else "再開",
     )
+    # 待機で古くなった生存時刻を送信の時点へ進める
+    # （更新しないと、再開直後のセッションを同じ周期のタイムアウト回収が処理中ラベル付きとみなして kill する）
+    registry.touch(session.session_name)
 
 
 def _sort_key(target: MonitorTarget, ranks: dict[str, int]) -> tuple[int, int]:

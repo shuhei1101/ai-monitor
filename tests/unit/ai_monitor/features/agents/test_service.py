@@ -230,6 +230,31 @@ def test_process_one_when_new_session(agent, io_mocks, registry, mon_project):
     assert '"$(cat ' in io_mocks.send_keys.call_args.args[1]
 
 
+def test_process_one_when_resumed(agent, io_mocks, registry, mon_project):
+    """再開送信で生存時刻が更新されることを確認する（正常系）。"""
+    # 準備: 待機で last_seen_at が古くなった既存セッション
+    stale = (datetime.now(timezone.utc) - timedelta(minutes=45)).astimezone().isoformat()
+    registry.register(
+        AgentSession(
+            session_name="ai-monitor-sandbox-35-intake-issue-triager",
+            project="sandbox",
+            agent_name="intake-issue-triager",
+            primary_number=35,
+            last_seen_at=stale,
+        )
+    )
+    target = _issue(35, labels=["確認:intake-issue-triager"])
+    # 実行
+    service._process_one(
+        mon_project, agent, target, open_targets=[target], registry=registry, telemetry=None, port=8765, ai_monitor_wiki_base=WIKI_BASE
+    )
+    # 検証: 送信後に生存時刻が現在時刻へ進む（同じ周期のタイムアウト回収に kill されない）
+    session = registry.find("sandbox", "intake-issue-triager", 35)
+    assert session.last_seen_at != stale
+    elapsed = datetime.now(timezone.utc) - datetime.fromisoformat(session.last_seen_at)
+    assert elapsed < timedelta(minutes=1)
+
+
 def test_build_launch_env(mon_project, agent):
     """環境変数の組み立てを確認する（正常系）。"""
     # 準備

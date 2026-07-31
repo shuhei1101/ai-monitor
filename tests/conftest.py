@@ -248,6 +248,7 @@ def mon_settings(mon_project):
         telemetry=None,
         notifies=[],
         ai_monitor_wiki_base="https://example.com/ai-monitor-wiki",
+        ai_monitor_repo="shuhei1101/ai-monitor",
     )
 
 
@@ -256,10 +257,10 @@ def notify():
     """契機通知のスタブを返す（呼び出しを記録する）。"""
     from ai_monitor.features.notify.types import SendResult
 
-    calls: list[tuple[str, str, str]] = []
+    calls: list[tuple[str, str, str, str | None, int | None]] = []
 
-    def _notify(event, title, body):
-        calls.append((event, title, body))
+    def _notify(event, title, body, *, repo=None, number=None):
+        calls.append((event, title, body, repo, number))
         return SendResult(sent=True)
 
     _notify.calls = calls

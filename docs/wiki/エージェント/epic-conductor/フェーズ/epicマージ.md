@@ -28,6 +28,15 @@ MCP `merge_pr` を呼ぶ:
 続けて MCP `worktree_remove` を呼ぶ:
 - `branch`: epic ブランチ
 
+### epic Issue の close
+
+MCP `close` を呼ぶ:
+- `number`: $issue_number
+- `is_pr`: false
+- `reason`: `completed`
+
+最終マージではモニターがこの close を検知して配下のセッションを一括解放するため、通常マージ / 最終マージのどちらでも実行する。
+
 ### 監視面の除去と上位への完了報告
 
 判定に応じて共通ルール『最終マージの判定』の「判定後にやること」を実行する。

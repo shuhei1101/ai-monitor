@@ -75,6 +75,8 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | Issue 再オープン | MCP ツール | `mcp/server.py` | 関数 | [`reopen_issue`](#issue再オープン) | クローズ済み Issue を再オープン | バグ差し戻し用 |
 | 子 Issue 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_child_issue`](#子issue作成) | Sub-issue リンク付きで子 Issue を作成 | - |
 | 新規 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_intake_issue`](#新規issue起票) | 親を持たない intake Issue を作成 | 全エージェントが使う。ラベルは固定 |
+| 不具合 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_defect_issue`](#不具合issue起票) | ai-monitor 自身のリポジトリへ不具合 Issue を作成 | 全エージェントが使う。assignee = 認証ユーザー・ラベルは `AI不具合報告` のみ |
+| 不具合本文組立 | 内部処理 | `mcp/server.py` | 関数 | [`_build_defect_body`](#不具合本文組立) | 報告元 / 該当ページ / 事象 / 回避策を定型セクションに組み立てる | 不具合 Issue 起票からのみ使う |
 | Draft PR 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_draft_pr`](#draftpr作成) | base 明示で Draft PR を作成 | Stacked PR 対応 |
 | PR Ready 化 | MCP ツール | `mcp/server.py` | 関数 | [`mark_pr_ready`](#pr_ready化) | Draft を解除 | - |
 | PR マージ | MCP ツール | `mcp/server.py` | 関数 | [`merge_pr`](#prマージ) | 既定 squash + ブランチ削除でマージ | - |
@@ -397,7 +399,7 @@ classDiagram
 
 ```mermaid
 classDiagram
-  direction TD
+  direction LR
   コメント一括Resolve ..> Resolve実行 : スレッドを畳む
   宛先コメント一覧 ..> コメント解析 : ブロックの抽出
   宛先コメント一覧 ..> Resolved状態取得 : 未解決の絞り込み
@@ -458,7 +460,7 @@ classDiagram
 
 ```mermaid
 classDiagram
-  direction TD
+  direction LR
   ラベル追加 ..> ラベル再取得 : 操作後の一覧
   ラベル除去 ..> ラベル再取得 : 操作後の一覧
   フェーズ遷移 ..> ラベル再取得 : 操作後の一覧
@@ -527,11 +529,12 @@ classDiagram
 
 ```mermaid
 classDiagram
-  direction TD
+  direction LR
   IssuePR情報取得 --> イシュースナップショット : 返す
   IssuePR検索 --> 検索結果 : 返す
   子Issue作成 ..> IssuePR情報取得 : 親の確認
   新規Issue起票 ..> ラベル追加 : intake ラベルの付与
+  不具合Issue起票 ..> 不具合本文組立 : 定型本文の組み立て
 
   class IssuePR情報取得["Issue・PR情報取得"] {
     <<function>>
@@ -565,6 +568,14 @@ classDiagram
     <<function>>
     +新規Issue起票(タイトル, 本文) dict
   }
+  class 不具合Issue起票 {
+    <<function>>
+    +不具合Issue起票(タイトル, 本文, エージェント名, 番号, 該当ページ一覧, 回避策) dict
+  }
+  class 不具合本文組立 {
+    <<function>>
+    +不具合本文組立(プロジェクト名, エージェント名, 番号, 該当ページ一覧, 本文, 回避策) str
+  }
   class 検索結果 {
     +番号: int
     +タイトル: str
@@ -584,6 +595,8 @@ classDiagram
   click Issue再オープン href "#issue再オープン"
   click 子Issue作成 href "#子issue作成"
   click 新規Issue起票 href "#新規issue起票"
+  click 不具合Issue起票 href "#不具合issue起票"
+  click 不具合本文組立 href "#不具合本文組立"
   click 検索結果 href "#検索結果"
   click イシュースナップショット href "#イシュースナップショット"
   click ラベル追加 href "#ラベル追加"
@@ -627,7 +640,7 @@ classDiagram
 
 ```mermaid
 classDiagram
-  direction TD
+  direction LR
   worktree作成 ..> worktreeパス解決 : 配置先の決定
   worktree作成 ..> ローカルブランチ存在確認 : 新規 / 既存の分岐
   worktree作成 ..> git実行入口 : git の実行
@@ -991,6 +1004,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 #### 処理
 
 1. `comment_node_id` から既存コメントの現在本文を取得する
+   - 本文を取れない場合、`ValueError` を投げる（追記対象が会話欄のコメントでない）
 2. `format` の `type` に応じて本文（表を含む場合は表も）を組み立てる（[本文レンダリング](#本文レンダリング)）
 3. 既存本文の末尾が区切り線かを判定する（[区切り線判定](#区切り線判定)）
 4. 追記ブロックを組み立てる（[定型ブロック組立](#定型ブロック組立)・`needs_separator` は 3 の判定の否定）
@@ -1002,6 +1016,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 | --- | --- | --- | --- |
 | `RequestFailed` | API 応答が 4xx / 5xx（対象不存在・認証エラー 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
 | `GraphQLFailed` | GraphQL がエラーを返す（node_id 不正 等） | `errors[].message` | - |
+| `ValueError` | 照会は成功したが本文を取れない（インライン指摘等、会話欄のコメント以外の node_id） | 対象の node_id + インライン指摘は新規投稿で行う旨 | 照会クエリが `IssueComment` だけを対象にしているため空の node が返る |
 
 #### 単体テスト
 
@@ -1010,6 +1025,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 | `test_reply_comment` | 正常 | 末尾が区切り線でない本文への追記 | 末尾が通常の文の既存コメント | githubkit | 先頭 `---` + 宛先ヘッダー付きで追記され、末尾が `---` で終わる | ユーザーが書き足した後 |
 | `test_reply_comment_when_ends_with_separator` | 正常 | 末尾が区切り線の本文への追記 | 末尾が `---` の既存コメント | githubkit | 先頭に `---` を足さずに追記され、境目の `---` が 1 本だけになる | 本ツールが投稿した後 |
 | `test_reply_comment_when_commits_format` | 正常 | 表付きの追記 | `format` が `CommitsFormat` | githubkit | 追記ブロックの末尾（区切り線の手前）に表が入る | コメント投稿と同じ書式 |
+| `test_reply_comment_when_not_issue_comment` | 異常 | 会話欄のコメント以外の node_id | 照会が本文を含まない node を返す | githubkit | `ValueError` が送出され、コメント更新 API が呼ばれない | 例外表「照会は成功したが本文を取れない」に対応 |
 
 #### 疎通テスト
 
@@ -2080,6 +2096,155 @@ CreatedIssueResult(issue_number=58, url="https://github.com/.../issues/58", pare
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
 | `test_ext_create_intake_issue` | GitHub | 親なし起票 | 固定ラベルの付与 | 副作用: sandbox に Issue 作成（テスト後クローズ） |
+
+---
+
+### 不具合Issue起票
+> 物理名: `create_defect_issue`<br>
+> 種別: 関数
+
+ai-monitor 自身のリポジトリへ不具合 Issue を作成する。
+
+エージェントが手順書どおりに進められなかった事象を、ユーザーの承認待ちの状態で残すためのもの。
+起票先は呼び出し元セッションのプロジェクトではなく、[全体設定](../モニター/エージェント管理.py.md#全体設定)の `ai_monitor_repo` で解決する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| タイトル | `title` | `str` | ✅ | - | 不具合の要約 | 1 行で事象が分かるもの |
+| 本文 | `body` | `str` | ✅ | - | 事象と再現の経緯 | 定型セクションは本関数が組み立てる |
+| エージェント名 | `agent_name` | `str` | ✅ | - | 報告元のエージェント名 | `@` は不要 |
+| 番号 | `number` | `int` | ✅ | - | 報告元の Issue / PR 番号 | 担当プロジェクト側の番号 |
+| 該当ページ一覧 | `source_pages` | `list[str]` | - | `[]` | 該当する Wiki ページのパス | 1 事象が複数ページにまたがる場合に並べる |
+| 回避策 | `workaround` | `str \| None` | - | `None` | 取った回避策 | `None` = そのターンで作業を続けられなかった |
+
+引数例:
+
+```python
+create_defect_issue(
+    title="subsystemマージ の作業完了報告が監視面除去の後で失敗する",
+    body="監視面除去を先に実行すると、処理中ラベルの付いた PR 番号で台帳を解決できず失敗する。",
+    agent_name="subsystem-conductor",
+    number=1179,
+    source_pages=["Claudeハーネス/共通ルール/最終マージの判定.md"],
+    workaround="主番号で作業完了報告を出し、PR の処理中ラベルは フェーズ遷移 で除去した。",
+)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`CreatedIssueResult`](#issue-作成結果) | 作成した Issue の番号 / URL | `parent_issue_number` は `None` |
+
+戻り値例:
+
+```python
+CreatedIssueResult(issue_number=214, url="https://github.com/.../issues/214", parent_issue_number=None)
+```
+
+#### 処理
+
+1. [全体設定](../モニター/エージェント管理.py.md#全体設定)の `ai_monitor_repo` から起票先の owner / repo を求める
+   - 未設定の場合、`ValueError` を投げる（設定キー名をメッセージに含める）
+2. 認証ユーザーのログイン名を求める（[ログイン解決](#ログイン解決)）
+3. 報告元・該当ページ・事象・回避策を定型セクションに組み立てる（[不具合本文組立](#不具合本文組立)）
+4. REST で Issue を作成する
+   - assignee は 2 のログイン名 1 件のみ・ラベルは[ラベル設定](../モニター/エージェント管理.py.md#ラベル設定)の `ai_defect_report` 1 件のみ
+   - 確認ラベルは付けない（ユーザーが承認して付けるまで改修フローに乗せない）
+   - `[WARNING]` 不具合が報告された（`project` / `agent_name` / `number` / `issue_number` / `source_pages` / 回避策の有無）
+5. 契機 `defect_report` で通知を送る（[契機通知](../モニター/通知.py.md#契機通知)）
+   - 承認するまで Issue が動かないため、溜めずにその場で知らせる
+   - 送出に失敗しても起票は成功として扱う（通知は副次的な経路）
+6. `CreatedIssueResult` を返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `ValueError` | 全体設定に起票先のリポジトリが無い | 必要な設定キー名 | Issue の作成 API は呼ばない |
+| `RequestFailed` | API 応答が 4xx / 5xx（認証エラー 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_create_defect_issue` | 正常 | 起票先と assignee / ラベル | `ai_monitor_repo` 設定あり + 呼び出し元は別プロジェクト | githubkit | `ai_monitor_repo` の owner / repo で起票され、assignee が認証ユーザー 1 名・ラベルが `AI不具合報告` 1 件 | 起票先の取り違えを検出する |
+| `test_create_defect_issue_when_notified` | 正常 | 契機通知の送出 | 送出先を 1 件設定 | githubkit / Webhook 送出 | 契機 `defect_report` で通知が送られ、本文に起票した Issue 番号が入る | - |
+| `test_create_defect_issue_when_notify_failed` | 正常 | 通知の失敗 | 送出が失敗を返す | githubkit / Webhook 送出 | 起票は成功として `CreatedIssueResult` を返す | 通知は副次的な経路 |
+| `test_create_defect_issue_when_repo_unset` | 異常 | 起票先の未設定 | `ai_monitor_repo` を設定しない | githubkit | `ValueError` が送出され、Issue 作成 API が呼ばれない | 例外表「全体設定に起票先のリポジトリが無い」に対応 |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_create_defect_issue` | GitHub | assignee + ラベル付きの起票 | Issue 作成 API / assignee とラベルの設定 | 副作用: sandbox に Issue 作成（テスト後クローズ） |
+
+---
+
+### 不具合本文組立
+> 物理名: `_build_defect_body`<br>
+> 種別: 関数
+
+不具合 Issue の本文を定型セクションに組み立てる。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト名 | `project_name` | `str` | ✅ | - | 報告元のプロジェクト名 | 呼び出し元セッションのプロジェクト |
+| リポジトリ | `repo` | `str` | ✅ | - | 報告元のリポジトリ（`owner/name`） | 対象行のリンク表記に使う |
+| エージェント名 | `agent_name` | `str` | ✅ | - | 報告元のエージェント名 | - |
+| 番号 | `number` | `int` | ✅ | - | 報告元の Issue / PR 番号 | - |
+| 本文 | `body` | `str` | ✅ | - | 事象と再現の経緯 | そのまま事象のセクションに入る |
+| 該当ページ一覧 | `source_pages` | `list[str]` | ✅ | - | 該当する Wiki ページのパス | 空なら該当ページのセクションを出さない |
+| 回避策 | `workaround` | `str \| None` | ✅ | - | 取った回避策 | `None` なら中断した旨を出す |
+
+引数例:
+
+```python
+_build_defect_body(
+    "sandbox", "shuhei1101/ai-monitor-e2e", "subsystem-conductor", 1179,
+    "監視面除去を先に実行すると失敗する。", ["Claudeハーネス/共通ルール/最終マージの判定.md"], None,
+)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `str` | 組み立てた Issue 本文 | 報告元 → 該当ページ → 事象 → 回避策 の順 |
+
+戻り値例:
+
+```python
+"## 報告元\n\n| 項目 | 値 |\n| --- | --- |\n| プロジェクト | sandbox |\n...\n## 回避策\n\nなし（作業を中断した）\n"
+```
+
+#### 処理
+
+1. 報告元のセクションを作る（プロジェクト名 / エージェント名 / `{repo}#{番号}` の 3 行表）
+2. 該当ページのセクションを作る
+   - 該当ページ一覧が空の場合、セクションごと出さない
+   - 空でない場合、各パスをコード書式の箇条書きで並べる
+3. 事象のセクションに本文をそのまま入れる
+4. 回避策のセクションを作る
+   - 回避策がある場合、その内容を入れる
+   - `None` の場合、回避できず作業を中断した旨を入れる
+5. 各セクションを空行で連結して返す
+
+#### 例外
+
+なし
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_build_defect_body` | 正常 | 全セクションの組み立て | 該当ページ 2 件 + 回避策あり | なし | 報告元 / 該当ページ / 事象 / 回避策 が順に並び、該当ページが箇条書きになる | - |
+| `test_build_defect_body_when_no_source_pages` | 正常 | 該当ページなし | 該当ページ一覧が空 | なし | 該当ページのセクションが出ず、他のセクションは変わらない | - |
+| `test_build_defect_body_when_no_workaround` | 正常 | 回避策なし | 回避策が `None` | なし | 回避策のセクションに作業を中断した旨が入る | - |
 
 ---
 

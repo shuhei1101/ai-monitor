@@ -36,11 +36,15 @@ notifies:
       user_gate: true
       timeout_kill: true
       epic_done: true
+      defect_report: true
 
 # ai-monitor 自身の Wiki の場所（フェーズページ・共通対応表・共通ルールの取得元）
 # raw URL（https:// 始まり）またはローカル絶対パスのどちらでもよい
 # ローカルを指す場合は worktree ではなくメインリポジトリを指定する
 ai_monitor_wiki_base: /mnt/c/Users/shuhe/repo/ai-monitor/docs/wiki
+
+# ai-monitor 自身の GitHub リポジトリ
+ai_monitor_repo: shuhei1101/ai-monitor
 
 # 監視対象プロジェクト（複数可）
 # wiki_base は ai_monitor_wiki_base と同じく raw URL / ローカル絶対パスの両対応

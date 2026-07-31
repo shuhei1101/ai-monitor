@@ -64,6 +64,7 @@ def test_build_label_specs(tmp_constants):
         "# コメント行\n"
         '\nAI_MONITOR_LABEL_IN_DISCUSSION="議論中"\n'
         'AI_MONITOR_LABEL_REVERSE_ENGINEERING="リバースエンジニアリング"\n'
+        'AI_MONITOR_LABEL_AI_DEFECT_REPORT="AI不具合報告"\n'
         'AI_MONITOR_LABEL_LAYER_EPIC="layer:epic"\n'
         'AI_MONITOR_LABEL_TYPE_FEAT="type:feat"\n'
         'AI_MONITOR_LABEL_PRIORITY_URGENT="優先度:急ぎ"\n'
@@ -78,6 +79,7 @@ def test_build_label_specs(tmp_constants):
     assert set(by_name) == {
         "議論中",
         "リバースエンジニアリング",
+        "AI不具合報告",
         "layer:epic",
         "type:feat",
         "優先度:急ぎ",
@@ -95,6 +97,7 @@ def test_build_label_specs(tmp_constants):
     assert by_name["優先度:急ぎ"].color == styles.color_priority
     assert by_name["議論中"].color == styles.color_in_discussion
     assert by_name["リバースエンジニアリング"].color == styles.color_reverse_engineering
+    assert by_name["AI不具合報告"].color == styles.color_ai_defect_report
     # 名前の昇順で返る
     assert [spec.name for spec in specs] == sorted(by_name)
 

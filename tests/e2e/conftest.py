@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -20,6 +21,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # モニターを全テストで共有するための作業ディレクトリ（xdist の worker 間で共有する）
 SHARED_DIR = REPO_ROOT / ".e2e"
+
+# 実行を打ち切るための合図ファイル（作成すると待機中の全テストが次の周期で失敗する）
+ABORT_PATH = SHARED_DIR / "abort"
 
 
 def pytest_addoption(parser):
@@ -58,6 +62,8 @@ def pytest_sessionstart(session):
             pass
         pid_path.unlink()
     (SHARED_DIR / "monitor.lock").unlink(missing_ok=True)
+    # 前回の中断で残った合図ファイルを消す（残っていると今回の待機が即座に打ち切られる）
+    ABORT_PATH.unlink(missing_ok=True)
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -75,6 +81,7 @@ def pytest_sessionfinish(session, exitstatus):
             pass
         pid_path.unlink()
     (SHARED_DIR / "monitor.lock").unlink(missing_ok=True)
+    ABORT_PATH.unlink(missing_ok=True)
 
 
 @pytest.fixture(scope="session")
@@ -101,6 +108,26 @@ def sandbox(e2e_settings_path, monkeypatch) -> dict:
 
 
 @pytest.fixture
+def broken_phase_page(ai_monitor_wiki):
+    """複製した Wiki のページを一時的に差し替える factory（テスト後に元へ戻す）。
+
+    エージェントが手順どおりに進められない状況を決定的に作るために使う。
+    実クローンではなく複製を書き換えるので、リポジトリの作業ツリーは汚れない。
+    """
+    saved: list[tuple[Path, str]] = []
+
+    def _break(relative_path: str, content: str) -> str:
+        path = ai_monitor_wiki / relative_path
+        saved.append((path, path.read_text(encoding="utf-8")))
+        path.write_text(content, encoding="utf-8")
+        return relative_path
+
+    yield _break
+    for path, original in reversed(saved):
+        path.write_text(original, encoding="utf-8")
+
+
+@pytest.fixture
 def gh_live():
     """sandbox 向けの実 githubkit クライアントを返す。"""
     return server._get_client()
@@ -120,7 +147,19 @@ def e2e_state_path() -> Path:
 
 
 @pytest.fixture(scope="session")
-def monitor(e2e_settings_path, e2e_state_path):
+def ai_monitor_wiki(e2e_settings_path) -> Path:
+    """ai-monitor の Wiki を `.e2e/wiki` へ複製し、そのパスを返す。
+
+    エージェントに欠けた手順書を読ませるテスト（不具合報告）が手順書を書き換えるため、
+    実クローンではなく複製を読ませる。
+    起動役だけが複製し、相乗り側は出来上がったものを使う。
+    """
+    source = Path(yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8"))["ai_monitor_wiki_base"])
+    return SHARED_DIR / "wiki" if source.is_dir() else source
+
+
+@pytest.fixture(scope="session")
+def monitor(e2e_settings_path, e2e_state_path, ai_monitor_wiki):
     """実モニター（FastAPI + ポーリングループ）をテスト全体で 1 本だけ共有する。
 
     1 プロセスが全対象を監視する本番と同じ構成にすることで、テストを並列実行できる。
@@ -144,14 +183,20 @@ def monitor(e2e_settings_path, e2e_state_path):
             pytest.fail(f"ポート {port} がテスト管理外のプロセスに占有されている")
         except OSError:
             pass
+        # 手順書を書き換えるテストのために、実クローンではなく複製を読ませる
+        source = Path(yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8"))["ai_monitor_wiki_base"])
+        if source.is_dir():
+            shutil.rmtree(ai_monitor_wiki, ignore_errors=True)
+            shutil.copytree(source, ai_monitor_wiki)
         env = os.environ.copy()
         env["AI_MONITOR_ENV"] = "e2e"
         env["STATE_PATH"] = str(e2e_state_path)
         env["PYTHONPATH"] = str(REPO_ROOT / "src")
         # 起動元セッションの環境変数が設定ファイルを上書きしないようにする
         # （SessionStart フックが同名の変数をエージェント向けに展開している）
-        for name in ("AI_MONITOR_WIKI_BASE", "WIKI_BASE", "PORT"):
+        for name in ("WIKI_BASE", "PORT"):
             env.pop(name, None)
+        env["AI_MONITOR_WIKI_BASE"] = str(ai_monitor_wiki)
         with log_path.open("w", encoding="utf-8") as log:
             proc = subprocess.Popen(
                 ["uv", "run", "python", "-c", "from ai_monitor.main import main; main()"],
@@ -172,8 +217,8 @@ def monitor(e2e_settings_path, e2e_state_path):
     yield
 
 
-def _close_issue_tree(gh_live, owner: str, repo: str, number: int, collected: list[int]) -> None:
-    """Sub-issue を再帰的にたどって子から順に not_planned でクローズし、番号を collected に積む。
+def _collect_issue_tree(gh_live, owner: str, repo: str, number: int, collected: list[int]) -> None:
+    """Sub-issue を再帰的にたどって子から順に番号を collected に積む。
 
     エージェントが起票した子孫 Issue は factory の管理外に生まれるため、親から辿って回収する。
     """
@@ -182,42 +227,67 @@ def _close_issue_tree(gh_live, owner: str, repo: str, number: int, collected: li
     except RequestFailed:
         subs = []
     for sub in subs:
-        _close_issue_tree(gh_live, owner, repo, sub.number, collected)
+        _collect_issue_tree(gh_live, owner, repo, sub.number, collected)
     collected.append(number)
-    try:
-        gh_live.rest.issues.update(
-            owner=owner, repo=repo, issue_number=number, state="closed", state_reason="not_planned"
-        )
-    except RequestFailed:
-        pass
 
 
-def _close_prs_for(gh_live, owner: str, repo: str, numbers: list[int]) -> list[str]:
-    """指定番号のいずれかを本文で参照している open PR を閉じてリモートブランチを削除する。
-
-    閉じた PR の番号は numbers に積む（後段の tmux セッション掃除で使うため）。
-    判定は呼び出し時点の番号一覧で行い、積んだ PR 番号は判定に混ぜない。
-    """
-    branches: list[str] = []
+def _find_prs_for(gh_live, owner: str, repo: str, numbers: list[int]) -> list:
+    """指定番号のいずれかを本文で参照している open PR を返す。"""
     try:
         pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
     except RequestFailed:
-        return branches
-    targets = list(numbers)
+        return []
+    return [pr for pr in pulls if any(f"#{number}" in (pr.body or "") for number in numbers)]
+
+
+def _find_reported_issues_for(gh_live, owner: str, repo: str, numbers: list[int]) -> list[int]:
+    """指定番号のいずれかを本文で参照している open Issue の番号を返す。
+
+    エージェントが不具合報告で起票した Issue は親を持たず PR でもないため、
+    Issue ツリーからも紐づく PR からも辿れない。報告元の番号を手掛かりに回収する。
+    """
+    try:
+        listed = gh_live.rest.issues.list_for_repo(
+            owner=owner, repo=repo, state="open", per_page=100
+        ).parsed_data
+    except RequestFailed:
+        return []
+    return [
+        data.number
+        for data in listed
+        if data.pull_request is None
+        and data.number not in numbers
+        and any(f"#{number}" in (data.body or "") for number in numbers)
+    ]
+
+
+def _close_prs(gh_live, owner: str, repo: str, pulls: list) -> None:
+    """PR をクローズする。"""
     for pr in pulls:
-        if not any(f"#{number}" in (pr.body or "") for number in targets):
-            continue
-        numbers.append(pr.number)
-        branches.append(pr.head.ref)
         try:
             gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
         except RequestFailed:
             pass
+
+
+def _delete_branches(gh_live, owner: str, repo: str, branches: list[str]) -> None:
+    """リモートブランチを削除する。"""
+    for ref in branches:
         try:
-            gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
+            gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{ref}")
         except RequestFailed:
             pass
-    return branches
+
+
+def _close_issues(gh_live, owner: str, repo: str, numbers: list[int]) -> None:
+    """収集済みの Issue を not_planned でクローズする。"""
+    for number in numbers:
+        try:
+            gh_live.rest.issues.update(
+                owner=owner, repo=repo, issue_number=number, state="closed", state_reason="not_planned"
+            )
+        except RequestFailed:
+            pass
 
 
 def _remove_worktrees(local_path: str, branches: list[str]) -> None:
@@ -240,6 +310,31 @@ def _kill_sessions(sandbox: dict, numbers: list[int]) -> None:
             subprocess.run(["tmux", "kill-session", "-t", name], capture_output=True, text=True, check=False)
 
 
+def _cleanup(gh_live, owner: str, repo: str, sandbox: dict, root_numbers: list[int]) -> None:
+    """テストが作った Issue ツリーと紐づく PR を、稼働中のエージェントを止めてから片付ける。
+
+    セッションの kill を close より先に行う。
+    close 済みの PR は head が close 時点で固定されるため、まだ動いているエージェントが
+    その後に積んだ commit の行へインライン指摘を投稿すると 422 になる。
+    """
+    numbers: list[int] = []
+    for number in reversed(root_numbers):
+        _collect_issue_tree(gh_live, owner, repo, number, numbers)
+    pulls = _find_prs_for(gh_live, owner, repo, numbers)
+    numbers.extend(pr.number for pr in pulls)
+    # エージェントが起票した不具合報告は親を持たないので、報告元の番号から拾う
+    numbers.extend(_find_reported_issues_for(gh_live, owner, repo, numbers))
+    branches = [pr.head.ref for pr in pulls]
+    _kill_sessions(sandbox, numbers)
+    _close_prs(gh_live, owner, repo, pulls)
+    _close_issues(gh_live, owner, repo, numbers)
+    # kill から close までの隙間にポーリングが起動し直したセッションを掃除する
+    # （ブランチ削除も後に回す。止め損ねたエージェントが push し直していることがある）
+    _kill_sessions(sandbox, numbers)
+    _delete_branches(gh_live, owner, repo, branches)
+    _remove_worktrees(sandbox["local_path"], branches)
+
+
 @pytest.fixture
 def intake_issue_factory(gh_live, repo_ctx, sandbox):
     """確認ラベル付きの intake Issue を作成し、テスト後に子孫 Issue・PR・ブランチ・worktree・tmux セッションごと片付ける factory。
@@ -257,12 +352,7 @@ def intake_issue_factory(gh_live, repo_ctx, sandbox):
         return issue
 
     yield _create
-    cleanup_numbers: list[int] = []
-    for number in reversed(created):
-        _close_issue_tree(gh_live, owner, repo, number, cleanup_numbers)
-    branches = _close_prs_for(gh_live, owner, repo, cleanup_numbers)
-    _remove_worktrees(sandbox["local_path"], branches)
-    _kill_sessions(sandbox, cleanup_numbers)
+    _cleanup(gh_live, owner, repo, sandbox, created)
 
 
 @pytest.fixture
@@ -279,10 +369,7 @@ def issue_factory(gh_live, repo_ctx, sandbox):
         return issue
 
     yield _create
-    cleanup_numbers: list[int] = []
-    for number in reversed(created):
-        _close_issue_tree(gh_live, owner, repo, number, cleanup_numbers)
-    _kill_sessions(sandbox, cleanup_numbers)
+    _cleanup(gh_live, owner, repo, sandbox, created)
 
 
 @pytest.fixture
@@ -316,31 +403,7 @@ def epic_issue_factory(gh_live, repo_ctx, sandbox):
         return intake, epic
 
     yield _create
-    cleanup_numbers: list[int] = []
-    branches: list[str] = []
-    for pair in reversed(created):
-        # epic に紐づく open PR をクローズしてリモートブランチを削除する
-        try:
-            pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data
-        except RequestFailed:
-            pulls = []
-        for pr in pulls:
-            if f"#{pair['epic']}" not in (pr.body or ""):
-                continue
-            cleanup_numbers.append(pr.number)
-            branches.append(pr.head.ref)
-            try:
-                gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
-            except RequestFailed:
-                pass
-            try:
-                gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
-            except RequestFailed:
-                pass
-        # intake から子孫（epic → story → subsystem）を辿って子から順にクローズする
-        _close_issue_tree(gh_live, owner, repo, pair["intake"], cleanup_numbers)
-    _remove_worktrees(sandbox["local_path"], branches)
-    _kill_sessions(sandbox, cleanup_numbers)
+    _cleanup(gh_live, owner, repo, sandbox, [pair["intake"] for pair in created])
 
 
 @pytest.fixture
@@ -369,31 +432,7 @@ def story_issue_factory(gh_live, repo_ctx, sandbox):
         return story
 
     yield _create
-    cleanup_numbers: list[int] = []
-    branches: list[str] = []
-    for story_number in reversed(created):
-        # story に紐づく open PR をクローズしてリモートブランチを削除する
-        try:
-            pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data
-        except RequestFailed:
-            pulls = []
-        for pr in pulls:
-            if f"#{story_number}" not in (pr.body or ""):
-                continue
-            cleanup_numbers.append(pr.number)
-            branches.append(pr.head.ref)
-            try:
-                gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
-            except RequestFailed:
-                pass
-            try:
-                gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
-            except RequestFailed:
-                pass
-        # story から子孫（エージェントが起票した subsystem）を辿って子から順にクローズする
-        _close_issue_tree(gh_live, owner, repo, story_number, cleanup_numbers)
-    _remove_worktrees(sandbox["local_path"], branches)
-    _kill_sessions(sandbox, cleanup_numbers)
+    _cleanup(gh_live, owner, repo, sandbox, created)
 
 
 @pytest.fixture
@@ -479,37 +518,7 @@ def subsystem_issue_factory(gh_live, repo_ctx, sandbox):
         return subsystem
 
     yield _create
-    cleanup_numbers: list[int] = []
-    branches: list[str] = []
-    for subsystem_number in reversed(created):
-        # subsystem に紐づく open PR をクローズしてリモートブランチを削除する
-        try:
-            pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data
-        except RequestFailed:
-            pulls = []
-        for pr in pulls:
-            if f"#{subsystem_number}" not in (pr.body or ""):
-                continue
-            cleanup_numbers.append(pr.number)
-            branches.append(pr.head.ref)
-            try:
-                gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
-            except RequestFailed:
-                pass
-            try:
-                gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{pr.head.ref}")
-            except RequestFailed:
-                pass
-        # subsystem Issue を not_planned でクローズする
-        cleanup_numbers.append(subsystem_number)
-        try:
-            gh_live.rest.issues.update(
-                owner=owner, repo=repo, issue_number=subsystem_number, state="closed", state_reason="not_planned"
-            )
-        except RequestFailed:
-            pass
-    _remove_worktrees(sandbox["local_path"], branches)
-    _kill_sessions(sandbox, cleanup_numbers)
+    _cleanup(gh_live, owner, repo, sandbox, created)
 
 
 @pytest.fixture
@@ -532,12 +541,7 @@ def system_issue_factory(gh_live, repo_ctx, sandbox):
         return system
 
     yield _create
-    cleanup_numbers: list[int] = []
-    for system_number in reversed(created):
-        _close_issue_tree(gh_live, owner, repo, system_number, cleanup_numbers)
-    branches = _close_prs_for(gh_live, owner, repo, cleanup_numbers)
-    _remove_worktrees(sandbox["local_path"], branches)
-    _kill_sessions(sandbox, cleanup_numbers)
+    _cleanup(gh_live, owner, repo, sandbox, created)
 
 
 @pytest.fixture
@@ -592,13 +596,30 @@ def master_baseline(gh_live, repo_ctx):
     )
 
 
+def _abort_reason(nodeid: str) -> str | None:
+    """中断ファイルの指定が対象テストに当てはまれば理由を返す。"""
+    if not ABORT_PATH.exists():
+        return None
+    # 空なら実行中の全テストが対象。行があればテスト ID への部分一致で絞る
+    patterns = [line.strip() for line in ABORT_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not patterns:
+        return "全テスト指定"
+    matched = next((p for p in patterns if p in nodeid), None)
+    return f"指定 {matched!r} に一致" if matched else None
+
+
 @pytest.fixture
-def wait_until():
+def wait_until(request):
     """条件が真値を返すまでポーリングで待つ function fixture。"""
 
     def _wait(condition, *, timeout_sec: int, interval_sec: int = 15, message: str = ""):
         deadline = time.time() + timeout_sec
         while time.time() < deadline:
+            # 合図ファイルの指定が自分に当てはまればタイムアウトを待たずに失敗させる
+            # （通常の失敗として終わるので、fixture の後片付けがそのまま走る）
+            reason = _abort_reason(request.node.nodeid)
+            if reason:
+                pytest.fail(f"中断ファイル（{ABORT_PATH}・{reason}）により打ち切りました: {message}")
             # 長時間のポーリングでは一時的な通信断が起きるので、次の周期に回して待ち続ける
             # （githubkit は通信断を RequestError に包む。ステータス異常の RequestFailed は素通しする）
             try:

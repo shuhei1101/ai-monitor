@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Protocol
 
-# モニターが自分で検知して送る契機
-type NotifyEvent = Literal["rate_limit", "user_gate", "timeout_kill", "epic_done"]
+# ユーザーが気づくべき出来事の契機（モニターの検知と MCP ツールの処理から送る）
+type NotifyEvent = Literal["rate_limit", "user_gate", "timeout_kill", "epic_done", "defect_report"]
 
 # 送信先サービス（ペイロードのキーが変わる）
 type WebhookKind = Literal["discord", "slack"]
@@ -15,8 +15,20 @@ type WebhookKind = Literal["discord", "slack"]
 # 送信先は build_sender が束ねるため、本型は本文だけを受ける
 type SendMessage = Callable[[str], str]
 
-# 契機を検知した側が呼ぶ通知関数（設定と送出先は composition root で束ねる）
-type NotifyFn = Callable[[NotifyEvent, str, str], "SendResult"]
+class NotifyFn(Protocol):
+    """契機を検知した側が呼ぶ通知関数（設定と送出先は composition root で束ねる）。"""
+
+    def __call__(
+        self,
+        event: NotifyEvent,
+        title: str,
+        body: str,
+        *,
+        repo: str | None = None,
+        number: int | None = None,
+    ) -> "SendResult":
+        """契機と文面、対象（あれば）を渡して送出する。"""
+        ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -19,7 +19,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
 from ai_monitor.features.agents.types import Agent
-from ai_monitor.features.notify.service import build_targets, send_notification
+from ai_monitor.features.notify.service import build_targets, notify_event, send_notification
 from ai_monitor.features.notify.types import SendResult
 from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.integrations.github.labels import remove_label
@@ -573,6 +573,12 @@ def reply_comment(
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # 既存コメントの現在本文を取得する
     node = client.graphql(_COMMENT_BODY_QUERY, {"id": comment_node_id})["node"]
+    # 照会は IssueComment だけを対象にしているため、インライン指摘等は本文のない node が返る
+    if not node or "body" not in node:
+        raise ValueError(
+            f"会話欄のコメントではないため追記できません: {comment_node_id}"
+            "（インライン指摘への指摘は create_review_comment で新規投稿する）"
+        )
     # format の type に応じて本文（表を含む場合は表も）を組み立てる
     body = _render_format(format)
     # 既存本文が区切り線で終わっていなければ、追記ブロックの先頭に --- を足す
@@ -967,6 +973,95 @@ def create_child_issue(
     )
 
 
+def _build_defect_body(
+    project_name: str,
+    repo: str,
+    agent_name: str,
+    number: int,
+    body: str,
+    source_pages: list[str],
+    workaround: str | None,
+) -> str:
+    """不具合 Issue の本文を定型セクションに組み立てる。"""
+    # 報告元（どのプロジェクトのどの対象で起きたか）
+    sections = [
+        "## 報告元\n\n"
+        "| 項目 | 値 |\n| --- | --- |\n"
+        f"| プロジェクト | {project_name} |\n"
+        f"| エージェント | {agent_name} |\n"
+        f"| 対象 | {repo}#{number} |"
+    ]
+    # 該当ページは特定できないことがあるので、空ならセクションごと出さない
+    if source_pages:
+        listed = "\n".join(f"- `{page}`" for page in source_pages)
+        sections.append(f"## 該当ページ\n\n{listed}")
+    sections.append(f"## 事象\n\n{body}")
+    # 回避策の有無がそのまま「ワークフローが止まっているか」を表す
+    if workaround:
+        sections.append(f"## 回避策\n\n{workaround}")
+    else:
+        sections.append("## 回避策\n\nなし（回避できず作業を中断した）")
+    return "\n\n".join(sections) + "\n"
+
+
+@_log_tool_call
+def create_defect_issue(
+    title: str,
+    body: str,
+    agent_name: str,
+    number: int,
+    source_pages: list[str] | None = None,
+    workaround: str | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
+    label_settings: LabelSettings,
+) -> CreatedIssueResult:
+    """ai-monitor 自身のリポジトリへ不具合 Issue を作成する。"""
+    # 起票先は呼び出し元セッションのプロジェクトではなく設定で決まる
+    if not settings.ai_monitor_repo:
+        raise ValueError("不具合 Issue の起票先が未設定です: settings.yaml の ai_monitor_repo を設定してください")
+    owner, repo = settings.ai_monitor_repo.split("/", 1)
+    project = _resolve_project(ctx, projects=settings.projects)
+    # 承認する相手が常にユーザーなので assignee は認証ユーザーで固定する
+    login = _get_current_login()
+    text = _build_defect_body(
+        project.name, project.repo, agent_name, number, body, list(source_pages or []), workaround
+    )
+    # AI の報告であることを示すラベルだけを付ける
+    # （確認ラベルはユーザーが付けるまで付けない = 改修フローに乗せない）
+    created = _get_client().rest.issues.create(
+        owner=owner,
+        repo=repo,
+        title=title,
+        body=text,
+        assignees=[login],
+        labels=[label_settings.ai_defect_report],
+    ).parsed_data
+    logger.warning(
+        "不具合が報告されました: project=%s agent_name=%s number=%s issue_number=%s"
+        " source_pages=%s workaround=%s",
+        project.name,
+        agent_name,
+        number,
+        created.number,
+        list(source_pages or []),
+        "あり" if workaround else "なし",
+    )
+    # 承認するまで Issue が動かないので、溜めずにその場で知らせる
+    notify_event(
+        "defect_report",
+        f"不具合が報告されました: {title}",
+        f"報告元: {project.name} {project.repo}#{number}（{agent_name}）",
+        settings.notifies,
+        targets=build_targets(settings.notifies),
+        repo=settings.ai_monitor_repo,
+        number=created.number,
+    )
+    return CreatedIssueResult(issue_number=created.number, url=created.html_url)
+
+
+@_log_tool_call
 def create_intake_issue(
     title: str,
     body: str,
@@ -1234,6 +1329,7 @@ def build_mcp_app(
         (reopen_issue, "Issue再オープン", None),
         (create_child_issue, "子Issue作成", None),
         (create_intake_issue, "新規Issue起票", None),
+        (create_defect_issue, "不具合Issue起票", None),
         (create_draft_pr, "DraftPR作成", None),
         (mark_pr_ready, "PR_Ready化", None),
         (merge_pr, "PRマージ", _DESTRUCTIVE),

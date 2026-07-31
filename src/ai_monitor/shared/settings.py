@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     rate_limit_fallback_min: int = 60
     state_path: str = "data/state.yaml"
     ai_monitor_wiki_base: str
+    # 不具合 Issue の起票先（owner/name）。未設定なら create_defect_issue が使えない
+    ai_monitor_repo: str | None = None
     projects: list[MonitoredProject] = []
     agents: dict[str, AgentSettings]
     telemetry: TelemetrySettings | None = None
@@ -133,6 +135,7 @@ class LabelSettings(BaseSettings):
     )
 
     in_discussion: LabelName
+    ai_defect_report: LabelName
     confirm_prefix: LabelName
     layer_intake: LabelName
     layer_epic: LabelName

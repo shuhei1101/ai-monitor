@@ -76,3 +76,17 @@ def test_error_when_api_error(gh, graphql_failed, api):
     # 実行・検証
     with pytest.raises(GraphQLFailed):
         api.reply_comment("IC_bad", sender="tester", format=PlainFormat(body="本文"))
+
+
+def test_error_when_not_issue_comment(gh, api):
+    """会話欄のコメント以外の node_id を弾くことを確認する（異常系）。"""
+    # 準備: インライン指摘の node（照会は成功するが本文を含まない）
+    gh.graphql.return_value = {"node": {}}
+    # 実行・検証
+    with pytest.raises(ValueError) as exc_info:
+        api.reply_comment("PRRC_1", sender="tester", format=PlainFormat(body="本文"))
+    # 対象の node_id と代替手段がメッセージに含まれる
+    assert "PRRC_1" in str(exc_info.value)
+    assert "create_review_comment" in str(exc_info.value)
+    # 本文更新の API は呼ばれていない
+    gh.rest.issues.update_comment.assert_not_called()

@@ -381,6 +381,27 @@ def test_ext_create_intake_issue(gh_live, repo_ctx, api):
     )
 
 
+def test_ext_create_defect_issue(gh_live, repo_ctx, api):
+    """assignee + AI不具合報告 ラベル付きでの不具合起票を確認する（正常系）。"""
+    # 準備
+    owner, repo = repo_ctx
+    # 実行
+    res = api.create_defect_issue(
+        title="外部疎通テスト 不具合起票",
+        body="自動クローズ予定",
+        agent_name="architect",
+        number=1,
+        source_pages=["規約/マージ手順.md"],
+    )
+    # 検証: 認証ユーザーが assignee に入り、AI不具合報告 ラベルだけが付く
+    created = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=res.issue_number).parsed_data
+    assert [a.login for a in created.assignees] == [gh_live.rest.users.get_authenticated().parsed_data.login]
+    assert [label.name for label in created.labels] == ["AI不具合報告"]
+    gh_live.rest.issues.update(
+        owner=owner, repo=repo, issue_number=res.issue_number, state="closed", state_reason="not_planned"
+    )
+
+
 def test_ext_create_draft_pr(branch_factory, gh_live, repo_ctx, api):
     """draft=true / base 指定での PR 作成を確認する（正常系）。"""
     # 準備

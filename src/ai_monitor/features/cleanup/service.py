@@ -113,6 +113,8 @@ def release_closed_roots(
             "epic_done",
             f"#{closed.number} が完了しました",
             f"プロジェクト: {project.name}\n解放したセッション: {len(released)} 本",
+            repo=project.repo,
+            number=closed.number,
         )
 
 
@@ -240,4 +242,6 @@ def reap_timed_out_sessions(
             "timeout_kill",
             f"#{session.primary_number} のセッションをタイムアウトで停止しました",
             f"セッション: {session.session_name}\n経過: {elapsed_min} 分",
+            repo=project.repo,
+            number=session.primary_number,
         )

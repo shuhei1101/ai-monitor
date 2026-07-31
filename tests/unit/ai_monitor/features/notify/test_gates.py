@@ -21,8 +21,8 @@ def notifier():
     """契機通知のスタブを返す（渡った引数を記録する）。"""
     calls: list[tuple] = []
 
-    def _notify(event, title, body):
-        calls.append((event, title, body))
+    def _notify(event, title, body, *, repo=None, number=None):
+        calls.append((event, title, body, repo, number))
         return None
 
     _notify.calls = calls
@@ -46,14 +46,16 @@ def test_notify_open_gates(notifier, session):
     targets = [_Target(35, ["議論中", "確認:epic-conductor"], ["user"])]
     # 実行
     notify_open_gates(
-        targets, [session], discussion_label="議論中", notify=notifier
+        targets, [session], discussion_label="議論中", repo="owner/app", notify=notifier
     )
     # 検証
     assert len(notifier.calls) == 1
-    event, title, body = notifier.calls[0]
+    event, title, body, repo, number = notifier.calls[0]
     assert event == "user_gate"
     assert "35" in title or "35" in body
     assert "epic-conductor" in body
+    # 受け取った側が対象へ直接飛べるようリポジトリと番号が渡る
+    assert (repo, number) == ("owner/app", 35)
     assert session.notified_gates == [35]
 
 
@@ -63,7 +65,7 @@ def test_notify_open_gates_when_already_notified(notifier, session):
     session.notified_gates = [35]
     targets = [_Target(35, ["議論中"], ["user"])]
     # 実行
-    notify_open_gates(targets, [session], discussion_label="議論中", notify=notifier)
+    notify_open_gates(targets, [session], discussion_label="議論中", repo="owner/app", notify=notifier)
     # 検証
     assert not notifier.calls
 
@@ -74,7 +76,7 @@ def test_notify_open_gates_when_gate_closed(notifier, session):
     session.notified_gates = [35]
     targets = [_Target(35, ["確認:epic-conductor"], [])]
     # 実行
-    notify_open_gates(targets, [session], discussion_label="議論中", notify=notifier)
+    notify_open_gates(targets, [session], discussion_label="議論中", repo="owner/app", notify=notifier)
     # 検証
     assert not notifier.calls
     assert session.notified_gates == []
@@ -85,6 +87,6 @@ def test_notify_open_gates_when_not_watched(notifier, session):
     # 準備
     targets = [_Target(99, ["議論中"], ["user"])]
     # 実行
-    notify_open_gates(targets, [session], discussion_label="議論中", notify=notifier)
+    notify_open_gates(targets, [session], discussion_label="議論中", repo="owner/app", notify=notifier)
     # 検証
     assert not notifier.calls

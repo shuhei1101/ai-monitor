@@ -23,6 +23,7 @@ def notify_open_gates(
     sessions: list[AgentSession],
     *,
     discussion_label: str,
+    repo: str,
     notify: NotifyFn,
 ) -> None:
     """ユーザーの番になった対象を、セッションごとに 1 度だけ通知する。
@@ -40,10 +41,13 @@ def notify_open_gates(
         session.notified_gates = [n for n in session.notified_gates if n in open_numbers]
         # 自セッションの監視面のうち、まだ通知していない番号を送る
         for number in sorted(watched & open_numbers - set(session.notified_gates)):
+            # 受け取った側が対象へ直接飛べるよう、リポジトリと番号も渡す
             notify(
                 "user_gate",
                 f"#{number} がユーザーの確認待ちになりました",
-                f"担当: {session.agent_name}\n対象: #{number}",
+                f"担当: {session.agent_name}",
+                repo=repo,
+                number=number,
             )
             session.notified_gates.append(number)
             logger.info(

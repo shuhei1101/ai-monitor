@@ -22,15 +22,19 @@ MCP `merge_pr` を呼ぶ:
 続けて MCP `worktree_remove` を呼ぶ:
 - `branch`: subsystem ブランチ
 
+### subsystem Issue の close
+
+MCP `close` を呼ぶ:
+- `number`: 対象 subsystem Issue 番号（subsystem PR 本文の `## 紐づく Issue`）
+- `is_pr`: false
+- `reason`: `completed`
+
+完了報告より前に閉じる。
+story-conductor は全子 subsystem が closed かどうかで統合テストの委任と状況確認を分けるため、open のまま報告すると委任側の分岐に入れない。
+
 ### 親 story Issue への完了報告
 
-MCP `add_labels` を呼ぶ:
-- `number`: 親 story Issue 番号
-- `is_pr`: false
-- `labels`:
-  - `$AI_MONITOR_LABEL_CONFIRM_STORY_CONDUCTOR` の値
-
-続けて MCP `comment` を呼ぶ:
+MCP `comment` を呼ぶ:
 - `number`: 親 story Issue 番号
 - `is_pr`: false
 - `sender`: `subsystem-conductor`
@@ -39,6 +43,12 @@ MCP `add_labels` を呼ぶ:
   - `type`: `plain`
   - `body`: 完了報告（対象 subsystem Issue 番号 + 実装内容の要約）。バグ差し戻し由来の修正用 PR の場合は、修正完了報告であることと修正内容を書く
 
+続けて MCP `add_labels` を呼ぶ:
+- `number`: 親 story Issue 番号
+- `is_pr`: false
+- `labels`:
+  - `$AI_MONITOR_LABEL_CONFIRM_STORY_CONDUCTOR` の値
+
 ### ラベル除去
 
 MCP `transition_phase` を呼ぶ:
@@ -46,7 +56,7 @@ MCP `transition_phase` を呼ぶ:
 - `is_pr`: true
 - `remove_labels_`:
   - `$AI_MONITOR_LABEL_CONFIRM_SUBSYSTEM_CONDUCTOR` の値
-- `add_labels_`: なし（subsystem Issue は PR マージで自動 close）
+- `add_labels_`: なし
 
 ### 作業完了報告
 

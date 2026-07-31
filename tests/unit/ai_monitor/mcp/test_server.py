@@ -60,6 +60,7 @@ EXPECTED_TOOLS = {
     "mark_pr_ready",
     "create_child_issue",
     "create_intake_issue",
+    "create_defect_issue",
     "create_draft_pr",
     "merge_pr",
     "worktree_create",
@@ -372,6 +373,16 @@ def test_reply_comment_when_commits_format(gh, api):
     posted = gh.rest.issues.update_comment.call_args.kwargs["body"]
     assert "| commit | 内容 |" in posted
     assert "| `a1b2c3d` | 異常系ケースを追加 |" in posted
+
+
+def test_reply_comment_when_not_issue_comment(gh, api):
+    """会話欄のコメント以外の node_id を弾くことを確認する（異常系）。"""
+    # 準備: 照会クエリのインラインフラグメントに一致しない node（インライン指摘など）
+    gh.graphql.return_value = {"node": {}}
+    # 実行・検証
+    with pytest.raises(ValueError):
+        api.reply_comment("PRRC_1", sender="tester", format=PlainFormat(body="修正しました。"))
+    gh.rest.issues.update_comment.assert_not_called()
 
 
 # ---- コメント一括Resolve ----
@@ -873,6 +884,125 @@ def test_create_intake_issue(gh, api):
     ]
     gh.rest.issues.add_sub_issue.assert_not_called()
     assert res == CreatedIssueResult(issue_number=58, url="http://i/58", parent_issue_number=None)
+
+
+# ---- 不具合Issue起票 ----
+
+
+def test_create_defect_issue(gh, api):
+    """ai-monitor リポジトリへの起票と assignee / ラベルを確認する（正常系）。"""
+    # 準備: 呼び出し元は sandbox・起票先は ai_monitor_repo
+    gh.rest.users.get_authenticated.return_value = _resp(NS(login="shuhei1101"))
+    gh.rest.issues.create.return_value = _resp(NS(number=214, html_url="http://i/214"))
+    # 実行
+    res = api.create_defect_issue(
+        title="subsystemマージ の作業完了報告が失敗する",
+        body="監視面除去を先に実行すると台帳を解決できない。",
+        agent_name="subsystem-conductor",
+        number=1179,
+        source_pages=["Claudeハーネス/共通ルール/最終マージの判定.md"],
+        workaround="主番号で作業完了報告を出した。",
+    )
+    # 検証: 起票先が呼び出し元セッションのプロジェクトではなく ai_monitor_repo
+    kwargs = gh.rest.issues.create.call_args.kwargs
+    assert (kwargs["owner"], kwargs["repo"]) == ("shuhei1101", "ai-monitor")
+    # 承認する相手が常にユーザーなので assignee は認証ユーザー 1 名で固定
+    assert kwargs["assignees"] == ["shuhei1101"]
+    # AI の報告であることを示すラベルだけを付ける（確認ラベルはユーザーが付けるまで付けない）
+    assert kwargs["labels"] == ["AI不具合報告"]
+    assert res == CreatedIssueResult(issue_number=214, url="http://i/214", parent_issue_number=None)
+
+
+def test_create_defect_issue_when_notified(gh, api, mon_settings, monkeypatch):
+    """契機通知の送出を確認する（正常系）。"""
+    # 準備
+    import ai_monitor.features.notify.service as notify_service
+    from ai_monitor.shared.settings import WebhookNotifySettings
+
+    sent: list[str] = []
+    monkeypatch.setattr(notify_service, "post_webhook", lambda url, kind, text: sent.append(text) or "")
+    mon_settings.notifies = [WebhookNotifySettings(webhook_url="https://example.com/hook", kind="discord")]
+    gh.rest.users.get_authenticated.return_value = _resp(NS(login="shuhei1101"))
+    gh.rest.issues.create.return_value = _resp(NS(number=214, html_url="http://i/214"))
+    # 実行
+    api.create_defect_issue(title="件名", body="本文", agent_name="architect", number=52)
+    # 検証: 承認待ちの Issue を溜めないよう、起票のたびに送る
+    assert sent, "通知が送られていない"
+    assert "214" in sent[0]
+
+
+def test_create_defect_issue_when_notify_failed(gh, api, mon_settings, monkeypatch):
+    """通知が失敗しても起票を成功として返すことを確認する（正常系）。"""
+    # 準備
+    import ai_monitor.features.notify.service as notify_service
+    from ai_monitor.shared.settings import WebhookNotifySettings
+
+    monkeypatch.setattr(notify_service, "post_webhook", lambda url, kind, text: "接続できません")
+    mon_settings.notifies = [WebhookNotifySettings(webhook_url="https://example.com/hook", kind="discord")]
+    gh.rest.users.get_authenticated.return_value = _resp(NS(login="shuhei1101"))
+    gh.rest.issues.create.return_value = _resp(NS(number=214, html_url="http://i/214"))
+    # 実行
+    res = api.create_defect_issue(title="件名", body="本文", agent_name="architect", number=52)
+    # 検証: 通知は副次的な経路なので起票の成否には影響しない
+    assert res == CreatedIssueResult(issue_number=214, url="http://i/214", parent_issue_number=None)
+
+
+def test_create_defect_issue_when_repo_unset(gh, api, mon_settings):
+    """起票先が未設定のときのエラーを確認する（異常系）。"""
+    # 準備
+    mon_settings.ai_monitor_repo = None
+    # 実行・検証
+    with pytest.raises(ValueError) as exc_info:
+        api.create_defect_issue(title="件名", body="本文", agent_name="architect", number=1)
+    assert "ai_monitor_repo" in str(exc_info.value)
+    gh.rest.issues.create.assert_not_called()
+
+
+def test_build_defect_body():
+    """全セクションの組み立てを確認する（正常系）。"""
+    # 実行
+    text = server._build_defect_body(
+        "sandbox", "shuhei1101/ai-monitor-e2e", "subsystem-conductor", 1179,
+        "監視面除去を先に実行すると失敗する。",
+        ["Claudeハーネス/共通ルール/最終マージの判定.md", "エージェント/subsystem-conductor/フェーズ/subsystemマージ.md"],
+        "主番号で作業完了報告を出した。",
+    )
+    # 検証: 4 セクションが順に並ぶ
+    assert text.index("## 報告元") < text.index("## 該当ページ") < text.index("## 事象") < text.index("## 回避策")
+    # 報告元から どのプロジェクトのどの対象で起きたか を辿れる
+    assert "sandbox" in text
+    assert "subsystem-conductor" in text
+    assert "shuhei1101/ai-monitor-e2e#1179" in text
+    # 該当ページは箇条書きで並ぶ
+    assert "- `Claudeハーネス/共通ルール/最終マージの判定.md`" in text
+    assert "- `エージェント/subsystem-conductor/フェーズ/subsystemマージ.md`" in text
+    assert "監視面除去を先に実行すると失敗する。" in text
+    assert "主番号で作業完了報告を出した。" in text
+
+
+def test_build_defect_body_when_no_source_pages():
+    """該当ページなしの組み立てを確認する（正常系）。"""
+    # 実行
+    text = server._build_defect_body(
+        "sandbox", "shuhei1101/ai-monitor-e2e", "architect", 52, "事象の説明。", [], "回避した。"
+    )
+    # 検証: 該当ページのセクションだけが落ちる
+    assert "## 該当ページ" not in text
+    assert "## 報告元" in text
+    assert "## 事象" in text
+    assert "## 回避策" in text
+
+
+def test_build_defect_body_when_no_workaround():
+    """回避策なしの組み立てを確認する（正常系）。"""
+    # 実行
+    text = server._build_defect_body(
+        "sandbox", "shuhei1101/ai-monitor-e2e", "architect", 52, "事象の説明。", ["規約/マージ手順.md"], None
+    )
+    # 検証: 回避できず作業を中断したことが読み取れる
+    section = text.split("## 回避策", 1)[1]
+    assert "なし" in section
+    assert "中断" in section
 
 
 def test_create_draft_pr(gh, api):

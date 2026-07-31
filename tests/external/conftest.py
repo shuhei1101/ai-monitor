@@ -110,16 +110,22 @@ def api(sandbox):
     """sandbox を対象に設定とコンテキストを束ねた MCP ツール呼び出し口を返す。"""
     from types import SimpleNamespace
 
-    from ai_monitor.shared.settings import MonitoredProject
+    from ai_monitor.shared.settings import LabelSettings, MonitoredProject
 
-    settings = SimpleNamespace(projects=[MonitoredProject(**sandbox)])
+    # 不具合起票の宛先も sandbox に固定する（設定ファイルの値に依存させない）
+    settings = SimpleNamespace(
+        projects=[MonitoredProject(**sandbox)], ai_monitor_repo=sandbox["repo"], notifies=[]
+    )
     ctx = SimpleNamespace(
         request_context=SimpleNamespace(request=SimpleNamespace(headers={"X-Project": sandbox["name"]}))
     )
+    label_settings = LabelSettings()
 
     class _Tools:
         def __getattr__(self, name):
-            return server._bind(getattr(server, name), ctx=ctx, settings=settings)
+            return server._bind(
+                getattr(server, name), ctx=ctx, settings=settings, label_settings=label_settings
+            )
 
     return _Tools()
 

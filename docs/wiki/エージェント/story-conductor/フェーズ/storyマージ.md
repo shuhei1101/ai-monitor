@@ -23,15 +23,19 @@ MCP `merge_pr` を呼ぶ:
 続けて MCP `worktree_remove` を呼ぶ:
 - `branch`: story ブランチ
 
+### story Issue の close
+
+MCP `close` を呼ぶ:
+- `number`: $issue_number
+- `is_pr`: false
+- `reason`: `completed`
+
+完了報告より前に閉じる。
+epic-conductor は全子 story が closed かどうかで統合テストの委任と状況確認を分けるため、open のまま報告すると委任側の分岐に入れない。
+
 ### 親 epic Issue への完了報告
 
-MCP `add_labels` を呼ぶ:
-- `number`: 親 epic Issue 番号
-- `is_pr`: false
-- `labels`:
-  - `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` の値
-
-続けて MCP `comment` を呼ぶ:
+MCP `comment` を呼ぶ:
 - `number`: 親 epic Issue 番号
 - `is_pr`: false
 - `sender`: `story-conductor`
@@ -40,6 +44,12 @@ MCP `add_labels` を呼ぶ:
   - `type`: `plain`
   - `body`: story のマージ完了報告（対象 story Issue 番号 + マージ済み subsystem のサマリ）
 
+続けて MCP `add_labels` を呼ぶ:
+- `number`: 親 epic Issue 番号
+- `is_pr`: false
+- `labels`:
+  - `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` の値
+
 ### ラベル除去
 
 MCP `transition_phase` を呼ぶ:
@@ -47,7 +57,7 @@ MCP `transition_phase` を呼ぶ:
 - `is_pr`: false
 - `remove_labels_`:
   - `$AI_MONITOR_LABEL_CONFIRM_STORY_CONDUCTOR` の値
-- `add_labels_`: なし（story Issue は PR マージで自動 close）
+- `add_labels_`: なし
 
 ### 作業完了報告
 

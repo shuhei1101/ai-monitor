@@ -125,6 +125,14 @@ def test_settings_when_agents_empty_model(tmp_config_dir):
         settings_mod.Settings()
 
 
+def test_settings_when_ai_monitor_repo_unset(tmp_config_dir):
+    """不具合 Issue の起票先が未設定のときの既定を確認する（正常系）。"""
+    # 実行
+    settings = settings_mod.Settings()
+    # 検証: 既定は不具合報告を無効化
+    assert settings.ai_monitor_repo is None
+
+
 def test_settings_when_telemetry_unset(tmp_config_dir):
     """テレメトリ未設定時の既定を確認する（正常系）。"""
     # 実行

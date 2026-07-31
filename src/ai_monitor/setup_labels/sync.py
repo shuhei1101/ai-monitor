@@ -39,6 +39,7 @@ _PREFIX_STYLES: tuple[tuple[str, str], ...] = (
 _EXACT_STYLES: dict[str, str] = {
     "議論中": "in_discussion",
     "リバースエンジニアリング": "reverse_engineering",
+    "AI不具合報告": "ai_defect_report",
 }
 
 # ラベル一覧 API の 1 ページあたりの取得件数
@@ -60,6 +61,8 @@ class LabelStyleSettings(BaseSettings):
     desc_in_discussion: str
     color_reverse_engineering: str
     desc_reverse_engineering: str
+    color_ai_defect_report: str
+    desc_ai_defect_report: str
     color_layer: str
     desc_layer: str
     color_type: str

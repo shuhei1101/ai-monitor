@@ -96,6 +96,7 @@ def run_cycle(
                 targets,
                 [s for s in registry.sessions if s.project == project.name],
                 discussion_label=labels.in_discussion,
+                repo=project.repo,
                 notify=notify,
             )
             # クリーンアップ検知を実行する
