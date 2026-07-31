@@ -28,6 +28,7 @@ def agent() -> Agent:
         confirm_label="確認:intake-issue-triager",
         processing_label="処理中:intake-issue-triager",
         model="opus",
+        effort="xhigh",
     )
 
 
@@ -84,7 +85,7 @@ def test_poll_when_new_target(agent, io_mocks, registry, mon_project, rate_limit
     assert registry.find("sandbox", "intake-issue-triager", 35) is not None
     sent_text = io_mocks.send_keys.call_args.args[1]
     assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager")
-    assert "claude --model opus --dangerously-skip-permissions" in sent_text
+    assert "claude --model opus --effort xhigh --dangerously-skip-permissions" in sent_text
     assert "--append-system-prompt-file " in sent_text
 
 
@@ -159,6 +160,7 @@ def test_poll_when_phases_unregistered(io_mocks, registry, mon_project, rate_lim
         confirm_label="確認:tester",
         processing_label="処理中:tester",
         model="sonnet",
+        effort="high",
     )
     targets = [_issue(35, labels=["確認:tester"])]
     # 実行
@@ -177,6 +179,7 @@ def test_poll_when_phases_unregistered_and_no_target(io_mocks, registry, mon_pro
         confirm_label="確認:tester",
         processing_label="処理中:tester",
         model="sonnet",
+        effort="high",
     )
     targets = [_issue(35, labels=["確認:tester"], assignees=["shuhei1101"])]
     # 実行
@@ -208,7 +211,7 @@ def test_process_one(agent, io_mocks, registry, mon_project):
     assert io_mocks.add_label.call_args.args[2] == "処理中:intake-issue-triager"
     sent_text = io_mocks.send_keys.call_args.args[1]
     assert sent_text.startswith("AI_MONITOR_PROJECT=sandbox ")
-    assert "claude --model opus --dangerously-skip-permissions" in sent_text
+    assert "claude --model opus --effort xhigh --dangerously-skip-permissions" in sent_text
     assert "--append-system-prompt-file " in sent_text
 
 
@@ -222,7 +225,7 @@ def test_process_one_when_new_session(agent, io_mocks, registry, mon_project):
     )
     # 検証
     assert io_mocks.create_session.call_args.args[0] == "ai-monitor-sandbox-35-intake-issue-triager"
-    assert "claude --model opus " in io_mocks.send_keys.call_args.args[1]
+    assert "claude --model opus --effort xhigh " in io_mocks.send_keys.call_args.args[1]
     # 起動プロンプトは一時ファイル経由で渡す（数万文字を send-keys の引数に直接埋めない）
     assert '"$(cat ' in io_mocks.send_keys.call_args.args[1]
 
@@ -385,7 +388,7 @@ def test_build_launch_command(agent, io_mocks, mon_project):
     )
     # 検証: 環境変数で始まり、手順書は追記システムプロンプトのファイル・起動プロンプトはコマンド置換で渡す
     assert command.startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager")
-    assert "claude --model opus --dangerously-skip-permissions" in command
+    assert "claude --model opus --effort xhigh --dangerously-skip-permissions" in command
     assert "--append-system-prompt-file " in command
     assert '"$(cat ' in command
     docs_path = Path(tempfile.gettempdir()) / "ai-monitor-sandbox-52-intake-issue-triager.docs"

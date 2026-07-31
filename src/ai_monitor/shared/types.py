@@ -6,6 +6,9 @@ from typing import Literal, NewType
 
 LabelName = NewType("LabelName", str)
 
+# claude --effort が受け付ける値の列挙（列挙外は設定の読み込み時に弾く）
+type EffortLevel = Literal["low", "medium", "high", "xhigh", "max"]
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Issue:

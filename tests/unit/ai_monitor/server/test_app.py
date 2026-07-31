@@ -14,7 +14,7 @@ RESETS_AT = datetime(2026, 7, 29, 2, 30, tzinfo=timezone(timedelta(hours=9)))
 
 @pytest.fixture
 def agents() -> list[Agent]:
-    return [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
+    return [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet", effort="high")]
 
 
 @pytest.fixture

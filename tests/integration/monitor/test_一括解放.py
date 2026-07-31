@@ -67,8 +67,8 @@ def _not_found():
     return RequestFailed(response)
 
 
-def _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, current, notify):
-    agents = build_agents(label_settings, agent_models=agent_models)
+def _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, current, notify):
+    agents = build_agents(label_settings, agent_settings=agent_settings)
     return run_cycle(
         mon_settings,
         agents,
@@ -84,7 +84,7 @@ def _killed(tmux_calls):
     return sorted(c[2] for c in tmux_calls.calls if c[0] == "kill-session")
 
 
-def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """最上位 close 検知 → 配下の全セッション解放を確認する（正常系）。"""
     # 準備: 親が intake の epic #35 が closed
     _register(mon_registry, [(30, "intake-issue-triager"), (35, "epic-conductor"), (40, "story-conductor")])
@@ -98,7 +98,7 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
     )
     prev = {"sandbox": [Issue(number=35, state="open", labels=["layer:epic"])]}
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, [], notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
     # 検証
     assert mon_registry.sessions == []
     assert _killed(tmux_calls) == [
@@ -108,7 +108,7 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
     ]
 
 
-def test_normal_when_system_is_top(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal_when_system_is_top(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """system が最上位のときの 4 レイヤー一括解放を確認する（正常系）。"""
     # 準備: 親を持たない system #10 が closed
     _register(
@@ -119,7 +119,7 @@ def test_normal_when_system_is_top(gh_mon, tmux_calls, mon_settings, label_setti
     _wire(gh_mon, closed=_issue_ns(10, "layer:system"), tree={10: [35], 35: [40], 40: [50], 50: []}, parents={})
     prev = {"sandbox": [Issue(number=10, state="open", labels=["layer:system"])]}
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, [], notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
     # 検証
     assert mon_registry.sessions == []
     assert _killed(tmux_calls) == [
@@ -130,7 +130,7 @@ def test_normal_when_system_is_top(gh_mon, tmux_calls, mon_settings, label_setti
     ]
 
 
-def test_normal_when_story_is_top(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal_when_story_is_top(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """story が最上位のときの解放を確認する（正常系）。"""
     # 準備: 親を持たない story #40 が closed
     _register(mon_registry, [(40, "story-conductor"), (50, "subsystem-conductor")])
@@ -138,7 +138,7 @@ def test_normal_when_story_is_top(gh_mon, tmux_calls, mon_settings, label_settin
     _wire(gh_mon, closed=_issue_ns(40, "layer:story"), tree={40: [50], 50: []}, parents={})
     prev = {"sandbox": [Issue(number=40, state="open", labels=["layer:story"])]}
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, [], notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
     # 検証
     assert mon_registry.sessions == []
     assert _killed(tmux_calls) == [
@@ -147,7 +147,7 @@ def test_normal_when_story_is_top(gh_mon, tmux_calls, mon_settings, label_settin
     ]
 
 
-def test_normal_when_subsystem_is_top(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal_when_subsystem_is_top(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """subsystem が最上位（配下なし）のときの解放を確認する（正常系）。"""
     # 準備: 親も子も持たない subsystem #50 が closed
     _register(mon_registry, [(50, "subsystem-conductor")])
@@ -155,13 +155,13 @@ def test_normal_when_subsystem_is_top(gh_mon, tmux_calls, mon_settings, label_se
     _wire(gh_mon, closed=_issue_ns(50, "layer:subsystem"), tree={50: []}, parents={})
     prev = {"sandbox": [Issue(number=50, state="open", labels=["layer:subsystem"])]}
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, [], notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
     # 検証
     assert mon_registry.sessions == []
     assert _killed(tmux_calls) == ["ai-monitor-sandbox-50-subsystem-conductor"]
 
 
-def test_normal_when_parent_remains(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal_when_parent_remains(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """親を持つ Issue の close で解放しないことを確認する（正常系）。"""
     # 準備: 親が open の system である epic #35 が closed
     _register(mon_registry, [(10, "system-conductor"), (35, "epic-conductor")])
@@ -175,13 +175,13 @@ def test_normal_when_parent_remains(gh_mon, tmux_calls, mon_settings, label_sett
     )
     prev = {"sandbox": [Issue(number=35, state="open", labels=["layer:epic"])]}
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, [], notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
     # 検証
     assert len(mon_registry.sessions) == 2
     assert _killed(tmux_calls) == []
 
 
-def test_normal_when_confirm_remains(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal_when_confirm_remains(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """確認ラベル残存の解放見送りを確認する（正常系）。"""
     # 準備: 配下 subsystem #40 に 確認:* が残っている
     _register(mon_registry, [(30, "intake-issue-triager"), (35, "epic-conductor"), (40, "story-conductor")])
@@ -202,14 +202,14 @@ def test_normal_when_confirm_remains(gh_mon, tmux_calls, mon_settings, label_set
     )
     prev = {"sandbox": [Issue(number=35, state="open", labels=["layer:epic"])]}
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, [], notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
     # 検証
     assert len(mon_registry.sessions) == 3
     assert _killed(tmux_calls) == []
 
 
 def test_error_when_api_error(
-    gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, request_failed,
+    gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, request_failed,
 notify):
     """単体取得の失敗で周期を見送ることを確認する（異常系）。"""
     # 準備
@@ -218,7 +218,7 @@ notify):
     gh_mon.rest.issues.get.side_effect = request_failed(500)
     prev = {"sandbox": [Issue(number=35, state="open", labels=["layer:epic"])]}
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, prev, [], notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
     # 検証
     assert len(mon_registry.sessions) == 3
     assert _killed(tmux_calls) == []

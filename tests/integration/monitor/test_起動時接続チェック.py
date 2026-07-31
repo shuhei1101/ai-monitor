@@ -15,9 +15,9 @@ SLACK_URL = "https://hooks.slack.com/services/xxxx"
 
 
 @pytest.fixture
-def boot(monkeypatch, mon_settings, label_settings, agent_models, tmp_state_path):
+def boot(monkeypatch, mon_settings, label_settings, agent_settings, tmp_state_path):
     """main() を実行する準備を整え、起動したかを返す factory を返す。"""
-    mon_settings.agents = agent_models
+    mon_settings.agents = agent_settings
     mon_settings.state_path = str(tmp_state_path)
     mon_settings.github_token = SecretStr("github_pat_test")
     started: list[bool] = []

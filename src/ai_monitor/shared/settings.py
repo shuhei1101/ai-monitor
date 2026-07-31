@@ -12,7 +12,7 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
-from ai_monitor.shared.types import LabelName
+from ai_monitor.shared.types import EffortLevel, LabelName
 
 CONFIG_DIR = Path.home() / ".config" / "ai-monitor"
 CONSTANTS_ENV = Path(__file__).resolve().parents[3] / "plugins" / "ai-monitor" / "constants.env"
@@ -45,10 +45,11 @@ _AGENT_NAMES: tuple[str, ...] = (
 )
 
 
-class AgentModel(BaseModel):
-    """エージェント別のモデル設定 1 件分。"""
+class AgentSettings(BaseModel):
+    """エージェント別の起動設定 1 件分。"""
 
     model: str = Field(min_length=1)
+    effort: EffortLevel = "high"
 
 
 class TelemetrySettings(BaseModel):
@@ -96,7 +97,7 @@ class Settings(BaseSettings):
     state_path: str = "data/state.yaml"
     ai_monitor_wiki_base: str
     projects: list[MonitoredProject] = []
-    agents: dict[str, AgentModel]
+    agents: dict[str, AgentSettings]
     telemetry: TelemetrySettings | None = None
     notifies: list[NotifySettings] = []
 

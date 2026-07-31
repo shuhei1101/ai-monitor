@@ -103,21 +103,21 @@ def _issue_ns(number, labels, assignees=()):
     )
 
 
-def _cycle(mon_settings, label_settings, agent_models, mon_registry, notify, prev=None):
-    agents = build_agents(label_settings, agent_models=agent_models)
+def _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify, prev=None):
+    agents = build_agents(label_settings, agent_settings=agent_settings)
     return run_cycle(
         mon_settings, agents, registry=mon_registry, prev_targets=prev or {}, last_heartbeat_at=FUTURE, labels=label_settings, gate=RateLimitGate()
     , notify=notify)
 
 
-def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, tmp_state_path, local_wiki, fake_wiki, notify):
+def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, tmp_state_path, local_wiki, fake_wiki, notify):
     """新規対象の検知 → セッション作成 + 起動プロンプトの送信を確認する（正常系）。"""
     # 準備
     gh_mon.rest.issues.list_for_repo.side_effect = [
         _resp([_issue_ns(35, ["確認:intake-issue-triager"])])
     ]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証
     session_name = "ai-monitor-sandbox-35-intake-issue-triager"
     assert ["new-session", "-d", "-s", session_name, "-c", "/tmp/sandbox"] in tmux_calls.calls
@@ -126,7 +126,7 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
     assert gh_mon.rest.issues.add_labels.call_args.kwargs["labels"] == ["処理中:intake-issue-triager"]
     send = next(c for c in tmux_calls.calls if c[0] == "send-keys")
     assert send[3].startswith("AI_MONITOR_PROJECT=sandbox AI_MONITOR_AGENT=intake-issue-triager")
-    assert "claude --model sonnet --dangerously-skip-permissions" in send[3]
+    assert "claude --model sonnet --effort high --dangerously-skip-permissions" in send[3]
     # 追記システムプロンプトのファイルにフェーズ本文・参考資料・Wiki 索引が載る
     docs_path = send[3].split("--append-system-prompt-file ")[1].split(" ")[0]
     docs = Path(docs_path).read_text(encoding="utf-8")
@@ -141,7 +141,7 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
     assert fake_wiki.calls == []
 
 
-def test_normal_when_existing_session(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, local_wiki, notify):
+def test_normal_when_existing_session(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, local_wiki, notify):
     """既存セッションへの再開送信を確認する（正常系）。"""
     # 準備
     mon_registry.register(
@@ -156,7 +156,7 @@ def test_normal_when_existing_session(gh_mon, tmux_calls, mon_settings, label_se
         _resp([_issue_ns(35, ["確認:intake-issue-triager"])])
     ]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証
     assert not any(c[0] == "new-session" for c in tmux_calls.calls)
     send = next(c for c in tmux_calls.calls if c[0] == "send-keys")
@@ -164,38 +164,38 @@ def test_normal_when_existing_session(gh_mon, tmux_calls, mon_settings, label_se
     assert send[3].startswith("状態が変化しました")
 
 
-def test_normal_when_processing_label(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal_when_processing_label(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """処理中ラベル付きの対象の除外を確認する（正常系）。"""
     # 準備
     gh_mon.rest.issues.list_for_repo.side_effect = [
         _resp([_issue_ns(35, ["確認:intake-issue-triager", "処理中:intake-issue-triager"])])
     ]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証
     assert tmux_calls.calls == []
     gh_mon.rest.issues.add_labels.assert_not_called()
 
 
-def test_error_when_api_error(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, request_failed, notify):
+def test_error_when_api_error(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, request_failed, notify):
     """対象一覧の取得失敗で周期を見送ることを確認する（異常系）。"""
     # 準備
     gh_mon.rest.issues.list_for_repo.side_effect = request_failed(500)
     # 実行
-    targets_by_project, _ = _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    targets_by_project, _ = _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証
     assert targets_by_project == {}
     assert tmux_calls.calls == []
 
 
-def test_normal_when_remote_base(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, remote_wiki, notify):
+def test_normal_when_remote_base(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, remote_wiki, notify):
     """Wiki ベースが raw URL のときのドキュメント組み立てを確認する（正常系）。"""
     # 準備
     gh_mon.rest.issues.list_for_repo.side_effect = [
         _resp([_issue_ns(35, ["確認:intake-issue-triager"])])
     ]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証: ベースと相対パスを連結し、非 ASCII を quote した URL でリクエストされる
     assert remote_wiki.calls
     assert any("%E3%82%A8" in call for call in remote_wiki.calls)

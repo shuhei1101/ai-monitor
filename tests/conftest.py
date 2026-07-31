@@ -182,11 +182,11 @@ def tmp_state_path(tmp_path) -> Path:
 
 
 @pytest.fixture
-def agent_models():
-    """全エージェント分の AgentModel を明示した辞書を返す（テスト用に一律 sonnet）。"""
-    from ai_monitor.shared.settings import _AGENT_NAMES, AgentModel
+def agent_settings():
+    """全エージェント分の AgentSettings を明示した辞書を返す（テスト用に一律 sonnet）。"""
+    from ai_monitor.shared.settings import _AGENT_NAMES, AgentSettings
 
-    return {name: AgentModel(model="sonnet") for name in _AGENT_NAMES}
+    return {name: AgentSettings(model="sonnet") for name in _AGENT_NAMES}
 
 
 @pytest.fixture
@@ -304,6 +304,7 @@ def mcp_agents():
             confirm_label="確認:architect",
             processing_label="処理中:architect",
             model="sonnet",
+            effort="high",
         )
     ]
 

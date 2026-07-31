@@ -26,7 +26,7 @@ from ai_monitor.integrations.webhook.client import check_webhook
 from ai_monitor.integrations.github.search import list_open_targets
 from ai_monitor.observability import configure
 from ai_monitor.server.app import create_app
-from ai_monitor.shared.settings import _AGENT_NAMES, AgentModel, LabelSettings, Settings
+from ai_monitor.shared.settings import _AGENT_NAMES, AgentSettings, LabelSettings, Settings
 from ai_monitor.shared.types import MonitorTarget
 
 logger = logging.getLogger(__name__)
@@ -34,18 +34,19 @@ logger = logging.getLogger(__name__)
 _STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "quick-implementer", "questioner"}
 
 
-def build_agents(labels: LabelSettings, *, agent_models: dict[str, AgentModel]) -> list[Agent]:
-    """全エージェントの Agent をラベル設定と agent_models の値から組み立てる。"""
+def build_agents(labels: LabelSettings, *, agent_settings: dict[str, AgentSettings]) -> list[Agent]:
+    """全エージェントの Agent をラベル設定と agent_settings の値から組み立てる。"""
     agents = []
     for name in _AGENT_NAMES:
         field = name.replace("-", "_")
-        # 確認 / 処理中ラベル + モデルを取り出して組み立てる（独立系 5 種は standalone=True）
+        # 確認 / 処理中ラベル + モデル + 推論労力を取り出して組み立てる（独立系 5 種は standalone=True）
         agents.append(
             Agent(
                 name=name,
                 confirm_label=getattr(labels, f"confirm_{field}"),
                 processing_label=getattr(labels, f"processing_{field}"),
-                model=agent_models[name].model,
+                model=agent_settings[name].model,
+                effort=agent_settings[name].effort,
                 standalone=name in _STANDALONE_NAMES,
             )
         )
@@ -147,7 +148,7 @@ def main() -> int:
             " / ".join(f"{r.name}: {r.reason}" for r in blocked),
         )
         return 1
-    agents = build_agents(labels, agent_models=settings.agents)
+    agents = build_agents(labels, agent_settings=settings.agents)
     registry = SessionRegistry(Path(settings.state_path))
     app = create_app(settings, registry=registry, agents=agents, label_settings=labels)
     uvicorn.run(app, host="127.0.0.1", port=settings.port)

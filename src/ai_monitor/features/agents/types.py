@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ai_monitor.shared.types import LabelName
+from ai_monitor.shared.types import EffortLevel, LabelName
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -14,4 +14,5 @@ class Agent:
     confirm_label: LabelName
     processing_label: LabelName
     model: str
+    effort: EffortLevel
     standalone: bool = False

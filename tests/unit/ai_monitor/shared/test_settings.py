@@ -11,7 +11,7 @@ _ALL_AGENT_NAMES = list(settings_mod._AGENT_NAMES)
 
 def _agents_yaml(names=_ALL_AGENT_NAMES) -> str:
     """全エージェント分の agents セクション文字列を生成する。"""
-    return "agents:\n" + "".join(f"  {name}:\n    model: sonnet\n" for name in names)
+    return "agents:\n" + "".join(f"  {name}:\n    model: sonnet\n    effort: xhigh\n" for name in names)
 
 
 BASE_YAML = """github_token: github_pat_test
@@ -91,12 +91,13 @@ def test_settings_when_token_missing(tmp_config_dir):
 
 
 def test_settings_when_agents_all_set(tmp_config_dir):
-    """全エージェント分のモデル読み込みを確認する（正常系）。"""
+    """全エージェント分の起動設定の読み込みを確認する（正常系）。"""
     # 実行
     settings = settings_mod.Settings()
     # 検証
     assert set(settings.agents.keys()) == set(_ALL_AGENT_NAMES)
     assert all(agent.model == "sonnet" for agent in settings.agents.values())
+    assert all(agent.effort == "xhigh" for agent in settings.agents.values())
 
 
 def test_settings_when_agents_missing_entry(tmp_config_dir):
@@ -144,8 +145,23 @@ def test_settings_when_telemetry_set(tmp_config_dir):
     assert settings.telemetry.otlp_endpoint == "http://localhost:14317"
 
 
-def test_agent_model_when_empty():
-    """AgentModel の空文字禁止を確認する（異常系）。"""
+def test_agent_settings_when_empty():
+    """AgentSettings の空文字禁止を確認する（異常系）。"""
     # 実行・検証
     with pytest.raises(ValidationError):
-        settings_mod.AgentModel(model="")
+        settings_mod.AgentSettings(model="")
+
+
+def test_agent_settings_when_effort_omitted():
+    """推論労力の既定を確認する（正常系）。"""
+    # 実行
+    agent = settings_mod.AgentSettings(model="sonnet")
+    # 検証
+    assert agent.effort == "high"
+
+
+def test_agent_settings_when_effort_invalid():
+    """列挙外の推論労力がバリデーションエラーになることを確認する（異常系）。"""
+    # 実行・検証
+    with pytest.raises(ValidationError):
+        settings_mod.AgentSettings(model="sonnet", effort="ultra")

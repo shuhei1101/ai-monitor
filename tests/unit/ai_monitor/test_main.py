@@ -15,38 +15,40 @@ STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "quick-
 
 
 @pytest.fixture
-def agent_models():
-    """全エージェント分の AgentModel を明示した辞書を返す。"""
-    from ai_monitor.shared.settings import AgentModel
+def agent_settings():
+    """全エージェント分の AgentSettings を明示した辞書を返す。"""
+    from ai_monitor.shared.settings import AgentSettings
 
-    return {name: AgentModel(model="sonnet") for name in main_mod._AGENT_NAMES}
+    return {name: AgentSettings(model="sonnet") for name in main_mod._AGENT_NAMES}
 
 
-def test_build_agents(label_settings, agent_models):
+def test_build_agents(label_settings, agent_settings):
     """全エージェント分の Agent 生成を確認する（正常系）。"""
-    # 準備: implementer だけ opus を指定して個別注入を検証する
-    from ai_monitor.shared.settings import AgentModel
+    # 準備: implementer だけ別のモデルと推論労力を指定して個別注入を検証する
+    from ai_monitor.shared.settings import AgentSettings
 
-    agent_models["implementer"] = AgentModel(model="opus")
+    agent_settings["implementer"] = AgentSettings(model="opus", effort="max")
     # 実行
-    agents = main_mod.build_agents(label_settings, agent_models=agent_models)
+    agents = main_mod.build_agents(label_settings, agent_settings=agent_settings)
     # 検証
     assert len(agents) == len(main_mod._AGENT_NAMES)
     by_name = {a.name: a for a in agents}
     assert by_name["epic-conductor"].confirm_label == "確認:epic-conductor"
     assert by_name["epic-conductor"].processing_label == "処理中:epic-conductor"
     assert by_name["epic-conductor"].model == "sonnet"
+    assert by_name["epic-conductor"].effort == "high"
     assert by_name["implementer"].model == "opus"
+    assert by_name["implementer"].effort == "max"
     assert {a.name for a in agents if a.standalone} == STANDALONE_NAMES
 
 
-def test_build_agents_when_missing_entry(label_settings, agent_models):
-    """agent_models 欠落は KeyError を確認する（異常系）。"""
+def test_build_agents_when_missing_entry(label_settings, agent_settings):
+    """agent_settings 欠落は KeyError を確認する（異常系）。"""
     # 準備
-    del agent_models["implementer"]
+    del agent_settings["implementer"]
     # 実行・検証
     with pytest.raises(KeyError) as exc_info:
-        main_mod.build_agents(label_settings, agent_models=agent_models)
+        main_mod.build_agents(label_settings, agent_settings=agent_settings)
     assert "implementer" in str(exc_info.value)
 
 
@@ -65,14 +67,14 @@ def cycle_mocks(monkeypatch):
 
 
 @pytest.fixture
-def cycle_env(tmp_state_path, monkeypatch, mon_project, label_settings, agent_models):
+def cycle_env(tmp_state_path, monkeypatch, mon_project, label_settings, agent_settings):
     """run_cycle 用の設定・エージェント・台帳を組み立てる。"""
     monkeypatch.setattr(registry_mod, "save_sessions", MagicMock())
     settings = MagicMock()
     settings.projects = [mon_project]
     settings.heartbeat_interval_sec = 60
     settings.session_timeout_min = 30
-    agents = main_mod.build_agents(label_settings, agent_models=agent_models)
+    agents = main_mod.build_agents(label_settings, agent_settings=agent_settings)
     registry = registry_mod.SessionRegistry(tmp_state_path)
     return settings, agents, registry
 

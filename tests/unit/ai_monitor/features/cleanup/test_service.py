@@ -257,7 +257,7 @@ def test_reap_timed_out_sessions(io_mocks, registry, mon_project, rate_limit_gat
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect", "処理中:architect"])]
-    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
+    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet", effort="high")]
     # 実行
     cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate, notify=notify)
     # 検証
@@ -271,7 +271,7 @@ def test_reap_timed_out_sessions_when_waiting(io_mocks, registry, mon_project, r
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect"])]
-    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
+    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet", effort="high")]
     # 実行
     cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate, notify=notify)
     # 検証
@@ -298,7 +298,7 @@ def test_reap_timed_out_sessions_when_label_error(io_mocks, registry, mon_projec
     # 準備
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["処理中:architect"])]
-    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
+    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet", effort="high")]
     io_mocks.remove_label.side_effect = request_failed(500)
     # 実行
     cleanup.reap_timed_out_sessions(mon_project, targets, registry=registry, agents=agents, timeout_min=30, gate=rate_limit_gate, notify=notify)
@@ -312,7 +312,7 @@ def test_reap_timed_out_sessions_when_rate_limited(io_mocks, registry, mon_proje
     # 準備: 回収条件を満たすセッションを用意したうえで関門を待機中にする
     registry.register(_session(agent="architect", number=52))
     targets = [_issue(52, labels=["確認:architect", "処理中:architect"])]
-    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet")]
+    agents = [Agent(name="architect", confirm_label="確認:architect", processing_label="処理中:architect", model="sonnet", effort="high")]
     rate_limit_gate.block(
         "ai-monitor-sandbox-52-architect", datetime.now(timezone.utc) + timedelta(minutes=30)
     )

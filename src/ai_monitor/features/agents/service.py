@@ -118,7 +118,7 @@ def build_launch_command(
     # （プロジェクト名は設定由来の任意の文字列なので、引用符が混ざってもコマンドが壊れないよう引用する）
     mcp_config = shlex.quote(build_mcp_config(project, port))
     return (
-        f"{launch_env}claude --model {agent.model} --dangerously-skip-permissions "
+        f"{launch_env}claude --model {agent.model} --effort {agent.effort} --dangerously-skip-permissions "
         f"--mcp-config {mcp_config} "
         f'--append-system-prompt-file {docs_path} "$(cat {prompt_path})"'
     )
@@ -247,12 +247,13 @@ def _process_one(
         create_session(session.session_name, project.local_path)
         registry.register(session)
         logger.info(
-            "エージェントセッションを新規作成しました: project=%s agent_name=%s number=%s session_name=%s model=%s",
+            "エージェントセッションを新規作成しました: project=%s agent_name=%s number=%s session_name=%s model=%s effort=%s",
             project.name,
             agent.name,
             target.number,
             session.session_name,
             agent.model,
+            agent.effort,
         )
     # 送信前に処理中ラベルを付与する（除去は作業完了報告の受信時）
     add_label(project, target.number, agent.processing_label)

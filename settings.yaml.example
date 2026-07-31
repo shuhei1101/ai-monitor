@@ -50,54 +50,79 @@ projects:
     local_path: /mnt/c/Users/shuhe/repo/myapp
     wiki_base: /mnt/c/Users/shuhe/repo/myapp/docs/wiki
 
-# エージェント別モデル（全 24 エージェント分のエントリ必須・欠落 / 空値は起動エラー）
-# 推奨は「頭を使う工程は claude-opus-4-7 / 機械的な工程は sonnet」
+# エージェント別の起動設定
+# model の推奨は「頭を使う工程は claude-opus / 機械的な工程は sonnet」
+# effort は low / medium / high / xhigh / max のいずれか（省略時は high）
 agents:
   intake-issue-triager:
-    model: claude-opus-4-7      # Issue の分解・種別判定
+    model: claude-opus      # Issue の分解・種別判定
+    effort: high
   system-conductor:
-    model: claude-opus-4-7      # 構成要件の整理・エピック分割
+    model: claude-opus      # 構成要件の整理・エピック分割
+    effort: high
   system-architect:
-    model: claude-opus-4-7      # アーキテクチャ図・docs/wiki 骨格の生成
+    model: claude-opus      # アーキテクチャ図・docs/wiki 骨格の生成
+    effort: high
   architecture-reverse-engineer:
-    model: claude-opus-4-7      # 既存コードからの現状アーキテクチャ図の起こし
+    model: claude-opus      # 既存コードからの現状アーキテクチャ図の起こし
+    effort: high
   mock-reverse-engineer:
-    model: claude-opus-4-7      # 既存画面からの現状モックの起こし
+    model: claude-opus      # 既存画面からの現状モックの起こし
+    effort: high
   complex-scenario-reverse-engineer:
-    model: claude-opus-4-7      # 既存コードからの現状複合 UC シナリオの起こし
+    model: claude-opus      # 既存コードからの現状複合 UC シナリオの起こし
+    effort: high
   single-scenario-reverse-engineer:
-    model: claude-opus-4-7      # 既存コードからの現状単一 UC シナリオの起こし
+    model: claude-opus      # 既存コードからの現状単一 UC シナリオの起こし
+    effort: high
   ss-design-reverse-engineer:
-    model: claude-opus-4-7      # 既存コードからの現状結合 / モジュール構成の起こし
+    model: claude-opus      # 既存コードからの現状結合 / モジュール構成の起こし
+    effort: high
   epic-conductor:
-    model: claude-opus-4-7      # epic 要件・方針判断
+    model: claude-opus      # epic 要件・方針判断
+    effort: high
   epic-poc-runner:
-    model: claude-opus-4-7      # PoC 実装（技術判断）
+    model: claude-opus      # PoC 実装（技術判断）
+    effort: high
   mock-designer:
-    model: claude-opus-4-7      # UI 全体設計
+    model: claude-opus      # UI 全体設計
+    effort: high
   complex-scenario-writer:
-    model: claude-opus-4-7      # 複合シナリオ設計
+    model: claude-opus      # 複合シナリオ設計
+    effort: high
   complex-scenario-tester:
-    model: claude-opus-4-7      # 統合テスト設計・トリアージ
+    model: claude-opus      # 統合テスト設計・トリアージ
+    effort: high
   story-conductor:
-    model: claude-opus-4-7      # story 分解・判断
+    model: claude-opus      # story 分解・判断
+    effort: high
   single-scenario-writer:
-    model: claude-opus-4-7      # 単一シナリオ設計
+    model: claude-opus      # 単一シナリオ設計
+    effort: high
   single-scenario-tester:
-    model: claude-opus-4-7      # 統合テスト設計・トリアージ
+    model: claude-opus      # 統合テスト設計・トリアージ
+    effort: high
   subsystem-conductor:
-    model: claude-opus-4-7      # SA 分解・変更判断
+    model: claude-opus      # SA 分解・変更判断
+    effort: high
   architect:
-    model: claude-opus-4-7      # 設計・レビュー
+    model: claude-opus      # 設計・レビュー
+    effort: high
   library-poc-runner:
-    model: claude-opus-4-7      # PoC 実装（技術判断）
+    model: claude-opus      # PoC 実装（技術判断）
+    effort: high
   resetter:
-    model: claude-opus-4-7      # 影響範囲分析
+    model: claude-opus      # 影響範囲分析
+    effort: high
   questioner:
-    model: claude-opus-4-7      # 会話・判断
+    model: claude-opus      # 会話・判断
+    effort: high
   tester:
     model: sonnet               # 設計書からのテスト作成（機械的）
+    effort: high
   implementer:
     model: sonnet               # 設計書 + テストからの実装（機械的）
+    effort: high
   quick-implementer:
     model: sonnet               # 軽微修正の直接実装（機械的）
+    effort: high

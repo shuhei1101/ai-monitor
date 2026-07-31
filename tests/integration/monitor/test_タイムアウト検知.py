@@ -41,12 +41,12 @@ def _register_timed_out(mon_registry):
     )
 
 
-def _cycle(mon_settings, label_settings, agent_models, mon_registry, notify):
-    agents = build_agents(label_settings, agent_models=agent_models)
+def _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify):
+    agents = build_agents(label_settings, agent_settings=agent_settings)
     return run_cycle(mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=PAST, labels=label_settings, gate=RateLimitGate(), notify=notify)
 
 
-def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """超過セッションの kill + ラベル除去 + 台帳除去を確認する（正常系）。"""
     # 準備
     _register_timed_out(mon_registry)
@@ -54,40 +54,40 @@ def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, 
         _resp([_target_ns(52, ["確認:architect", "処理中:architect"])])
     ]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証
     assert gh_mon.rest.issues.remove_label.call_args.kwargs["name"] == "処理中:architect"
     assert ["kill-session", "-t", "ai-monitor-sandbox-52-architect"] in tmux_calls.calls
     assert mon_registry.sessions == []
 
 
-def test_normal_when_waiting(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal_when_waiting(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """待機中セッションの対象外を確認する（正常系）。"""
     # 準備
     _register_timed_out(mon_registry)
     gh_mon.rest.issues.list_for_repo.side_effect = [_resp([_target_ns(52, ["議論中"])])]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証
     gh_mon.rest.issues.remove_label.assert_not_called()
     assert not any(c[0] == "kill-session" for c in tmux_calls.calls)
     assert len(mon_registry.sessions) == 1
 
 
-def test_normal_when_session_gone(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, notify):
+def test_normal_when_session_gone(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
     """tmux 実体消失の台帳修復を確認する（正常系）。"""
     # 準備
     _register_timed_out(mon_registry)
     tmux_calls.has_session_rc = 1
     gh_mon.rest.issues.list_for_repo.side_effect = [_resp([])]
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証
     assert mon_registry.sessions == []
     assert not any(c[0] == "kill-session" for c in tmux_calls.calls)
 
 
-def test_error_when_api_error(gh_mon, tmux_calls, mon_settings, label_settings, agent_models, mon_registry, request_failed, notify):
+def test_error_when_api_error(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, request_failed, notify):
     """ラベル除去失敗の見送りを確認する（異常系）。"""
     # 準備
     _register_timed_out(mon_registry)
@@ -96,7 +96,7 @@ def test_error_when_api_error(gh_mon, tmux_calls, mon_settings, label_settings, 
     ]
     gh_mon.rest.issues.remove_label.side_effect = request_failed(500)
     # 実行
-    _cycle(mon_settings, label_settings, agent_models, mon_registry, notify)
+    _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証
     assert not any(c[0] == "kill-session" for c in tmux_calls.calls)
     assert len(mon_registry.sessions) == 1
