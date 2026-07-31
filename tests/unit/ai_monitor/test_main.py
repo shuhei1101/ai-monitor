@@ -138,3 +138,72 @@ def test_run_cycle_when_list_error(cycle_mocks, cycle_env, label_settings, rate_
     # 検証
     cycle_mocks.poll.assert_not_called()
     assert targets_by_project == {}
+
+
+# ---- 監視役の起動配線 ----
+
+
+@pytest.fixture
+def watchdog_target(tmp_path):
+    """監視役を指す監視対象を返す。"""
+    from ai_monitor.features.watchdog.types import WatchTarget
+
+    return WatchTarget(
+        name="watchdog",
+        pid_path=tmp_path / "watchdog.pid",
+        heartbeat_path=tmp_path / "watchdog.heartbeat",
+        port=None,
+        start_command=["true"],
+        down_event="watchdog_down",
+    )
+
+
+def test_ensure_watchdog_started(watchdog_target):
+    """監視役が居ないときに起動することを確認する（正常系）。"""
+    # 準備
+    from ai_monitor.features.watchdog.types import Liveness
+
+    started: list[str] = []
+    # 実行
+    main_mod.ensure_watchdog_started(
+        watchdog_target,
+        now=datetime.now(timezone.utc),
+        check=lambda target: Liveness(alive=False, missing="pid が読めない"),
+        start=lambda target: started.append(target.name),
+    )
+    # 検証
+    assert started == ["watchdog"]
+
+
+def test_ensure_watchdog_started_when_alive(watchdog_target):
+    """監視役が既に動いているときに起動しないことを確認する（正常系）。"""
+    # 準備
+    from ai_monitor.features.watchdog.types import Liveness
+
+    started: list[str] = []
+    # 実行
+    main_mod.ensure_watchdog_started(
+        watchdog_target,
+        now=datetime.now(timezone.utc),
+        check=lambda target: Liveness(alive=True),
+        start=lambda target: started.append(target.name),
+    )
+    # 検証
+    assert started == [], "再起動されたモニターが監視役を二重に起動している"
+
+
+def test_ensure_watchdog_started_when_failed(watchdog_target):
+    """監視役の起動に失敗してもモニターの起動を止めないことを確認する（正常系）。"""
+    # 準備
+    from ai_monitor.features.watchdog.types import Liveness
+
+    def _start(target):
+        raise OSError("起動できない")
+
+    # 実行・検証（例外を伝播させない）
+    main_mod.ensure_watchdog_started(
+        watchdog_target,
+        now=datetime.now(timezone.utc),
+        check=lambda target: Liveness(alive=False, missing="pid が読めない"),
+        start=_start,
+    )

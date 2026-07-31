@@ -58,6 +58,18 @@ class TelemetrySettings(BaseModel):
     otlp_endpoint: str = "http://localhost:4317"
 
 
+class WatchdogSettings(BaseModel):
+    """モニターと監視役の相互監視の設定。"""
+
+    # false にすると監視役を起動も監視もしない（モニターの起動と停止を外部が管理する場合に使う）
+    enabled: bool = True
+    interval_sec: int = 15
+    liveness_timeout_sec: int = 120
+    restart_window_min: int = 60
+    restart_max: int = 3
+    restarts_path: str = "data/restarts.yaml"
+
+
 class WebhookNotifySettings(BaseModel):
     """Webhook（Discord / Slack）方式の送信先 1 件分の設定。"""
 
@@ -101,6 +113,7 @@ class Settings(BaseSettings):
     projects: list[MonitoredProject] = []
     agents: dict[str, AgentSettings]
     telemetry: TelemetrySettings | None = None
+    watchdog: WatchdogSettings = WatchdogSettings()
     notifies: list[NotifySettings] = []
 
     @model_validator(mode="after")

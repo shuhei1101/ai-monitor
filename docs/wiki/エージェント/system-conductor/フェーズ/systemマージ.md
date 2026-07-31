@@ -16,6 +16,14 @@ commit された生成物（`README.md`・`docs/rules.yaml`・`docs/wiki/` 骨�
 MCP `resolve_comments` を呼ぶ:
 - `node_ids`: system PR の自分宛コメントの `node_id` 配列
 
+### Draft 解除
+
+MCP `mark_pr_ready` を呼ぶ:
+- `pr_number`: system PR の番号
+
+Draft のままマージすると 405 で失敗する。
+Ready 済みの PR に呼んでも何も起きない。
+
 ### マージ
 
 `規約/マージ手順.md` に沿って base（`master`）を取り込み、コンフリクトがないことを確認する。

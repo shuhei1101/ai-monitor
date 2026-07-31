@@ -22,6 +22,7 @@ MCP `create_draft_pr` を呼ぶ:
 - `base_branch`: `master`
 - `title`: chore Issue のタイトル
 - `body`: テンプレート「PR本文/軽微修正」の `## 紐づく Issue` / `## 概要`
+- `labels`: `$AI_MONITOR_LABEL_LAYER_CHORE` の値
 
 続けて MCP `mark_pr_ready` を呼ぶ:
 - `pr_number`: 作成した PR 番号

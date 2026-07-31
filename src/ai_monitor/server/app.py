@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import logging
+import os
+import signal
 import threading
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,9 +16,10 @@ from pydantic import BaseModel
 
 from ai_monitor.features.agents.service import reset_session
 from ai_monitor.features.agents.types import Agent
-from ai_monitor.features.notify.service import build_notifier
+from ai_monitor.features.notify.service import build_notifier, build_settings_reader
 from ai_monitor.features.rate_limit.gate import RateLimitGate
 from ai_monitor.features.rate_limit.service import resolve_reset_at
+from ai_monitor.features.watchdog.heartbeat import touch_heartbeat
 from ai_monitor.mcp.server import build_mcp_app
 from ai_monitor.shared.settings import LabelSettings, Settings
 
@@ -23,6 +27,11 @@ if TYPE_CHECKING:
     from ai_monitor.features.sessions.registry import SessionRegistry
 
 logger = logging.getLogger(__name__)
+
+
+def _exit_process() -> None:
+    """自プロセスへ終了シグナルを送る（uvicorn の停止手順を通す）。"""
+    os.kill(os.getpid(), signal.SIGTERM)
 
 
 class ContextResetRequest(BaseModel):
@@ -43,15 +52,22 @@ class RateLimitRequest(BaseModel):
 
 
 def create_app(
-    settings: Settings, *, registry: SessionRegistry, agents: list[Agent], label_settings: LabelSettings
+    settings: Settings,
+    *,
+    registry: SessionRegistry,
+    agents: list[Agent],
+    label_settings: LabelSettings,
+    heartbeat_path: Path | None = None,
+    supervise_watchdog: Callable[[datetime], None] | None = None,
+    exit_process: Callable[[], None] = _exit_process,
 ) -> FastAPI:
     """FastAPI アプリを生成し、MCP のマウントと lifespan を配線する。"""
     # MCP サーバーの ASGI アプリを組み立てる
     mcp_app = build_mcp_app(settings, registry=registry, agents=agents, label_settings=label_settings)
     # 上限の待機状態は到達通知の受信とポーリングループで共有する（上限はアカウント単位なので 1 つだけ持つ）
     gate = RateLimitGate()
-    # 通知の送出先を 1 回だけ解決する（未設定なら送らない関数になる）
-    notify = build_notifier(settings.notifies)
+    # 送出のたびに設定を読み直す（Webhook の変更に再起動を要らなくする）
+    notify = build_notifier(build_settings_reader(lambda: Settings().notifies))
 
     # lifespan で MCP のセッション管理を開始し、その内側でポーリングループを起動する
     @asynccontextmanager
@@ -63,18 +79,31 @@ def create_app(
         def loop() -> None:
             prev_targets: dict = {}
             heartbeat_at = "1970-01-01T00:00:00+00:00"
-            while not stop.is_set():
-                prev_targets, heartbeat_at = run_cycle(
-                    settings,
-                    agents,
-                    registry=registry,
-                    prev_targets=prev_targets,
-                    last_heartbeat_at=heartbeat_at,
-                    labels=label_settings,
-                    gate=gate,
-                    notify=notify,
-                )
-                stop.wait(settings.poll_interval_sec)
+            # ループが例外で抜けたら理由を残してプロセスごと落とす
+            # （HTTP だけ生きている状態にすると、MCP は応答するのに仕事が割り当てられなくなる）
+            try:
+                while not stop.is_set():
+                    now = datetime.now(timezone.utc)
+                    # 監視役が鮮度を見る材料として、1 周ごとに時刻を書く
+                    if heartbeat_path is not None:
+                        touch_heartbeat(heartbeat_path, now=now)
+                    prev_targets, heartbeat_at = run_cycle(
+                        settings,
+                        agents,
+                        registry=registry,
+                        prev_targets=prev_targets,
+                        last_heartbeat_at=heartbeat_at,
+                        labels=label_settings,
+                        gate=gate,
+                        notify=notify,
+                    )
+                    # 監視役の生存を見る（落ちていれば再起動して通知する）
+                    if supervise_watchdog is not None:
+                        supervise_watchdog(now)
+                    stop.wait(settings.poll_interval_sec)
+            except BaseException:
+                logger.critical("ポーリングループが停止したためプロセスを終了します", exc_info=True)
+                exit_process()
 
         async with mcp_app.router.lifespan_context(mcp_app):
             thread = threading.Thread(target=loop, daemon=True)

@@ -10,6 +10,14 @@ single-scenario-writer の全 pass 報告を受けて story PR を親 epic ブ�
 
 MCP `resolve_comments` で完了報告コメントを Resolve する。
 
+### Draft 解除
+
+MCP `mark_pr_ready` を呼ぶ:
+- `pr_number`: story PR の番号（初期処理の監視面から取得）
+
+Draft のままマージすると 405 で失敗する。
+Ready 済みの PR に呼んでも何も起きない。
+
 ### マージ
 
 `規約/マージ手順.md` に沿って base（親 epic ブランチ）を取り込み、コンフリクトがないことを確認する。

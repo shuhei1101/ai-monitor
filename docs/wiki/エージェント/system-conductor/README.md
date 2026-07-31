@@ -22,6 +22,7 @@ template_version: 2.0.0
 | `{起こす範囲}` | リポジトリ全体 |
 | `{成果物}` | `設計図/アーキテクチャ図.md` + 機能の洗い出し（完了報告コメント） |
 | 依頼先の確認ラベル | `$AI_MONITOR_LABEL_CONFIRM_ARCHITECTURE_REVERSE_ENGINEER` |
+| `{レイヤーラベル}` | `$AI_MONITOR_LABEL_LAYER_SYSTEM` |
 | `layer:*` / `type:*` の付与 | 必要（`$AI_MONITOR_LABEL_LAYER_SYSTEM` + `$AI_MONITOR_LABEL_TYPE_DOCS`。ユーザーが直接起票するため） |
 
 ## 目次

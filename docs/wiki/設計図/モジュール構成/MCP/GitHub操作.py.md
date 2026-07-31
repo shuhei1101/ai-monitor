@@ -77,8 +77,8 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 新規 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_intake_issue`](#新規issue起票) | 親を持たない intake Issue を作成 | 全エージェントが使う。ラベルは固定 |
 | 不具合 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_defect_issue`](#不具合issue起票) | ai-monitor 自身のリポジトリへ不具合 Issue を作成 | 全エージェントが使う。assignee = 認証ユーザー・ラベルは `AI不具合報告` のみ |
 | 不具合本文組立 | 内部処理 | `mcp/server.py` | 関数 | [`_build_defect_body`](#不具合本文組立) | 報告元 / 該当ページ / 事象 / 回避策を定型セクションに組み立てる | 不具合 Issue 起票からのみ使う |
-| Draft PR 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_draft_pr`](#draftpr作成) | base 明示で Draft PR を作成 | Stacked PR 対応 |
-| PR Ready 化 | MCP ツール | `mcp/server.py` | 関数 | [`mark_pr_ready`](#pr_ready化) | Draft を解除 | - |
+| Draft PR 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_draft_pr`](#draftpr作成) | base 明示で Draft PR を作成 | Stacked PR 対応。`layer:*` は作成時に付与する |
+| PR Ready 化 | MCP ツール | `mcp/server.py` | 関数 | [`mark_pr_ready`](#pr_ready化) | Draft を解除 | Ready 済みなら何もしない（冪等） |
 | PR マージ | MCP ツール | `mcp/server.py` | 関数 | [`merge_pr`](#prマージ) | 既定 squash + ブランチ削除でマージ | - |
 | worktree 作成 | MCP ツール | `mcp/server.py` | 関数 | [`worktree_create`](#worktree作成) | ブランチと worktree を作成 | 命名は `規約/ブランチ戦略.md` |
 | worktree 削除 | MCP ツール | `mcp/server.py` | 関数 | [`worktree_remove`](#worktree削除) | worktree とブランチを削除 | - |
@@ -613,7 +613,7 @@ classDiagram
 
   class DraftPR作成 {
     <<function>>
-    +DraftPR作成(headブランチ, baseブランチ, タイトル, 本文) dict
+    +DraftPR作成(headブランチ, baseブランチ, タイトル, 本文, ラベル一覧) dict
   }
   class PR_Ready化 {
     <<function>>
@@ -2262,11 +2262,12 @@ base 明示で Draft PR を作成する（Stacked PR 対応）。
 | base ブランチ | `base_branch` | `str` | ✅ | - | base ブランチ名 | Stacked PR 用 |
 | タイトル | `title` | `str` | ✅ | - | PR タイトル | - |
 | 本文 | `body` | `str` | ✅ | - | PR 本文 | 作成時は `## 紐づく Issue` のみの運用 |
+| ラベル | `labels` | `list[str] \| None` | - | `None`（付与しない） | 作成直後に付与するラベル | 紐づく Issue と同じ `layer:*` を渡す |
 
 引数例:
 
 ```python
-create_draft_pr(head_branch="feat/backend/profile/edit/edit-api", base_branch="feat/story/profile/edit", title="プロフィール編集 API", body="## 紐づく Issue\n\n- #50")
+create_draft_pr(head_branch="feat/backend/profile/edit/edit-api", base_branch="feat/story/profile/edit", title="プロフィール編集 API", body="## 紐づく Issue\n\n- #50", labels=["layer:subsystem"])
 ```
 
 #### 戻り値
@@ -2283,7 +2284,10 @@ CreatedPRResult(pr_number=52, url="https://github.com/.../pull/52")
 
 #### 処理
 
-1. REST で `draft=true`・`base` 明示の PR を作成し、`CreatedPRResult` を返す
+1. REST で `draft=true`・`base` 明示の PR を作成する
+2. `labels` がある場合、作成した PR に Issue としてラベルを付与する
+   - PR 作成 API はラベルを受け取らないため、付与は別リクエストになる
+3. `CreatedPRResult` を返す
 
 #### 例外
 
@@ -2295,13 +2299,14 @@ CreatedPRResult(pr_number=52, url="https://github.com/.../pull/52")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_draft_pr` | 正常 | base 明示の Draft PR 作成 | head / base / title / body | githubkit | `draft=true`・`base` 指定で作成 + `CreatedPRResult` | - |
+| `test_create_draft_pr` | 正常 | base 明示の Draft PR 作成 + ラベル付与 | head / base / title / body / labels | githubkit | `draft=true`・`base` 指定で作成され、指定ラベルが付与される | - |
+| `test_create_draft_pr_when_no_labels` | 正常 | ラベルなしでの作成 | `labels` を省略 | githubkit | ラベル付与 API が呼ばれない | 省略時の分岐 |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_create_draft_pr` | GitHub | base 明示の Draft PR 作成 | `draft=true` / base 指定 | 副作用: sandbox に PR 作成（テスト後クローズ + ブランチ削除） |
+| `test_ext_create_draft_pr` | GitHub | base 明示の Draft PR 作成 | `draft=true` / base 指定 / ラベル付与 | 副作用: sandbox に PR 作成（テスト後クローズ + ブランチ削除） |
 
 ---
 
@@ -2337,8 +2342,10 @@ EmptyResult()
 
 #### 処理
 
-1. PR の GraphQL node_id を取得する
-2. `markPullRequestReadyForReview` mutation を実行し、`EmptyResult` を返す
+1. PR の GraphQL node_id と Draft 状態を取得する
+2. Draft でない場合、mutation を実行せず `EmptyResult` を返す
+   - Ready 済みへの mutation はエラーになるため、マージ直前の呼び出しを安全にする
+3. `markPullRequestReadyForReview` mutation を実行し、`EmptyResult` を返す
 
 #### 例外
 
@@ -2351,7 +2358,8 @@ EmptyResult()
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_mark_pr_ready` | 正常 | Draft 解除 | pr_number | githubkit | `markPullRequestReadyForReview` mutation が実行される | - |
+| `test_mark_pr_ready` | 正常 | Draft 解除 | 対象 PR が Draft | githubkit | `markPullRequestReadyForReview` mutation が実行される | - |
+| `test_mark_pr_ready_when_already_ready` | 正常 | Ready 済みの素通し | 対象 PR が Ready | githubkit | mutation が実行されない | マージ直前の呼び出しを冪等にする分岐 |
 
 #### 疎通テスト
 

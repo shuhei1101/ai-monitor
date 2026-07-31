@@ -8,10 +8,16 @@
 """
 from __future__ import annotations
 
+import pytest
+
 import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import issue, label_names, me, waiting_for_user
 from tests.e2e.実装対象 import add_worktree
 from tests.e2e.統合テスト import STORY_PR_BODY, setup_story, story_branch_files
+
+# 起票されるのはテストデータなので、起票先を sandbox へ上書きした別実行で回す
+# （複製 Wiki のページ差し替えが他テストからも見えるため直列実行も前提）
+pytestmark = pytest.mark.defect_report
 
 PHASE_PAGE = "エージェント/single-scenario-writer/フェーズ/統合テスト割り当て.md"
 

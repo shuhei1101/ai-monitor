@@ -1,6 +1,7 @@
 """`src/ai_monitor/server/app.py` の単体テスト。"""
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -154,3 +155,53 @@ def test_receive_rate_limit_when_session_missing(client, blocked, monkeypatch):
     assert response.status_code == 404
     assert blocked == []
     assert calls == []
+
+
+# ---- ポーリングループ ----
+
+
+def test_create_app_when_heartbeat(mon_settings, mon_registry, agents, monkeypatch, label_settings, tmp_path):
+    """ループが 1 周ごとに最終周回時刻を書くことを確認する（正常系）。"""
+    # 準備
+    import ai_monitor.main as main_mod
+
+    monkeypatch.setattr(main_mod, "run_cycle", lambda *a, **k: ({}, "1970-01-01T00:00:00+00:00"))
+    beat_path = tmp_path / "monitor.heartbeat"
+    supervised: list[object] = []
+    app = app_mod.create_app(
+        mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings,
+        heartbeat_path=beat_path, supervise_watchdog=lambda now: supervised.append(now),
+    )
+    # 実行
+    with TestClient(app, base_url="http://localhost:8765"):
+        for _ in range(50):
+            if beat_path.exists() and supervised:
+                break
+            time.sleep(0.05)
+    # 検証
+    assert beat_path.exists(), "最終周回時刻が書かれていない"
+    assert supervised, "監視役の監視が呼ばれていない"
+
+
+def test_create_app_when_cycle_raised(mon_settings, mon_registry, agents, monkeypatch, label_settings):
+    """ポーリングループの異常終了でプロセス終了が呼ばれることを確認する（正常系）。"""
+    # 準備
+    import ai_monitor.main as main_mod
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("周期の失敗")
+
+    monkeypatch.setattr(main_mod, "run_cycle", _raise)
+    exited: list[bool] = []
+    app = app_mod.create_app(
+        mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings,
+        exit_process=lambda: exited.append(True),
+    )
+    # 実行
+    with TestClient(app, base_url="http://localhost:8765"):
+        for _ in range(50):
+            if exited:
+                break
+            time.sleep(0.05)
+    # 検証
+    assert exited, "ループが無言で消えている"

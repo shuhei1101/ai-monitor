@@ -33,3 +33,6 @@ package = false
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = ["-ra", "--import-mode=importlib"]
+markers = [
+    "defect_report: 起票先の上書きと直列実行が要る不具合報告の E2E（全件実行からは -m 'not defect_report' で外す）",
+]

@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import logging
+import os
+from collections.abc import Callable
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 
 import uvicorn
@@ -20,7 +23,12 @@ from ai_monitor.features.notify.gates import notify_open_gates
 from ai_monitor.features.notify.types import NotifyFn
 from ai_monitor.features.rate_limit.gate import RateLimitGate
 from ai_monitor.features.rate_limit.service import resume_blocked_sessions
+from ai_monitor.features.notify.service import build_notifier, build_settings_reader
 from ai_monitor.features.sessions.registry import SessionRegistry
+from ai_monitor.features.watchdog.service import check_liveness, supervise
+from ai_monitor.features.watchdog.targets import build_monitor_target, build_watchdog_target
+from ai_monitor.features.watchdog.types import Liveness, StartProcessFn, WatchTarget
+from ai_monitor.integrations.process.ops import can_connect, is_pid_alive, start_detached, terminate
 from ai_monitor.integrations.github.client import check_github, get_client
 from ai_monitor.integrations.webhook.client import check_webhook
 from ai_monitor.integrations.github.search import list_open_targets
@@ -151,9 +159,67 @@ def main() -> int:
         return 1
     agents = build_agents(labels, agent_settings=settings.agents)
     registry = SessionRegistry(Path(settings.state_path))
-    app = create_app(settings, registry=registry, agents=agents, label_settings=labels)
+    # 自分の pid を書き出す（監視役の生存確認が読む）
+    self_target = build_monitor_target(settings)
+    self_target.pid_path.parent.mkdir(parents=True, exist_ok=True)
+    self_target.pid_path.write_text(str(os.getpid()), encoding="utf-8")
+    # 監視役の監視を組み立て、居なければ起動する（無効なら監視も起動もしない）
+    watchdog_target = build_watchdog_target(settings)
+    check = partial(
+        check_liveness,
+        timeout_sec=settings.watchdog.liveness_timeout_sec,
+        is_pid_alive=is_pid_alive,
+        can_connect=can_connect,
+    )
+    # 送出のたびに設定を読み直す（Webhook の変更に再起動を要らなくする）
+    notify = build_notifier(build_settings_reader(lambda: Settings().notifies))
+    if settings.watchdog.enabled:
+        ensure_watchdog_started(
+            watchdog_target,
+            now=datetime.now(timezone.utc),
+            check=partial(check, now=datetime.now(timezone.utc)),
+            start=start_detached,
+        )
+
+    def _supervise_watchdog(now: datetime) -> None:
+        """監視役の生存を 1 周期分見る。"""
+        supervise(
+            watchdog_target,
+            now=now,
+            settings=settings.watchdog,
+            check=partial(check, now=now),
+            start=start_detached,
+            stop=terminate,
+            notify=notify,
+        )
+
+    app = create_app(
+        settings,
+        registry=registry,
+        agents=agents,
+        label_settings=labels,
+        heartbeat_path=self_target.heartbeat_path,
+        supervise_watchdog=_supervise_watchdog if settings.watchdog.enabled else None,
+    )
     uvicorn.run(app, host="127.0.0.1", port=settings.port)
     return 0
+
+
+def ensure_watchdog_started(
+    target: WatchTarget, *, now: datetime, check: Callable[[WatchTarget], Liveness], start: StartProcessFn
+) -> None:
+    """モニターの起動時に、監視役が動いていなければ起動する。"""
+    # 監視役に再起動されたモニターは、既に動いている監視役に相乗りする
+    if check(target).alive:
+        return
+    # 起動時は通知も記録もしない（正常な起動でも監視役は必ず居ないため誤検知になる）
+    try:
+        start(target)
+    except Exception:
+        # 監視が無い状態にはなるが、ワークフロー自体は回るのでモニターは続ける
+        logger.exception("監視役の起動に失敗しました: target=%s", target.name)
+        return
+    logger.info("監視役を起動しました: start_command=%s", target.start_command)
 
 
 if __name__ == "__main__":

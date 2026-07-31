@@ -17,6 +17,7 @@ subsystem ブランチ名 `{type}/{scope}/{ドメイン}/{UC名}/{変更内容}`
 - `base_branch`: `master`
 - `title`: `PoC: {ライブラリ名}（#{親 subsystem Issue 番号}）`
 - `body`: テンプレート「PR本文/ライブラリPoC」の `## 紐づく Issue` / `## 発注元 PR` / `## 検証対象` / `## 調査結果` / `## 検証観点と結果`（観点と成功条件まで。実測値・判定は `-`）
+- `labels`: `$AI_MONITOR_LABEL_LAYER_SUBSYSTEM` の値
 
 ### 候補比較コメントへの PoC PR 一覧の追記
 

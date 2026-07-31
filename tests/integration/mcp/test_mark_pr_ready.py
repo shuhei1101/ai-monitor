@@ -12,13 +12,24 @@ from ai_monitor.mcp.models import EmptyResult
 def test_normal(gh, resp, api):
     """node_id 取得 → markPullRequestReadyForReview mutation の一連を確認する（正常系）。"""
     # 準備
-    gh.rest.pulls.get.return_value = resp(NS(node_id="PR_1", head=NS(ref="feat/x", sha="S")))
+    gh.rest.pulls.get.return_value = resp(NS(node_id="PR_1", draft=True, head=NS(ref="feat/x", sha="S")))
     # 実行
     res = api.mark_pr_ready(52)
     # 検証
     query, variables = gh.graphql.call_args.args
     assert "markPullRequestReadyForReview" in query
     assert variables == {"id": "PR_1"}
+    assert res == EmptyResult()
+
+
+def test_normal_when_already_ready(gh, resp, api):
+    """Ready 済みの PR で mutation を呼ばないことを確認する（正常系）。"""
+    # 準備
+    gh.rest.pulls.get.return_value = resp(NS(node_id="PR_1", draft=False, head=NS(ref="feat/x", sha="S")))
+    # 実行
+    res = api.mark_pr_ready(52)
+    # 検証
+    gh.graphql.assert_not_called()
     assert res == EmptyResult()
 
 

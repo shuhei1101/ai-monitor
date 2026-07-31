@@ -20,6 +20,7 @@ template_version: 2.0.0
 | `{起こす範囲}` | 親 epic Issue の `## ユースケース一覧` の当該 UC |
 | `{成果物}` | `設計図/シナリオ/単一ユースケース/{機能名}.md` |
 | 依頼先の確認ラベル | `$AI_MONITOR_LABEL_CONFIRM_SINGLE_SCENARIO_REVERSE_ENGINEER` |
+| `{レイヤーラベル}` | `$AI_MONITOR_LABEL_LAYER_STORY` |
 | `layer:*` / `type:*` の付与 | 不要（起票側が付与済み） |
 
 ## 目次

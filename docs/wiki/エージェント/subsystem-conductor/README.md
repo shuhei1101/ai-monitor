@@ -21,6 +21,7 @@ template_version: 2.0.0
 | `{起こす範囲}` | 親 story の UC のうち自 Issue の `scope:*` が指す範囲 |
 | `{成果物}` | `設計図/インターフェース定義/` / `設計図/モジュール構成/` / `設計図/ER図/` / `設計図/画面構成/` |
 | 依頼先の確認ラベル | `$AI_MONITOR_LABEL_CONFIRM_SS_DESIGN_REVERSE_ENGINEER` |
+| `{レイヤーラベル}` | `$AI_MONITOR_LABEL_LAYER_SUBSYSTEM` |
 | `layer:*` / `type:*` の付与 | 不要（起票側が付与済み） |
 
 ## 目次

@@ -231,10 +231,10 @@ def _collect_issue_tree(gh_live, owner: str, repo: str, number: int, collected: 
     collected.append(number)
 
 
-def _find_prs_for(gh_live, owner: str, repo: str, numbers: list[int]) -> list:
-    """指定番号のいずれかを本文で参照している open PR を返す。"""
+def _find_prs_for(gh_live, owner: str, repo: str, numbers: list[int], *, state: str = "open") -> list:
+    """指定番号のいずれかを本文で参照している PR を返す。"""
     try:
-        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
+        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state=state, per_page=100).parsed_data
     except RequestFailed:
         return []
     return [pr for pr in pulls if any(f"#{number}" in (pr.body or "") for number in numbers)]
@@ -245,6 +245,7 @@ def _find_reported_issues_for(gh_live, owner: str, repo: str, numbers: list[int]
 
     エージェントが不具合報告で起票した Issue は親を持たず PR でもないため、
     Issue ツリーからも紐づく PR からも辿れない。報告元の番号を手掛かりに回収する。
+    起票先を sandbox へ上書きした実行でだけ一致する（通常の実行では ai-monitor 側に起票され、残す）。
     """
     try:
         listed = gh_live.rest.issues.list_for_repo(
@@ -321,7 +322,9 @@ def _cleanup(gh_live, owner: str, repo: str, sandbox: dict, root_numbers: list[i
     for number in reversed(root_numbers):
         _collect_issue_tree(gh_live, owner, repo, number, numbers)
     pulls = _find_prs_for(gh_live, owner, repo, numbers)
-    numbers.extend(pr.number for pr in pulls)
+    # マージ済みの PR も番号を拾う（担当エージェントのセッションは PR が閉じても常駐し続ける）
+    closed = _find_prs_for(gh_live, owner, repo, numbers, state="all")
+    numbers.extend({pr.number for pr in [*pulls, *closed]})
     # エージェントが起票した不具合報告は親を持たないので、報告元の番号から拾う
     numbers.extend(_find_reported_issues_for(gh_live, owner, repo, numbers))
     branches = [pr.head.ref for pr in pulls]

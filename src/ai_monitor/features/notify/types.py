@@ -3,13 +3,27 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
+
+if TYPE_CHECKING:
+    from ai_monitor.shared.settings import NotifySettings
 
 # ユーザーが気づくべき出来事の契機（モニターの検知と MCP ツールの処理から送る）
-type NotifyEvent = Literal["rate_limit", "user_gate", "timeout_kill", "epic_done", "defect_report"]
+type NotifyEvent = Literal[
+    "rate_limit",
+    "user_gate",
+    "timeout_kill",
+    "epic_done",
+    "defect_report",
+    "monitor_down",
+    "watchdog_down",
+]
 
 # 送信先サービス（ペイロードのキーが変わる）
 type WebhookKind = Literal["discord", "slack"]
+
+# 通知設定を読む関数（送出のたびに呼び、設定ファイルの編集を再起動なしで反映する）
+type ReadNotifySettings = Callable[[], list["NotifySettings"]]
 
 # 組み立て済みの本文を送る関数（失敗理由を返し、成功時は空文字）
 # 送信先は build_sender が束ねるため、本型は本文だけを受ける

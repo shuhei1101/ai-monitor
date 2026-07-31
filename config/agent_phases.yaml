@@ -5,6 +5,7 @@ architect:
   - エージェント/architect/README.md
   - エージェント/architect/フェーズ/初期処理.md
   - エージェント/architect/フェーズ/SS設計（初回）.md
+  - エージェント/architect/フェーズ/設計変更なしの着手.md
   - エージェント/architect/フェーズ/ライブラリPoC結果まとめ.md
   - エージェント/architect/フェーズ/ライブラリPoC発注.md
   - エージェント/architect/フェーズ/ライブラリ採用の反映.md

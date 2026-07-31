@@ -24,19 +24,55 @@ rate_limit_fallback_min: 60
 # セッション台帳の永続化先
 state_path: data/state.yaml
 
+# モニターと監視役の相互監視（丸ごと省略しても既定値で動く）
+watchdog:
+  enabled: true                 # false にすると監視役を起動も監視もしない
+  interval_sec: 15              # 相手の生存を確認する間隔（秒）
+  liveness_timeout_sec: 120     # 最終周回時刻がこの秒数より古ければ停止とみなす
+  restart_window_min: 60        # 再起動の回数を数える期間（分）
+  restart_max: 3                # 期間内に許す再起動の回数（超えたら通知のみ・相手ごとに別勘定）
+  restarts_path: data/restarts.yaml
+
 # 通知の送信先（複数指定可・丸ごと省略すると通知しない）
+# 同じ送信先を複数登録し、events で契機を振り分けると面ごとに分けられる
 notifies:
   - type: webhook              # 送出方式の判別子
     enabled: true              # false にすると設定を残したまま止められる
-    name: 開発 Discord         # ログと送出結果で使う表示名（省略時は {type}:{kind}）
+    name: ユーザー確認待ち     # ログと送出結果で使う表示名（省略時は {type}:{kind}）
     webhook_url: https://discord.com/api/webhooks/xxxxxxxx
     kind: discord              # discord / slack でペイロードのキーが変わる
     events:                    # 契機ごとの送出可否（書かなかった契機は送る）
-      rate_limit: true
       user_gate: true
-      timeout_kill: true
-      epic_done: true
-      defect_report: true
+      rate_limit: false
+      timeout_kill: false
+      epic_done: false
+      defect_report: false
+      monitor_down: false
+      watchdog_down: false
+      monitor_down: false
+      watchdog_down: false
+
+  - type: webhook
+    enabled: true
+    name: 死活監視
+    webhook_url: https://discord.com/api/webhooks/zzzzzzzz
+    kind: discord
+    events:
+      monitor_down: true
+      watchdog_down: true
+      user_gate: false
+      rate_limit: false
+      timeout_kill: false
+      epic_done: false
+      defect_report: false
+
+  - type: webhook
+    enabled: true
+    name: 運用通知
+    webhook_url: https://discord.com/api/webhooks/yyyyyyyy
+    kind: discord
+    events:
+      user_gate: false         # 書かなかった契機は送るので、外す契機だけ false にすれば足りる
 
 # ai-monitor 自身の Wiki の場所（フェーズページ・共通対応表・共通ルールの取得元）
 # raw URL（https:// 始まり）またはローカル絶対パスのどちらでもよい

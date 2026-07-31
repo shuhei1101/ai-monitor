@@ -348,6 +348,13 @@ PR_BODY_WITH_ER = SUBSYSTEM_PR_BODY_TEMPLATE.replace(
 )
 DESIGN_TASK_LINES_WITH_ER = ["`設計図/ER図/タスク.md` を新規作成", *DESIGN_TASK_LINES]
 
+# 設計タスクを持たない修正用 PR（バグ差し戻しを受けた subsystem-conductor が作るもの）
+PR_BODY_NO_DESIGN = SUBSYSTEM_PR_BODY_TEMPLATE.replace(
+    "- [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成\n"
+    "- [ ] `設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成\n",
+    "",
+)
+
 # base（story ブランチ）にある現状のモジュール構成（RE 経路の入力）
 CURRENT_MODULE_PATH = "docs/wiki/設計図/モジュール構成/バックエンド/タスク.py.md"
 CURRENT_MODULE_MD = """# モジュール構成: バックエンド / タスク
@@ -504,6 +511,47 @@ def test_normal(
     handoffs = [c for c in comments if "> to: @tester" in (c.body or "")]
     assert handoffs, "tester への割り当てコメントが投稿されていない"
     assert "設計図/" in (handoffs[-1].body or ""), "割り当てコメントに設計ページ名がない"
+
+
+def test_normal_when_no_design_change(
+    monitor, gh_live, repo_ctx, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until,
+):
+    """設計タスク 0 件の修正用 PR で設計を作らず tester へ渡すことを実環境で確認する（正常系）。"""
+    owner, repo = repo_ctx
+    ctx = _setup_ss_design(
+        gh_live, owner, repo, sandbox,
+        _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, subsystem_issue_factory),
+        commit_file, pr_body=PR_BODY_NO_DESIGN,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
+    )
+
+    # 実行: tester への引き渡しを待つ（設計提案のユーザー確認ゲートは開かない想定）
+    def _handoff():
+        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=ctx["pr"].number).parsed_data
+        labels = {label.name for label in data.labels}
+        return data if "確認:tester" in labels else None
+
+    pr_final = wait_until(_handoff, timeout_sec=1800, message="tester への引き渡し")
+
+    # 検証: 設計 Wiki が 1 件も作られていない
+    paths = _design_paths(gh_live, owner, repo, ctx["subsystem_branch"])
+    seed_paths = _design_paths(gh_live, owner, repo, ctx["story_branch"])
+    assert paths == seed_paths, f"設計 Wiki が追加されている: {sorted(set(paths) - set(seed_paths))}"
+
+    # 検証: ユーザー確認を挟まずに tester へ渡っている
+    labels = {label.name for label in pr_final.labels}
+    assert "確認:architect" not in labels, "確認:architect が除去されていない"
+    assert "議論中" not in labels, "ユーザー確認ゲートが開いている"
+
+    # 検証: 判定一覧とテスト作成の指示が tester 宛に投稿されている
+    comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number
+    ).parsed_data
+    handoffs = [c for c in comments if "> to: @tester" in (c.body or "")]
+    assert handoffs, "tester への割り当てコメントが投稿されていない"
 
 
 def test_normal_when_interface_report(

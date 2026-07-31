@@ -162,6 +162,47 @@ sequenceDiagram
 - `設計図/ER図/` 配下への commit が存在しない（タスク一覧にない Wiki は作成されない）
 - subsystem PR に `確認:tester` が付与され、`確認:architect` が除去されている
 
+## 正常シナリオ（設計変更なし）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| subsystem Draft PR | `確認:architect` 付与済みの修正用 PR | バグ差し戻しを受けた subsystem-conductor が作成したもの |
+| タスク一覧 | 設計タスクが 0 件（実装とテスト実行のみ） | 分岐を決定的に誘発 |
+| 既存テスト | 差し戻された fail を再現するテストが base ブランチに commit 済み | 実行すると fail する |
+| assignee | PR に未設定 | エージェント起動条件 |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  participant GH as GitHub
+  participant ORC as モニター
+  participant MON as architect
+  participant REPO as リポジトリ
+
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
+  ORC->>MON: セッションを作成して送信
+  activate MON
+  MON-->>GH: subsystem PR の タスク一覧 を読み<br>設計タスクが 0 件と判定
+  MON-->>GH: 親 subsystem Issue の システム要件（SA）と<br>親 story の ユースケース要件 を取得
+  MON->>REPO: worktree で fail 内容と<br>既存の設計 Wiki・実装コードを確認
+  MON->>MON: 影響調査の判定一覧が<br>全て「維持」と確定
+  MON->>GH: subsystem PR に判定一覧と<br>テスト作成の指示を投稿（@tester 宛）
+  MON->>GH: subsystem PR の 確認:architect 除去
+  MON->>GH: subsystem PR に 確認:tester 付与
+  deactivate MON
+```
+
+### 期待値
+
+- 設計 Wiki への commit が 1 件も存在しない
+- subsystem PR に判定一覧とテスト作成の指示コメント（@tester 宛・未解決）が投稿されている
+- subsystem PR に `確認:tester` が付与され、`確認:architect` が除去されている
+- `議論中` が付与されていない（ユーザー確認を挟まずに次担当へ渡る）
+
 ## 正常シナリオ（差し戻しからの設計修正）
 
 ### セットアップ

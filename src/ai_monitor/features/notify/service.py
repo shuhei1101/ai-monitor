@@ -8,6 +8,7 @@ from typing import assert_never
 from ai_monitor.features.notify.types import (
     NotifyEvent,
     NotifyFn,
+    ReadNotifySettings,
     SendResult,
     SendTarget,
     TargetResult,
@@ -116,9 +117,45 @@ def notify_event(
     )
 
 
-def build_notifier(settings_list: list[NotifySettings]) -> NotifyFn:
-    """設定から送出先を組み立てた契機通知の関数を返す（composition root で 1 回だけ呼ぶ）。"""
-    # 有効な設定だけを送出先にし、契機の判定に使う設定も同じ並びで束ねる
-    enabled_settings = [s for s in settings_list if s.enabled]
-    targets = build_targets(settings_list)
-    return partial(notify_event, settings_list=enabled_settings, targets=targets)
+def build_settings_reader(read: ReadNotifySettings) -> ReadNotifySettings:
+    """送出のたびに通知設定を読み直す関数を返す（読めなければ直前の設定を使う）。"""
+    # 初回は素直に読む（ここで失敗したら起動を止めたいので握らない）
+    cache = [read()]
+
+    def _read() -> list[NotifySettings]:
+        # 設定ファイルの編集を再起動なしで反映する
+        try:
+            cache[0] = read()
+        except Exception:
+            # 編集途中や記述ミスで送出が止まらないよう、直前の設定で送り続ける
+            logger.warning("通知設定を読み直せませんでした。直前の設定で送出します", exc_info=True)
+        return cache[0]
+
+    return _read
+
+
+def build_notifier(read: ReadNotifySettings) -> NotifyFn:
+    """契機通知の関数を返す（送出のたびに設定を解決する）。"""
+
+    def _notify(
+        event: NotifyEvent,
+        title: str,
+        body: str,
+        *,
+        repo: str | None = None,
+        number: int | None = None,
+    ) -> SendResult:
+        settings_list = read()
+        # 有効な設定だけを送出先にし、契機の判定に使う設定も同じ並びで束ねる
+        enabled_settings = [s for s in settings_list if s.enabled]
+        return notify_event(
+            event,
+            title,
+            body,
+            settings_list=enabled_settings,
+            targets=build_targets(settings_list),
+            repo=repo,
+            number=number,
+        )
+
+    return _notify

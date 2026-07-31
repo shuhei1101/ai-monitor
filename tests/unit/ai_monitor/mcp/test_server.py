@@ -1006,7 +1006,7 @@ def test_build_defect_body_when_no_workaround():
 
 
 def test_create_draft_pr(gh, api):
-    """base 明示の Draft PR 作成を確認する（正常系）。"""
+    """base 明示の Draft PR 作成とラベル付与を確認する（正常系）。"""
     # 準備
     gh.rest.pulls.create.return_value = _resp(NS(number=52, node_id="PR_1", html_url="http://p/52"))
     # 実行
@@ -1015,25 +1015,53 @@ def test_create_draft_pr(gh, api):
         base_branch="feat/story/profile/edit",
         title="プロフィール編集 API",
         body="## 紐づく Issue\n\n- #50",
+        labels=["layer:subsystem"],
     )
     # 検証
     kwargs = gh.rest.pulls.create.call_args.kwargs
     assert kwargs["head"] == "feat/backend/profile/edit/edit-api"
     assert kwargs["base"] == "feat/story/profile/edit"
     assert kwargs["draft"] is True
+    label_kwargs = gh.rest.issues.add_labels.call_args.kwargs
+    assert (label_kwargs["issue_number"], label_kwargs["labels"]) == (52, ["layer:subsystem"])
     assert res == CreatedPRResult(pr_number=52, url="http://p/52")
+
+
+def test_create_draft_pr_when_no_labels(gh, api):
+    """ラベル省略時に付与 API を呼ばないことを確認する（正常系）。"""
+    # 準備
+    gh.rest.pulls.create.return_value = _resp(NS(number=52, node_id="PR_1", html_url="http://p/52"))
+    # 実行
+    api.create_draft_pr(
+        head_branch="feat/backend/profile/edit/edit-api",
+        base_branch="feat/story/profile/edit",
+        title="プロフィール編集 API",
+        body="## 紐づく Issue\n\n- #50",
+    )
+    # 検証
+    gh.rest.issues.add_labels.assert_not_called()
 
 
 def test_mark_pr_ready(gh, api):
     """markPullRequestReadyForReview mutation での Draft 解除を確認する（正常系）。"""
     # 準備
-    gh.rest.pulls.get.return_value = _resp(NS(node_id="PR_1", head=NS(ref="feat/x", sha="S")))
+    gh.rest.pulls.get.return_value = _resp(NS(node_id="PR_1", draft=True, head=NS(ref="feat/x", sha="S")))
     # 実行
     api.mark_pr_ready(52)
     # 検証
     query, variables = gh.graphql.call_args.args
     assert "markPullRequestReadyForReview" in query
     assert variables == {"id": "PR_1"}
+
+
+def test_mark_pr_ready_when_already_ready(gh, api):
+    """Ready 済みの PR で mutation を呼ばないことを確認する（正常系）。"""
+    # 準備
+    gh.rest.pulls.get.return_value = _resp(NS(node_id="PR_1", draft=False, head=NS(ref="feat/x", sha="S")))
+    # 実行
+    api.mark_pr_ready(52)
+    # 検証
+    gh.graphql.assert_not_called()
 
 
 def test_merge_pr(gh, api):

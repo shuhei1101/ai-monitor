@@ -238,8 +238,11 @@ def tmp_tmux_session(tmp_session_name, tmp_path):
 @pytest.fixture
 def mon_settings(mon_project):
     """モニターの結合テスト用の全体設定を返す。"""
+    from ai_monitor.shared.settings import WatchdogSettings
+
     return NS(
         projects=[mon_project],
+        watchdog=WatchdogSettings(),
         poll_interval_sec=1,
         heartbeat_interval_sec=60,
         session_timeout_min=30,

@@ -403,18 +403,20 @@ def test_ext_create_defect_issue(gh_live, repo_ctx, api):
 
 
 def test_ext_create_draft_pr(branch_factory, gh_live, repo_ctx, api):
-    """draft=true / base 指定での PR 作成を確認する（正常系）。"""
+    """draft=true / base 指定 / ラベル付与での PR 作成を確認する（正常系）。"""
     # 準備
     owner, repo = repo_ctx
     branch = branch_factory()
     # 実行
     res = api.create_draft_pr(
-        head_branch=branch, base_branch="master", title="外部疎通テスト Draft PR", body="## 紐づく Issue\n\n- #1"
+        head_branch=branch, base_branch="master", title="外部疎通テスト Draft PR",
+        body="## 紐づく Issue\n\n- #1", labels=["layer:subsystem"],
     )
     # 検証
     created = gh_live.rest.pulls.get(owner=owner, repo=repo, pull_number=res.pr_number).parsed_data
     assert created.draft is True
     assert created.base.ref == "master"
+    assert [label.name for label in created.labels] == ["layer:subsystem"]
     gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=res.pr_number, state="closed")
 
 

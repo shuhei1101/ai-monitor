@@ -173,7 +173,8 @@ def test_normal(
                 gh_live, owner, repo, story_number, "single-scenario-writer"
             )
         ]
-        assert any("❌" in body or "失敗" in body for body in reports), (
+        # 失敗報告の本文は手順書が「fail 内容の要約」と定めており、`❌` はテスト結果表側にしか出ない
+        assert any("fail" in body.lower() or "❌" in body or "失敗" in body for body in reports), (
             "writer の失敗報告が親 story Issue に残っていない"
         )
         assert any("pass" in body or "✅" in body for body in reports), (

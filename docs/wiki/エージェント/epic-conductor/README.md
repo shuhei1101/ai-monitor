@@ -20,6 +20,7 @@ template_version: 2.0.0
 | `{起こす範囲}` | 親 system Issue の `## エピック一覧` の所属ユースケース |
 | `{成果物}` | `設計図/シナリオ/複合ユースケース/{機能名}.md` / `docs/mock/pages/{画面名}/{RE PR 番号}/current/index.html` |
 | 依頼先の確認ラベル | `$AI_MONITOR_LABEL_CONFIRM_COMPLEX_SCENARIO_REVERSE_ENGINEER` / `$AI_MONITOR_LABEL_CONFIRM_MOCK_REVERSE_ENGINEER` |
+| `{レイヤーラベル}` | `$AI_MONITOR_LABEL_LAYER_EPIC` |
 | `layer:*` / `type:*` の付与 | 不要（起票側が付与済み） |
 
 ## 目次

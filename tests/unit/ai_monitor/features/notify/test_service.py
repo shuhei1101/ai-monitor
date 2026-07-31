@@ -235,7 +235,7 @@ def test_build_notifier(posted):
     # 準備
     settings_list = [_settings()]
     # 実行
-    notify = build_notifier(settings_list)
+    notify = build_notifier(lambda: settings_list)
     result = notify("rate_limit", "見出し", "本文")
     # 検証
     assert result.sent is True
@@ -245,8 +245,55 @@ def test_build_notifier(posted):
 def test_build_notifier_when_empty(posted):
     """設定が空なら呼んでも送らない関数を返す（正常系）。"""
     # 実行
-    notify = build_notifier([])
+    notify = build_notifier(list)
     result = notify("rate_limit", "見出し", "本文")
     # 検証
     assert result.sent is False
     assert not posted
+
+
+# ---- 設定の読み直し ----
+
+
+def test_build_settings_reader():
+    """呼ぶたびに設定を読み直すことを確認する（正常系）。"""
+    # 準備
+    from ai_monitor.features.notify.service import build_settings_reader
+
+    values = [["初回"], ["更新後"]]
+    read = build_settings_reader(lambda: values.pop(0))
+    # 実行・検証: 初回読み込みぶんが消費されており、以降は呼ぶたびに新しい値になる
+    assert read() == ["更新後"]
+
+
+def test_build_settings_reader_when_read_failed():
+    """読み直しに失敗したときに直前の設定を返すことを確認する（正常系）。"""
+    # 準備
+    from ai_monitor.features.notify.service import build_settings_reader
+
+    calls = [0]
+
+    def _read():
+        calls[0] += 1
+        if calls[0] == 1:
+            return ["初回"]
+        raise ValueError("設定が壊れている")
+
+    read = build_settings_reader(_read)
+    # 実行・検証
+    assert read() == ["初回"]
+
+
+def test_build_notifier_when_settings_changed(posted):
+    """送出のたびに設定を解決することを確認する（正常系）。"""
+    # 準備
+    from ai_monitor.features.notify.service import build_notifier
+
+    current = [_settings(name="旧")]
+    notify = build_notifier(lambda: current)
+    notify("rate_limit", "件名", "本文")
+    # 実行: 設定を差し替えてから再送する
+    current[:] = [_settings(name="新")]
+    result = notify("rate_limit", "件名", "本文")
+    # 検証
+    assert [r.target for r in result.results] == ["新"]

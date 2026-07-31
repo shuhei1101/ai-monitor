@@ -27,6 +27,10 @@ def boot(monkeypatch, mon_settings, label_settings, agent_settings, tmp_state_pa
     monkeypatch.setattr(main_mod, "get_client", lambda settings: MagicMock())
     monkeypatch.setattr(main_mod, "configure", lambda name: None)
     monkeypatch.setattr(main_mod, "create_app", lambda *a, **k: MagicMock())
+    # 監視役の起動は本テストの対象外なので差し替える（実プロセスを立てない）
+    monkeypatch.setattr(main_mod, "ensure_watchdog_started", lambda *a, **k: None)
+    monkeypatch.setattr(main_mod, "build_settings_reader", lambda read: read)
+    monkeypatch.setattr(main_mod, "build_notifier", lambda read: (lambda *a, **k: None))
     # uvicorn の起動をフックして「起動したか」を観測する
     monkeypatch.setattr(
         main_mod.uvicorn, "run", lambda app, host=None, port=None: started.append(True)

@@ -15,6 +15,14 @@ MCP `resolve_comments` で完了報告コメントを Resolve する。
 
 初期処理で取得した epic Issue の `parent` から、最終マージか通常マージかを決める（共通ルール『最終マージの判定』）。
 
+### Draft 解除
+
+MCP `mark_pr_ready` を呼ぶ:
+- `pr_number`: epic PR の番号
+
+Draft のままマージすると 405 で失敗する。
+Ready 済みの PR に呼んでも何も起きない。
+
 ### マージ
 
 `規約/マージ手順.md` に沿って base（master）を取り込み、コンフリクトがないことを確認する。

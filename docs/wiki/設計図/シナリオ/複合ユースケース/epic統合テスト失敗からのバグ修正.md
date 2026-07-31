@@ -37,7 +37,7 @@ flowchart TD
     UC4 -->|該当 subsystem Issue を reopen +<br>バグ内容コメント +<br>確認:subsystem-conductor| UC5([バグ修正着手:正常シナリオ])
   end
 
-  UC5 -->|修正用 Draft PR（base=epic）+<br>確認:architect| UC6([SS設計:正常シナリオ])
+  UC5 -->|修正用 Draft PR（base=epic）+<br>確認:architect| UC6([SS設計:正常シナリオ（設計変更なし）])
   UC6 -->|設計確定 → architect が 確認:tester 付与| UC7([テスト作成:正常シナリオ])
   UC7 -->|完了報告 → architect が直接レビュー| UC8([テストレビュー:正常シナリオ])
   UC8 -->|指摘なし → architect が<br>確認:implementer 付与| UC9([実装:正常シナリオ])
@@ -58,7 +58,7 @@ flowchart TD
   click UC3 "../単一ユースケース/統合テスト起動.md#正常シナリオバグ差し戻し"
   click UC4 "../単一ユースケース/バグ差し戻しの中継.md#正常シナリオ差し戻しの中継"
   click UC5 "../単一ユースケース/バグ修正着手.md#正常シナリオ"
-  click UC6 "../単一ユースケース/SS設計.md#正常シナリオ"
+  click UC6 "../単一ユースケース/SS設計.md#正常シナリオ設計変更なし"
   click UC7 "../単一ユースケース/テスト作成.md#正常シナリオ"
   click UC8 "../単一ユースケース/テストレビュー.md#正常シナリオ"
   click UC9 "../単一ユースケース/実装.md#正常シナリオ"

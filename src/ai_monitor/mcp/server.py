@@ -1088,14 +1088,26 @@ def create_intake_issue(
 
 @_log_tool_call
 def create_draft_pr(
-    head_branch: str, base_branch: str, title: str, body: str, *, ctx: Context, settings: Settings
+    head_branch: str,
+    base_branch: str,
+    title: str,
+    body: str,
+    labels: list[str] | None = None,
+    *,
+    ctx: Context,
+    settings: Settings,
 ) -> CreatedPRResult:
     """base 明示で Draft PR を作成する。"""
+    client = _get_client()
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
-    # REST で draft=true・base 明示の PR を作成し、CreatedPRResult を返す
-    created = _get_client().rest.pulls.create(
+    # REST で draft=true・base 明示の PR を作成する
+    created = client.rest.pulls.create(
         owner=owner, repo=repo, title=title, body=body, head=head_branch, base=base_branch, draft=True
     ).parsed_data
+    # PR 作成 API はラベルを受け取らないため、Issue として付与する
+    if labels:
+        client.rest.issues.add_labels(owner=owner, repo=repo, issue_number=created.number, labels=labels)
+    # CreatedPRResult を返す
     return CreatedPRResult(pr_number=created.number, url=created.html_url)
 
 
@@ -1104,10 +1116,14 @@ def mark_pr_ready(pr_number: int, *, ctx: Context, settings: Settings) -> EmptyR
     """Draft を解除して Ready 状態にする。"""
     client = _get_client()
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
-    # PR の GraphQL node_id を取得する
-    node_id = client.rest.pulls.get(owner=owner, repo=repo, pull_number=pr_number).parsed_data.node_id
+    # PR の GraphQL node_id と Draft 状態を取得する
+    pr = client.rest.pulls.get(owner=owner, repo=repo, pull_number=pr_number).parsed_data
+    # 既に Ready の PR は mutation がエラーになるため何もせず返す
+    # （マージ前の呼び出しを、どの経路を通ってきた PR でも安全にするため）
+    if not pr.draft:
+        return EmptyResult()
     # markPullRequestReadyForReview mutation を実行し、EmptyResult を返す
-    client.graphql(_MARK_READY_MUTATION, {"id": node_id})
+    client.graphql(_MARK_READY_MUTATION, {"id": pr.node_id})
     return EmptyResult()
 
 
