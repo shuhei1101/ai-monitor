@@ -140,6 +140,12 @@ class CommentResult(BaseModel):
     url: str
 
 
+class CommentsResult(BaseModel):
+    """1 回の呼び出しで複数コメントを投稿するツールの結果。"""
+
+    comments: list[CommentResult] = Field(description="投稿したコメントの一覧（入力と同じ順序）")
+
+
 class ResolveResult(BaseModel):
     """コメント / レビュースレッドの一括 Resolve の結果。"""
 

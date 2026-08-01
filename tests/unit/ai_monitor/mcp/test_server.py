@@ -270,32 +270,45 @@ def test_comment_when_pages_format(gh, api):
 # ---- 質問投稿 ----
 
 
+def _question(name: str, *, labels: tuple[str, ...] = ("案 A", "案 B"), background: str = "背景") -> Question:
+    """テスト用の質問を組み立てる。"""
+    return Question(
+        question=name,
+        background=background,
+        choices=[Choice(label=label, reason="理由") for label in labels],
+        recommended_index=0,
+        recommended_reason="十分なため",
+    )
+
+
 def test_ask_questions(gh, api):
-    """選択肢 + 推奨付きの質問投稿を確認する（正常系）。"""
+    """質問件数分の個別投稿を確認する（正常系）。"""
     # 準備
     gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_2", html_url="u"))
-    questions = [
-        Question(
-            question="レスポンス形式は？",
-            background="API の返り値を決めたい。",
-            choices=[Choice(label="案 A", reason="単純"), Choice(label="案 B", reason="拡張的")],
-            recommended_index=0,
-            recommended_reason="十分なため",
-        ),
-        Question(
-            question="エラー時のステータスは？",
-            background="",
-            choices=[Choice(label="400 統一", reason="実装が軽い")],
-        ),
-    ]
+    questions = [_question("Q1"), _question("Q2"), _question("Q3")]
     # 実行
-    api.ask_questions(35, is_pr=False, sender="epic-conductor", intro="要件の確認です。", questions=questions)
+    res = api.ask_questions(35, is_pr=False, sender="epic-conductor", questions=questions)
     # 検証
-    posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
-    assert "要件の確認です。" in posted
-    assert "レスポンス形式は？" in posted
-    assert "案 A" in posted and "案 B" in posted
-    assert "推奨" in posted and "十分なため" in posted
+    assert gh.rest.issues.create_comment.call_count == 3
+    bodies = [c.kwargs["body"] for c in gh.rest.issues.create_comment.call_args_list]
+    for body, name in zip(bodies, ["Q1", "Q2", "Q3"], strict=True):
+        # 各コメントが担当の質問だけを含む
+        assert f"## {name}" in body
+        assert sum(body.count(f"## {other}") for other in ["Q1", "Q2", "Q3"]) == 1
+        assert body.startswith("> from: @epic-conductor")
+        assert body.endswith("---\n")
+    assert len(res.comments) == 3
+
+
+def test_ask_questions_when_single(gh, api):
+    """質問 1 件のときの投稿回数を確認する（正常系）。"""
+    # 準備
+    gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_2", html_url="u"))
+    # 実行
+    res = api.ask_questions(35, is_pr=False, sender="epic-conductor", questions=[_question("Q1")])
+    # 検証
+    assert gh.rest.issues.create_comment.call_count == 1
+    assert len(res.comments) == 1
 
 
 def test_ask_questions_when_no_recommendation(gh, api):
@@ -306,25 +319,63 @@ def test_ask_questions_when_no_recommendation(gh, api):
         Question(question="Q1", background="", choices=[Choice(label="A1", reason="r")], recommended_index=-1)
     ]
     # 実行
-    api.ask_questions(35, is_pr=False, sender="epic-conductor", intro="前置き", questions=questions)
+    api.ask_questions(35, is_pr=False, sender="epic-conductor", questions=questions)
     # 検証
     posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
     assert "推奨" not in posted
 
 
-def test_ask_questions_when_empty_intro_and_background(gh, api):
-    """空文字セクション（前置き・背景）の省略を確認する（正常系）。"""
+def test_ask_questions_when_empty_background(gh, api):
+    """空文字の背景の省略を確認する（正常系）。"""
     # 準備
     gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_2", html_url="u"))
     questions = [
         Question(question="Q1", background="", choices=[Choice(label="A1", reason="r")], recommended_index=-1)
     ]
     # 実行
-    api.ask_questions(35, is_pr=False, sender="epic-conductor", intro="", questions=questions)
+    api.ask_questions(35, is_pr=False, sender="epic-conductor", questions=questions)
     # 検証
     posted = gh.rest.issues.create_comment.call_args.kwargs["body"]
     assert "Q1" in posted
     assert "\n\n\n" not in posted
+
+
+def test_ask_questions_when_choices_renumbered(gh, api):
+    """質問ごとに選択肢の採番が振り直されることを確認する（正常系）。"""
+    # 準備
+    gh.rest.issues.create_comment.return_value = _resp(NS(node_id="IC_2", html_url="u"))
+    questions = [_question("Q1", labels=("甲", "乙")), _question("Q2", labels=("丙", "丁"))]
+    # 実行
+    api.ask_questions(35, is_pr=False, sender="epic-conductor", questions=questions)
+    # 検証
+    second = gh.rest.issues.create_comment.call_args_list[1].kwargs["body"]
+    assert "- A. 丙: 理由" in second
+    assert "- B. 丁: 理由" in second
+
+
+def test_ask_questions_when_api_error(gh, request_failed, api):
+    """1 件目の投稿で失敗したときの中断を確認する（異常系）。"""
+    # 準備
+    gh.rest.issues.create_comment.side_effect = request_failed(500)
+    questions = [_question("Q1"), _question("Q2")]
+    # 実行・検証
+    with pytest.raises(RuntimeError, match="0 / 2"):
+        api.ask_questions(35, is_pr=False, sender="epic-conductor", questions=questions)
+    assert gh.rest.issues.create_comment.call_count == 1
+
+
+def test_ask_questions_when_partial_failure(gh, resp, request_failed, api):
+    """途中の投稿で失敗したときの投稿済み件数の通知を確認する（異常系）。"""
+    # 準備
+    gh.rest.issues.create_comment.side_effect = [
+        resp(NS(node_id="IC_1", html_url="u1")),
+        request_failed(500),
+    ]
+    questions = [_question("Q1"), _question("Q2"), _question("Q3")]
+    # 実行・検証
+    with pytest.raises(RuntimeError, match="1 / 3"):
+        api.ask_questions(35, is_pr=False, sender="epic-conductor", questions=questions)
+    assert gh.rest.issues.create_comment.call_count == 2
 
 
 # ---- コメント返信 ----

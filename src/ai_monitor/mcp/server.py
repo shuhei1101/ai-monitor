@@ -30,6 +30,7 @@ from ai_monitor.mcp.models import (
     CommentBlock,
     CommentFormat,
     CommentResult,
+    CommentsResult,
     CommitsFormat,
     CreatedIssueResult,
     CreatedLabelResult,
@@ -605,23 +606,22 @@ def ask_questions(
     number: int,
     is_pr: bool,
     sender: str,
-    intro: str,
     questions: list[Question],
     receiver: str | None = None,
     *,
     ctx: Context,
     settings: Settings,
-) -> CommentResult:
-    """選択肢 + 推奨付きの質問コメントを投稿する。"""
+) -> CommentsResult:
+    """選択肢 + 推奨付きの質問を、質問 1 件ごとに独立したコメントとして投稿する。"""
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
-    # intro と各質問から質問本文を組み立てる（空文字のセクション・推奨なしの推奨行は省略）
-    sections: list[str] = []
-    if intro:
-        sections.append(intro)
+    # 質問を 1 件ずつ処理し、投稿結果を順に集める
+    posted: list[CommentResult] = []
     for q in questions:
+        # 本文を組み立てる（空文字の背景・推奨なしの推奨行は省略）
         part = f"## {q.question}"
         if q.background:
             part += f"\n\n{q.background}"
+        # 選択肢の採番はその質問の中で先頭から振る
         choice_lines = [
             f"- {CHOICE_LETTERS[i]}. {choice.label}: {choice.reason}" for i, choice in enumerate(q.choices)
         ]
@@ -631,11 +631,24 @@ def ask_questions(
             if q.recommended_reason:
                 recommended += f" — {q.recommended_reason}"
             part += f"\n\n{recommended}"
-        sections.append(part)
-    # ヘッダーを付ける
-    text = _format_block(sender, receiver, "\n\n".join(sections))
-    # 投稿して CommentResult を返す
-    return _create_issue_comment(number, text, owner=owner, repo=repo)
+        # ヘッダーを付ける
+        text = _format_block(sender, receiver, part)
+        # 投稿する
+        try:
+            posted.append(_create_issue_comment(number, text, owner=owner, repo=repo))
+        except RequestFailed as exc:
+            # 投稿済みのコメントは取り消さず、どこまで投稿できたかを添えて中断する
+            logger.error(
+                "確認質問の投稿に失敗しました: number=%s posted=%s total=%s",
+                number,
+                len(posted),
+                len(questions),
+            )
+            raise RuntimeError(
+                f"確認質問の投稿に失敗しました（{len(posted)} / {len(questions)} 件目まで投稿済み）: {exc}"
+            ) from exc
+    # 集めた結果を返す
+    return CommentsResult(comments=posted)
 
 
 @_log_tool_call

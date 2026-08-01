@@ -80,10 +80,11 @@ def test_ext_ask_questions(issue_factory, gh_live, repo_ctx, api):
     ]
     # 実行
     res = api.ask_questions(
-        issue.number, is_pr=False, sender="epic-conductor", intro="確認です。", questions=questions
+        issue.number, is_pr=False, sender="epic-conductor", questions=questions
     )
     # 検証
-    assert res.node_id.startswith("IC_")
+    assert len(res.comments) == 1
+    assert res.comments[0].node_id.startswith("IC_")
     body = _last_comment_body(gh_live, repo_ctx, issue.number)
     assert "- A. 案 A" in body
     assert "推奨: A" in body

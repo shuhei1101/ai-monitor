@@ -44,18 +44,19 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | ローカルブランチ存在確認 | `mcp/server.py` | 関数 | [`_branch_exists`](#ローカルブランチ存在確認) | ローカルブランチの有無を返す | 非 0 終了を結果として扱う |
 | 共通 | マージ可否待ち | `mcp/server.py` | 関数 | [`_wait_mergeable`](#マージ可否待ち) | GitHub のマージ可否計算が終わるまで PR を取り直す | base 更新直後の 405 を避ける |
 | 共通 | 質問 DTO | `mcp/models.py` | データモデル | [`Question`](#質問) / [`Choice`](#選択肢) | ask_questions の質問・選択肢 | - |
+| 共通 | 定数 | `mcp/server.py` | 定数 | `CHOICE_LETTERS` | 選択肢に振る記号（A / B / C ...） | 採番はコメントごとに先頭から振る |
 | 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`Comment`](#コメント) | `---` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
 | 共通 | 検索結果 DTO | `mcp/models.py` | データモデル | [`SearchResultItem`](#検索結果) | search_issues_and_prs の戻り値要素 | - |
 | 共通 | ラベル作成結果 DTO | `mcp/models.py` | データモデル | [`CreatedLabelResult`](#ラベル作成結果) | create_label の戻り値 | - |
-| 共通 | 操作結果 DTO | `mcp/models.py` | データモデル | [`CommentResult`](#コメント結果) / [`ResolveResult`](#resolve-結果) / [`LabelsResult`](#ラベル結果) / [`AssigneesResult`](#assignee-結果) / [`EmptyResult`](#空結果) / [`CreatedIssueResult`](#issue-作成結果) / [`CreatedPRResult`](#pr-作成結果) | 各ツールの戻り値 | - |
+| 共通 | 操作結果 DTO | `mcp/models.py` | データモデル | [`CommentResult`](#コメント結果) / [`CommentsResult`](#コメント一覧結果) / [`ResolveResult`](#resolve-結果) / [`LabelsResult`](#ラベル結果) / [`AssigneesResult`](#assignee-結果) / [`EmptyResult`](#空結果) / [`CreatedIssueResult`](#issue-作成結果) / [`CreatedPRResult`](#pr-作成結果) | 各ツールの戻り値 | - |
 | 共通 | worktree 結果 DTO | `mcp/models.py` | データモデル | [`WorktreeCreateResult`](#worktree-作成結果) / [`WorktreeRemoveResult`](#worktree-削除結果) | worktree 操作の戻り値 | - |
 | 共通 | 本文フォーマット型 | `mcp/models.py` | 型 | [`CommentFormat`](#本文フォーマット) | `type` を判別子とする Annotated Union | `Field(discriminator="type")` |
 | 共通 | 本文フォーマット DTO | `mcp/models.py` | データモデル | [`PlainFormat`](#プレーン形式) / [`CommitsFormat`](#commit-表形式) / [`PagesFormat`](#ページ範囲表形式) / [`CommitEntry`](#コミットエントリ) / [`PageRangeEntry`](#ページ範囲エントリ) | 本文構成の入力 | Union の各分岐と行の型 |
 | 共通 | スナップショット DTO | `mcp/models.py` | データモデル | [`IssueSnapshot`](#イシュースナップショット) / [`Label`](#ラベル) / [`UserRef`](#ユーザー参照) / [`IssueRef`](#イシュー参照) / [`IssueCommentEntry`](#コメントエントリ) / [`SubIssuesSummary`](#サブイシュー集計) | get_issue_or_pr の戻り値ツリー | - |
 | Issue・PR情報取得 | MCP ツール | `mcp/server.py` | 関数 | [`get_issue_or_pr`](#issuepr情報取得) | Issue / PR の情報を 1 コマンドで取得 | 読み取り専用 |
 | コメント投稿 | MCP ツール | `mcp/server.py` | 関数 | [`comment`](#コメント投稿) | 定型ブロックでコメントを投稿 | - |
-| 質問投稿 | MCP ツール | `mcp/server.py` | 関数 | [`ask_questions`](#質問投稿) | 選択肢 + 推奨付きの質問コメントを投稿 | - |
+| 質問投稿 | MCP ツール | `mcp/server.py` | 関数 | [`ask_questions`](#質問投稿) | 選択肢 + 推奨付きの質問を 1 質問 1 コメントで投稿 | - |
 | コメント返信 | MCP ツール | `mcp/server.py` | 関数 | [`reply_comment`](#コメント返信) | 既存コメントに `---` 区切りで追記 | - |
 | コメント一括Resolve | MCP ツール | `mcp/server.py` | 関数 | [`resolve_comments`](#コメント一括resolve) | 複数コメントを一括 Resolve | - |
 | コメント一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_comments`](#コメント一覧) | 全コメントをブロック配列 + 自分宛判定付きで返す | 読み取り専用 |
@@ -330,7 +331,8 @@ classDiagram
   本文レンダリング ..> 本文フォーマット : 形式で分岐
   本文フォーマット <|.. プレーン形式 : 実装
   コメント投稿 --> コメント結果 : 返す
-  質問投稿 --> コメント結果 : 返す
+  質問投稿 --> コメント一覧結果 : 返す
+  コメント一覧結果 --> コメント結果 : 含む
   コメント返信 --> コメント結果 : 返す
 
   class コメント投稿 {
@@ -339,7 +341,7 @@ classDiagram
   }
   class 質問投稿 {
     <<function>>
-    +質問投稿(番号, PRか, 送信者, 質問一覧) コメント結果
+    +質問投稿(番号, PRか, 送信者, 質問一覧) コメント一覧結果
   }
   class コメント返信 {
     <<function>>
@@ -380,6 +382,9 @@ classDiagram
     +node_id: str
     +URL: str
   }
+  class コメント一覧結果 {
+    +コメント一覧: コメント結果
+  }
 
   click コメント投稿 href "#コメント投稿"
   click 質問投稿 href "#質問投稿"
@@ -393,6 +398,7 @@ classDiagram
   click 本文フォーマット href "#本文フォーマット"
   click プレーン形式 href "#プレーン形式"
   click コメント結果 href "#コメント結果"
+  click コメント一覧結果 href "#コメント一覧結果"
 ```
 
 ---
@@ -920,7 +926,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 > 物理名: `ask_questions`<br>
 > 種別: 関数
 
-選択肢 + 推奨付きの質問コメントを投稿する。
+選択肢 + 推奨付きの質問を、質問 1 件ごとに独立したコメントとして投稿する。
 
 #### 引数
 
@@ -930,46 +936,54 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 | PR フラグ | `is_pr` | `bool` | ✅ | - | PR なら `True` | - |
 | 送信者 | `sender` | `str` | ✅ | - | 送信者のエージェント名 | `@` は不要 |
 | 宛先 | `receiver` | `str \| None` | - | `None`（to 行なし = 現担当宛） | 宛先名 | 通常はユーザーのログイン名 |
-| 前置き | `intro` | `str` | ✅ | - | 質問リストの前に置く前置き文 | 空文字なら省略される |
-| 質問一覧 | `questions` | [`list[Question]`](#質問) | ✅ | - | 質問の配列 | - |
+| 質問一覧 | `questions` | [`list[Question]`](#質問) | ✅ | - | 質問の配列 | 1 要素がコメント 1 件になる |
 
 引数例:
 
 ```python
-ask_questions(35, is_pr=False, sender="epic-conductor", intro="要件の確認です。", questions=[Question(question="レスポンス形式は？", background="...", choices=[Choice(label="案 A", reason="...")])])
+ask_questions(35, is_pr=False, sender="epic-conductor", questions=[Question(question="レスポンス形式は？", background="...", choices=[Choice(label="案 A", reason="...")])])
 ```
 
 #### 戻り値
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| [`CommentResult`](#コメント結果) | 投稿コメントの node_id / url | - |
+| [`CommentsResult`](#コメント一覧結果) | 投稿したコメントの一覧 | `questions` と同じ順序・同じ件数 |
 
 戻り値例:
 
 ```python
-CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuecomment-2")
+CommentsResult(comments=[CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuecomment-2")])
 ```
 
 #### 処理
 
-1. `intro` と各質問（背景・選択肢・推奨）から質問本文を組み立てる（空文字のセクション・`recommended_index=-1` の推奨行は省略）
-2. ヘッダーを付ける（[定型ブロック組立](#定型ブロック組立)）
-3. 投稿して `CommentResult` を返す（[コメント投稿実体](#コメント投稿実体)）
+1. 質問を 1 件ずつ処理し、投稿結果を順に集める
+   - 本文を組み立てる（質問見出し + 背景 + 選択肢 + 推奨。空文字の背景・`recommended_index=-1` の推奨行は省略）
+   - 選択肢の採番は `CHOICE_LETTERS` からその質問の中で先頭から振る
+   - ヘッダーを付ける（[定型ブロック組立](#定型ブロック組立)）
+   - 投稿する（[コメント投稿実体](#コメント投稿実体)）
+   - 投稿が失敗した場合、そこまでに投稿できた件数を添えて `RuntimeError` を投げる（投稿済みのコメントは取り消さない）
+     - `[ERROR]` 確認質問の投稿に失敗した（`number` / 投稿できた件数 / 全件数）
+2. 集めた結果を `CommentsResult` にして返す
 
 #### 例外
 
 | 例外名 | 発生条件 | メッセージ | 補足 |
 | --- | --- | --- | --- |
-| `RequestFailed` | API 応答が 4xx / 5xx（対象不存在・認証エラー 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+| `RuntimeError` | いずれかのコメントの投稿で API 応答が 4xx / 5xx（対象不存在・認証エラー 等） | `"確認質問の投稿に失敗しました（{投稿済み} / {全件} 件目まで投稿済み）: {原因}"` | `RequestFailed` を `raise from` で連鎖する。MCP がツールエラーとして呼び出し元エージェントに返す |
 
 #### 単体テスト
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_ask_questions` | 正常 | 選択肢 + 推奨付き質問投稿 | `Question` x2 + recommended_index | githubkit | 選択肢と推奨の書式を含み末尾が `---` の本文で投稿 | - |
+| `test_ask_questions` | 正常 | 質問件数分の個別投稿 | `Question` x3 + recommended_index | githubkit | 投稿が 3 回呼ばれ、各本文が 1 質問だけを含み `---` で終わる。`CommentsResult.comments` が 3 件 | - |
+| `test_ask_questions_when_single` | 正常 | 質問 1 件 | `Question` x1 | githubkit | 投稿が 1 回だけ呼ばれ、`comments` が 1 件 | - |
 | `test_ask_questions_when_no_recommendation` | 正常 | 推奨なしの省略 | `recommended_index=-1` | githubkit | 推奨行を含まない本文で投稿 | - |
-| `test_ask_questions_when_empty_intro_and_background` | 正常 | 空文字セクションの省略 | `intro` / `background` が空文字 | githubkit | 前置き・背景を含まない本文で投稿 | - |
+| `test_ask_questions_when_empty_background` | 正常 | 空文字セクションの省略 | `background` が空文字 | githubkit | 背景を含まない本文で投稿 | - |
+| `test_ask_questions_when_choices_renumbered` | 正常 | 質問ごとの採番リセット | `Question` x2（各 2 選択肢） | githubkit | 2 件目の本文の選択肢も `A` から始まる | - |
+| `test_ask_questions_when_api_error` | 異常 | 1 件目の投稿で失敗 | 投稿が 1 回目で `RequestFailed` | githubkit | `RuntimeError` を投げ、投稿は 1 回しか呼ばれない | 例外表「いずれかのコメントの投稿で 4xx / 5xx」に対応 |
+| `test_ask_questions_when_partial_failure` | 異常 | 2 件目の投稿で失敗 | 投稿が 2 回目で `RequestFailed` | githubkit | `RuntimeError` を投げ、メッセージに投稿できた件数を含み、3 件目の投稿が呼ばれない | 例外表と同上・投稿済みは取り消さない |
 
 #### 疎通テスト
 
@@ -3898,6 +3912,27 @@ search_issues_and_prs が返す検索結果 1 件（Pydantic `BaseModel`）。
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | node_id | `node_id` | `str` | 公開 | - | 投稿コメントの GraphQL node_id | `"IC_kwDO..."` | - |
 | URL | `url` | `str` | 公開 | - | コメントの html URL | - | - |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## コメント一覧結果
+> 物理名: `CommentsResult`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+1 回の呼び出しで複数コメントを投稿するツールの結果（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| コメント一覧 | `comments` | [`list[CommentResult]`](#コメント結果) | 公開 | - | 投稿したコメントの一覧 | - | 入力と同じ順序 |
 
 ### メソッド
 
