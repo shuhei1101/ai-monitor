@@ -34,6 +34,7 @@ from ai_monitor.integrations.webhook.client import check_webhook
 from ai_monitor.integrations.github.search import list_open_targets
 from ai_monitor.observability import configure
 from ai_monitor.server.app import create_app
+from ai_monitor.server.listen import bind_listen_socket
 from ai_monitor.shared.settings import _AGENT_NAMES, AgentSettings, LabelSettings, Settings
 from ai_monitor.shared.types import MonitorTarget
 
@@ -158,6 +159,19 @@ def main() -> int:
         return 1
     agents = build_agents(labels, agent_settings=settings.agents)
     registry = SessionRegistry(Path(settings.state_path))
+    # 待受ポートを先に確定させる（監視対象・MCP 接続先・フックの送信先が確定値を使うため）
+    port_path = Path(settings.state_path).parent / "monitor.port"
+    try:
+        listen_socket = bind_listen_socket(settings, port_path)
+    except OSError as exc:
+        logger.error("待受ポートを確保できないため起動を中止します: port=%s reason=%s", settings.port, exc)
+        return 1
+    logger.info(
+        "モニターを起動します: env=%s port=%s projects=%s",
+        os.environ.get("AI_MONITOR_ENV", "(既定)"),
+        settings.port,
+        [p.repo for p in settings.projects],
+    )
     # 自分の pid を書き出す（監視役の生存確認が読む）
     self_target = build_monitor_target(settings)
     self_target.pid_path.parent.mkdir(parents=True, exist_ok=True)
@@ -201,7 +215,7 @@ def main() -> int:
         heartbeat_path=self_target.heartbeat_path,
         supervise_watchdog=_supervise_watchdog if settings.watchdog.enabled else None,
     )
-    uvicorn.run(app, host="127.0.0.1", port=settings.port)
+    uvicorn.Server(uvicorn.Config(app)).run(sockets=[listen_socket])
     return 0
 
 

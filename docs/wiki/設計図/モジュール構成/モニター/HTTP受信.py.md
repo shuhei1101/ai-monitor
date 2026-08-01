@@ -20,12 +20,14 @@ MCP は同一プロセスに同居するため、ツールがセッション台�
 | レートリミット通知 | リクエスト DTO | `server/app.py` | データモデル | [`RateLimitRequest`](#レートリミット要求) | `POST /rate_limit` のリクエストボディ | `pydantic.BaseModel` |
 | レートリミット通知 | レートリミット通知受信 | `server/app.py` | 関数 | [`receive_rate_limit`](#レートリミット通知受信) | `POST /rate_limit` を受けて待機を開始する | 同上 |
 | 設定リロード | 設定リロード受信 | `server/app.py` | 関数 | [`receive_reload`](#設定リロード受信) | `POST /reload` を受けて稼働中の設定を書き換える | リクエストボディを取らない |
+| モニターの起動 | 待受ポート確定 | `server/listen.py` | 関数 | [`bind_listen_socket`](#待受ポート確定) | 待受ソケットの bind と確定ポートの書き戻し / 公開 | `port: 0` で OS に選ばせる |
 
 ## ディレクトリ構成
 
 ```
 src/ai_monitor/server/
-└── app.py    # create_app / ContextResetRequest / RateLimitRequest / receive_reload
+├── app.py       # create_app / ContextResetRequest / RateLimitRequest / receive_reload
+└── listen.py    # bind_listen_socket
 ```
 
 ## 構成図
@@ -82,6 +84,11 @@ classDiagram
     <<function>>
   }
 
+  class 待受ポート確定 {
+    <<function>>
+    +待受ポート確定(全体設定, 公開先パス) ソケット
+  }
+
   click アプリ生成 href "#アプリ生成"
   click コンテキストリセット受信 href "#コンテキストリセット受信"
   click レートリミット通知受信 href "#レートリミット通知受信"
@@ -90,6 +97,7 @@ classDiagram
   click レートリミット要求 href "#レートリミット要求"
   click セッション台帳 href "./エージェント管理.py.md#セッション台帳"
   click 設定リロード href "./設定リロード.py.md#設定リロード"
+  click 待受ポート確定 href "#待受ポート確定"
 ```
 
 ## リセット要求
@@ -373,3 +381,69 @@ ReloadResult(added=["sandbox"], removed=[], ignored=[])
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_receive_reload` | 正常 | 再読込の反映 | 読込結果のプロジェクトが 1 件増えている | [設定リロード](./設定リロード.py.md#設定リロード) の依存（設定読込 / エージェント組立） | `200` と `added` が返る | - |
 | `test_receive_reload_when_read_fails` | 異常 | 読込失敗 | 設定読込が例外を投げる | 同上 | `500` が返り、稼働中の設定が変わらない | 例外表「設定ファイルを読めない」に対応 |
+
+## `server/listen.py`
+> 種別: ファイル
+
+待受ソケットの確定を担うファイル。
+uvicorn へ渡す前にポートを確定させることで、確定値を MCP 接続先とフックの送信先へ伝えられる状態にする。
+
+---
+
+### 待受ポート確定
+> 物理名: `bind_listen_socket`<br>
+> 種別: 関数
+
+待受ソケットを bind し、確定したポートを設定へ書き戻してファイルへ公開する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 全体設定 | `settings` | [`Settings`](./エージェント管理.py.md#全体設定) | ✅ | - | `port` を読み、確定値を書き戻す | `0` なら OS が選ぶ |
+| 公開先パス | `port_path` | `Path` | ✅ | - | 確定ポートの書き出し先 | 親ディレクトリが無ければ作る |
+
+引数例:
+
+```python
+sock = bind_listen_socket(settings, Path("data/monitor.port"))
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `socket.socket` | bind 済みの待受ソケット | `uvicorn.Server.run(sockets=[sock])` へ渡す |
+
+戻り値例:
+
+```python
+<socket.socket fd=7, laddr=('127.0.0.1', 41235)>
+```
+
+#### 処理
+
+1. `AF_INET` / `SOCK_STREAM` のソケットを作る
+   - `SO_REUSEADDR` は設定しない（使用中ポートの指定を検出できなくなるため）
+2. `127.0.0.1` と `settings.port` で bind する
+   - bind に失敗した場合、ソケットを閉じて `OSError` をそのまま伝播する（設定も公開ファイルも変更しない）
+     - `[ERROR]` 待受ポートを確保できなかった（要求したポート / 理由）
+3. `getsockname()` から確定ポートを取り出し、`settings.port` へ書き戻す
+4. 公開先の親ディレクトリを作り、確定ポートを書き出す
+   - `[INFO]` 待受ポートを確定した（確定ポート / 公開先）
+5. bind 済みソケットを返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `OSError` | 指定ポートが使用中で bind できない | OS のメッセージ（`Address already in use` 等） | 呼び出し元の `main()` が非 0 終了に変換する |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_bind_listen_socket` | 正常 | 自動割り当て | `port=0` | なし（実際に bind する） | 1 以上のポートで bind され、`settings.port` と公開ファイルが同じ値になる | - |
+| `test_bind_listen_socket_when_fixed` | 正常 | 指定ポート | 空いている固定値を指定 | なし | 指定値で bind され、公開ファイルも一致する | - |
+| `test_bind_listen_socket_when_in_use` | 異常 | 使用中ポート | 別ソケットで占有済みのポートを指定 | なし | `OSError` を投げ、`settings.port` と公開ファイルが変わらない | 例外表「指定ポートが使用中」に対応 |
+| `test_bind_listen_socket_when_dir_missing` | 正常 | 公開先の親ディレクトリなし | 存在しないディレクトリ配下を指定 | なし | ディレクトリが作られてファイルが書かれる | - |

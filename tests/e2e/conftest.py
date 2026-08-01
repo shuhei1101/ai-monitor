@@ -62,6 +62,7 @@ def pytest_sessionstart(session):
             pass
         pid_path.unlink()
     (SHARED_DIR / "monitor.lock").unlink(missing_ok=True)
+    (SHARED_DIR / "monitor.port").unlink(missing_ok=True)
     # 前回の中断で残った合図ファイルを消す（残っていると今回の待機が即座に打ち切られる）
     ABORT_PATH.unlink(missing_ok=True)
 
@@ -167,8 +168,9 @@ def monitor(e2e_settings_path, e2e_state_path, ai_monitor_wiki):
     停止は controller 側の `pytest_sessionfinish` が全 worker の終了後に行う。
     """
     SHARED_DIR.mkdir(parents=True, exist_ok=True)
-    port = yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8")).get("port", 8765)
     log_path = SHARED_DIR / "monitor.log"
+    # 待受ポートはモニターが確定して公開する（設定は port: 0 = OS に選ばせる）
+    port_path = SHARED_DIR / "monitor.port"
     # ロックをアトミックに作れたプロセスだけが起動役になる
     try:
         os.close(os.open(SHARED_DIR / "monitor.lock", os.O_CREAT | os.O_EXCL | os.O_WRONLY))
@@ -176,13 +178,8 @@ def monitor(e2e_settings_path, e2e_state_path, ai_monitor_wiki):
     except FileExistsError:
         is_owner = False
     if is_owner:
-        # 起動役の時点でポートが開いていれば、テスト管理外のモニターが占有している
-        # （相乗りすると意図しないコードで検証してしまうため落とす）
-        try:
-            socket.create_connection(("127.0.0.1", port), timeout=1).close()
-            pytest.fail(f"ポート {port} がテスト管理外のプロセスに占有されている")
-        except OSError:
-            pass
+        # 前回の実行が残したポートファイルを消す（古い番号へ繋ぎに行かないため）
+        port_path.unlink(missing_ok=True)
         # 手順書を書き換えるテストのために、実クローンではなく複製を読ませる
         source = Path(yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8"))["ai_monitor_wiki_base"])
         if source.is_dir():
@@ -203,9 +200,17 @@ def monitor(e2e_settings_path, e2e_state_path, ai_monitor_wiki):
                 cwd=REPO_ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, text=True,
             )
         (SHARED_DIR / "monitor.pid").write_text(str(proc.pid), encoding="utf-8")
-    # 起動役も相乗り側も待受ポートの開通を待つ
+    # 起動役も相乗り側も、確定ポートの公開と待受の開通を待つ
     deadline = time.time() + 180
+    port = None
     while time.time() < deadline:
+        if port is None:
+            # モニターが bind に成功した時点でポート番号が書かれる
+            text = port_path.read_text(encoding="utf-8").strip() if port_path.exists() else ""
+            port = int(text) if text else None
+            if port is None:
+                time.sleep(1)
+                continue
         try:
             socket.create_connection(("127.0.0.1", port), timeout=1).close()
             break
@@ -213,7 +218,7 @@ def monitor(e2e_settings_path, e2e_state_path, ai_monitor_wiki):
             time.sleep(1)
     else:
         tail = log_path.read_text(encoding="utf-8")[-2000:] if log_path.exists() else ""
-        pytest.fail(f"モニターの待受ポートが開通しない:\n{tail}")
+        pytest.fail(f"モニターの待受ポートが開通しない（port={port}）:\n{tail}")
     yield
 
 
