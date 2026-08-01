@@ -605,10 +605,12 @@ def _thread_node(
     line=48,
     diff_hunk="@@ -40,3 +40,4 @@\n+added",
     body="> from: @architect\n> to: @implementer\n\n指摘",
+    thumbs_up=(),
 ):
     comment = {
         "id": f"{node_id}-c1",
         "body": body,
+        "reactions": {"nodes": [{"user": {"login": login}} for login in thumbs_up]},
         "author": {"login": "shuhei1101"},
         "createdAt": "2026-07-20T00:00:00Z",
         "url": "http://r/1",
@@ -690,6 +692,20 @@ def test_list_review_threads_when_addressed_mixed(gh, api):
     # 検証
     assert [t.node_id for t in res] == ["PRRT_1", "PRRT_2", "PRRT_3", "PRRT_4"]
     assert [t.is_addressed for t in res] == [True, False, True, True]
+
+
+def test_list_review_threads_when_thumbs_up(gh, api):
+    """👍 を付けたユーザーの取得を確認する（正常系）。"""
+    # 準備
+    gh.graphql.return_value = _threads_payload(
+        [_thread_node("PRRT_1", thumbs_up=("shuhei1101",)), _thread_node("PRRT_2")]
+    )
+    # 実行
+    res = api.list_review_threads(52, addressee="implementer")
+    # 検証
+    assert res[0].comments[0].thumbs_up_by == ["shuhei1101"]
+    # 👍 が無いコメントは空配列になる
+    assert res[1].comments[0].thumbs_up_by == []
 
 
 # ---- レビュースレッド返信 ----

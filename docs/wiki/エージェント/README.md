@@ -37,5 +37,4 @@ template_version: 1.0.0
 | [tester](./tester/) | 結合 / モジュール構成を元にしたテストコードの作成と指摘対応 | - |
 | [implementer](./implementer/) | 結合 / モジュール構成のとおりの実装と指摘対応 | - |
 | [resetter](./resetter/) | 不要化した Issue 配下の巻き戻し（子孫 Issue / PR / ブランチの削除） | 唯一のユーザー手動起動 |
-| [quick-implementer](./quick-implementer/) | 軽微修正の直接マージ（TDD・Wiki 更新・レビューなし） | - |
 | [questioner](./questioner/) | question Issue の調査と回答 | 実装は行わない |

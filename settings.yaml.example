@@ -163,6 +163,3 @@ agents:
   implementer:
     model: sonnet               # 設計書 + テストからの実装（機械的）
     effort: high
-  quick-implementer:
-    model: sonnet               # 軽微修正の直接実装（機械的）
-    effort: high

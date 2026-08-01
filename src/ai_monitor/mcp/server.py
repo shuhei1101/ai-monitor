@@ -93,7 +93,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       reviewThreads(first: 100) {
-        nodes { id isResolved path startLine line comments(first: 50) { nodes { id body diffHunk author { login } createdAt url } } }
+        nodes { id isResolved path startLine line comments(first: 50) { nodes { id body diffHunk author { login } createdAt url reactions(first: 20, content: THUMBS_UP) { nodes { user { login } } } } } }
       }
     }
   }
@@ -310,6 +310,13 @@ def _format_block(
         return f"{block}\n\n---\n"
     # インライン指摘・スレッド返信は返信で積むため区切り線を付けない
     return block
+
+
+def _thumbs_up_logins(comment: dict) -> list[str]:
+    """GraphQL のコメントノードから 👍 を付けたユーザーのログイン名を取り出す。"""
+    nodes = (comment.get("reactions") or {}).get("nodes") or []
+    # 退会済みユーザーは user が null になるため取り除く
+    return [node["user"]["login"] for node in nodes if node.get("user")]
 
 
 def _is_addressed(blocks: list[CommentBlock], addressee: str) -> bool:
@@ -769,6 +776,7 @@ def list_review_threads(
                 author=UserRef(login=c["author"]["login"]) if c.get("author") else None,
                 url=c.get("url"),
                 diff_hunk=c.get("diffHunk"),
+                thumbs_up_by=_thumbs_up_logins(c),
             )
             for c in node["comments"]["nodes"]
         ]

@@ -11,7 +11,7 @@ import ai_monitor.main as main_mod
 import ai_monitor.features.sessions.registry as registry_mod
 from ai_monitor.shared.types import Issue
 
-STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "quick-implementer", "questioner"}
+STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "questioner"}
 
 
 @pytest.fixture

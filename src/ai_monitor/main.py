@@ -39,7 +39,7 @@ from ai_monitor.shared.types import MonitorTarget
 
 logger = logging.getLogger(__name__)
 
-_STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "quick-implementer", "questioner"}
+_STANDALONE_NAMES = {"epic-poc-runner", "library-poc-runner", "resetter", "questioner"}
 
 
 def build_agents(labels: LabelSettings, *, agent_settings: dict[str, AgentSettings]) -> list[Agent]:

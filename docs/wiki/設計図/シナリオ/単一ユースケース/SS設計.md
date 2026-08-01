@@ -203,6 +203,50 @@ sequenceDiagram
 - subsystem PR に `確認:tester` が付与され、`確認:architect` が除去されている
 - `議論中` が付与されていない（ユーザー確認を挟まずに次担当へ渡る）
 
+## 正常シナリオ（インライン確認事項に 👍 で回答）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| subsystem Draft PR | `確認:architect` 付与済み | - |
+| 設計 Wiki | 対象ページを commit 済み | 確認事項の対象になる行を含む |
+| インライン確認事項 | 選択肢と推奨を含む確認事項を該当行に投稿済み（ユーザー宛） | 推奨は本文に明記されている |
+| ラベル | `議論中` 付与済み | 応答ループ待ちの状態 |
+| リアクション | ユーザーがインライン確認事項に 👍 を付与 | 回答手段を決定的に誘発 |
+| ユーザー返信 | 本文のコメントは投稿しない | 👍 だけで判断できるかを見る |
+| assignee | PR から外し済み | エージェント起動条件 |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  actor U as ユーザー
+  participant GH as GitHub
+  participant ORC as モニター
+  participant MON as architect
+  participant REPO as リポジトリ
+
+  U->>GH: インライン確認事項に 👍 +<br>assignee 外し
+  ORC-->>GH: polling（assignee なし を検知）
+  ORC->>MON: 既存セッションへ送信
+  activate MON
+  MON-->>GH: インライン指摘スレッドを<br>リアクション付きで取得
+  MON->>MON: 👍 を推奨への同意と解釈
+  MON->>REPO: 推奨どおりの内容で設計 Wiki を確定<br>（変更が不要なら commit しない）
+  MON->>GH: 該当スレッドに確定内容を返信
+  MON->>GH: subsystem PR の assignee=ユーザー 再設定
+  deactivate MON
+```
+
+### 期待値
+
+- 推奨どおりの内容で設計 Wiki が確定している（別案へ変更されていない）
+- 該当スレッドに確定した旨の返信が投稿されている
+- ユーザーへ回答内容を問い直す確認コメントが投稿されていない（👍 だけで判断できている）
+- subsystem PR に `議論中` と `assignee=ユーザー` が残っている（当該ページの確定はユーザーの `議論中` 除去で行う）
+
 ## 正常シナリオ（差し戻しからの設計修正）
 
 ### セットアップ

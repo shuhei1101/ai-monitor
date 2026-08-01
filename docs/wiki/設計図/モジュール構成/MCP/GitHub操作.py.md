@@ -1326,7 +1326,7 @@ list_review_threads(52, addressee="implementer")
 
 #### 処理
 
-1. GraphQL で PR のレビュースレッド一覧（path / startLine / line / isResolved / コメント群 + diffHunk）を取得する
+1. GraphQL で PR のレビュースレッド一覧（path / startLine / line / isResolved / コメント群 + diffHunk + 👍 リアクション）を取得する
 2. `include_resolved` が `False` の場合、解決済みスレッドを除外する
 3. スレッドの最後のコメントをブロックに分け、最終ブロックの to / from で自分宛かを判定する（[コメント解析](#コメント解析)）
 4. 判定結果を `is_addressed` に入れた [レビュースレッド](#レビュースレッド)の配列に変換して返す
@@ -1346,12 +1346,13 @@ list_review_threads(52, addressee="implementer")
 | `test_list_review_threads_when_include_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` | githubkit | 解決済みも `is_resolved=True` で返る | - |
 | `test_list_review_threads_when_diff_hunk_missing` | 正常 | diffHunk 欠落時の既定 | `diffHunk` を含まない GraphQL 応答 | githubkit | コメントの `diff_hunk` が `None` になる | - |
 | `test_list_review_threads_when_addressed_mixed` | 正常 | 最後のコメントでの自分宛判定 | 自分宛・他エージェント宛・自分が最後に返信したスレッドが混在 | githubkit | 全スレッドが返り、自分宛だけ `is_addressed=True` になる | 宛先違いも落とさない |
+| `test_list_review_threads_when_thumbs_up` | 正常 | 👍 の取得 | コメントに 👍 が付いた GraphQL 応答 | githubkit | `thumbs_up_by` に付けたユーザーのログイン名が入る | 👍 が無いコメントは空配列 |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_list_review_threads` | GitHub | レビュースレッドの取得 | `startLine` / `line` / `isResolved` / コメント群 / `diffHunk` | 副作用: なし（読み取りのみ） |
+| `test_ext_list_review_threads` | GitHub | レビュースレッドの取得 | `startLine` / `line` / `isResolved` / コメント群 / `diffHunk` / 👍 の `thumbs_up_by` | 副作用: sandbox の PR コメントに 👍 を付与 |
 
 ---
 
@@ -4352,6 +4353,7 @@ get_issue_or_pr が返す Issue / PR のスナップショット（Pydantic `Bas
 | 投稿者 | `author` | `UserRef \| None` | 公開 | `None` | 投稿者 | - | - |
 | URL | `url` | `str \| None` | 公開 | `None` | コメントの html URL | - | - |
 | Resolved 済み | `is_minimized` | `bool` | 公開 | `False` | Resolved（minimize）済みか | `false` | - |
+| 👍 を付けた人 | `thumbs_up_by` | `list[str]` | 公開 | `[]` | 👍 を付けたユーザーのログイン名 | `["shuhei1101"]` | 確認事項への「推奨で OK」の回答として読む |
 | 周辺 diff | `diff_hunk` | `str \| None` | 公開 | `None` | 指摘箇所の周辺 diff | `"@@ -40,6 +40,8 @@ ..."` | インラインコメントのみ設定される（通常コメントは `None`） |
 
 ### メソッド

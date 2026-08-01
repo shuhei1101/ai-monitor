@@ -63,7 +63,7 @@ sequenceDiagram
 
 ### 期待値
 
-- 承認された案と同数の Sub-issue が親 Issue に紐づいて存在する（`layer:epic` なら `確認:epic-conductor`、chore なら `確認:quick-implementer` が付与）
+- 承認された案と同数の Sub-issue が親 Issue に紐づいて存在する（`layer:epic` + `確認:epic-conductor` が付与）
 - intake Issue の本文がユーザー起票時のまま書き換わっていない
 - intake Issue に `layer:intake` + `type:*` が残り、`確認:*` は除去済み
 - 自分宛コメントが全て Resolve 済み

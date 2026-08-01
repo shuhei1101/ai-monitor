@@ -174,17 +174,25 @@ def test_ext_create_review_comment_when_multi_line(pr_factory, api):
     assert res.node_id.startswith("PRRC_")
 
 
-def test_ext_list_review_threads(pr_factory, api):
-    """レビュースレッドの取得を確認する（正常系）。"""
+_ADD_REACTION_MUTATION = (
+    "mutation($id: ID!) { addReaction(input: { subjectId: $id, content: THUMBS_UP })"
+    " { reaction { content } } }"
+)
+
+
+def test_ext_list_review_threads(pr_factory, gh_live, api):
+    """レビュースレッドの取得と 👍 の取得を確認する（正常系）。"""
     # 準備
     pr = pr_factory()
-    api.create_review_comment(
+    posted = api.create_review_comment(
         pr.number, path=f"{pr.head.ref}.txt", line=3, start_line=1, sender="architect", body="スレッド確認用。"
     )
+    gh_live.graphql(_ADD_REACTION_MUTATION, {"id": posted.node_id})
     # 実行
     threads = api.list_review_threads(pr.number, addressee="implementer")
     # 検証
     assert len(threads) == 1
+    assert threads[0].comments[0].thumbs_up_by
     assert threads[0].node_id.startswith("PRRT_")
     assert threads[0].path == f"{pr.head.ref}.txt"
     assert threads[0].start_line == 1

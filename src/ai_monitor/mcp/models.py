@@ -106,6 +106,8 @@ class IssueCommentEntry(BaseModel):
     is_minimized: bool = False
     # 指摘箇所の周辺 diff（インラインコメントのみ設定される）
     diff_hunk: str | None = None
+    # 👍 を付けたユーザーのログイン名（インラインコメントのみ設定される）
+    thumbs_up_by: list[str] = []
 
 
 class ReviewThread(BaseModel):

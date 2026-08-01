@@ -169,13 +169,6 @@ questioner:
   - エージェント/questioner/フェーズ/回答.md
   - エージェント/questioner/フェーズ/完了処理.md
 
-quick-implementer:
-  - エージェント/quick-implementer/README.md
-  - エージェント/quick-implementer/フェーズ/初期処理.md
-  - エージェント/quick-implementer/フェーズ/応答ループ.md
-  - エージェント/quick-implementer/フェーズ/マージ実行.md
-  - エージェント/quick-implementer/フェーズ/修正とPR作成.md
-
 resetter:
   - エージェント/resetter/README.md
   - エージェント/resetter/フェーズ/初期処理.md

@@ -10,7 +10,7 @@ def _payload(nodes):
     return {"repository": {"pullRequest": {"reviewThreads": {"nodes": nodes}}}}
 
 
-def _node(node_id, resolved=False, body="> from: @architect\n> to: @implementer\n\n指摘"):
+def _node(node_id, resolved=False, body="> from: @architect\n> to: @implementer\n\n指摘", reactions=()):
     return {
         "id": node_id,
         "isResolved": resolved,
@@ -22,6 +22,9 @@ def _node(node_id, resolved=False, body="> from: @architect\n> to: @implementer\
                 {
                     "id": f"{node_id}-c1",
                     "body": body,
+                    "reactions": {
+                        "nodes": [{"user": {"login": login}} for login, content in reactions if content == "+1"]
+                    },
                     "diffHunk": "@@ -40,3 +40,4 @@\n+added",
                     "author": {"login": "x"},
                     "createdAt": "t",
@@ -37,7 +40,8 @@ def test_normal(gh, api):
     # 準備: 自分宛 / 解決済み / 他エージェント宛 / ユーザーの宛先なし返信
     gh.graphql.return_value = _payload(
         [
-            _node("PRRT_1"),
+            # 👍 と 👀 を付けた状態にし、👍 だけを拾うことを見る（👀 は GraphQL 側の content で除外される）
+            _node("PRRT_1", reactions=[("shuhei1101", "+1"), ("shuhei1101", "eyes")]),
             _node("PRRT_2", resolved=True),
             _node("PRRT_3", body="> from: @architect\n> to: @tester\n\n他人宛の指摘"),
             _node("PRRT_4", body="ここも直しておいて"),
@@ -50,6 +54,8 @@ def test_normal(gh, api):
     assert [t.node_id for t in res] == ["PRRT_1", "PRRT_3", "PRRT_4"]
     assert [t.is_addressed for t in res] == [True, False, True]
     assert res[0].comments[0].body.endswith("指摘")
+    assert res[0].comments[0].thumbs_up_by == ["shuhei1101"]
+    assert res[1].comments[0].thumbs_up_by == []
     assert res[0].comments[0].diff_hunk == "@@ -40,3 +40,4 @@\n+added"
 
 

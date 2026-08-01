@@ -40,7 +40,6 @@ _AGENT_NAMES: tuple[str, ...] = (
     "tester",
     "implementer",
     "resetter",
-    "quick-implementer",
     "questioner",
 )
 
@@ -176,7 +175,6 @@ class LabelSettings(BaseSettings):
     confirm_tester: LabelName
     confirm_implementer: LabelName
     confirm_resetter: LabelName
-    confirm_quick_implementer: LabelName
     confirm_questioner: LabelName
     processing_intake_issue_triager: LabelName
     processing_system_conductor: LabelName
@@ -200,5 +198,4 @@ class LabelSettings(BaseSettings):
     processing_tester: LabelName
     processing_implementer: LabelName
     processing_resetter: LabelName
-    processing_quick_implementer: LabelName
     processing_questioner: LabelName
