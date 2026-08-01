@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field
 class Choice(BaseModel):
     """質問の選択肢 1 件。"""
 
-    label: str
+    label: str = Field(
+        description="選択肢の要約ラベル。先頭に `A. ` 等の採番記号を付けない（記号はツール側が付ける）"
+    )
     reason: str
 
 
