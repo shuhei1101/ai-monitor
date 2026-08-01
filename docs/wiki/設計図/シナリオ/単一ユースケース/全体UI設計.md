@@ -81,7 +81,7 @@ sequenceDiagram
   MON->>GH: epic PR の自分宛コメント一括 Resolve<br>（指示コメント + モック URL コメント含む）
   MON->>GH: タスク一覧のモック作成の行に<br>チェックを入れる（自分がやった行だけ）
   MON->>GH: epic PR の 確認:mock-designer 除去
-  MON->>GH: 親 epic Issue に 確認:epic-conductor 付与 +<br>完了報告コメント投稿（@epic-conductor 宛・<br>確認後の Resolve 依頼付き）
+  MON->>GH: 親 epic Issue に 完了報告コメント投稿（@epic-conductor 宛・<br>確認後の Resolve 依頼付き） +<br>確認:epic-conductor 付与
   deactivate MON
   Note over MON: セッションは epic Issue close まで常駐
 ```
@@ -166,7 +166,7 @@ sequenceDiagram
   MON->>GH: epic PR の自分宛コメント一括 Resolve
   MON->>GH: タスク一覧のモック作成の行に<br>チェックを入れる（自分がやった行だけ）
   MON->>GH: epic PR の 確認:mock-designer 除去
-  MON->>GH: 親 epic Issue に 確認:epic-conductor 付与 +<br>完了報告コメント投稿（@epic-conductor 宛・<br>確認後の Resolve 依頼付き）
+  MON->>GH: 親 epic Issue に 完了報告コメント投稿（@epic-conductor 宛・<br>確認後の Resolve 依頼付き） +<br>確認:epic-conductor 付与
   deactivate MON
   Note over MON: セッションは epic Issue close まで常駐
 ```

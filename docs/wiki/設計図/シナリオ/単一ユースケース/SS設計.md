@@ -115,7 +115,7 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信
   activate MON
   MON->>GH: subsystem PR の<br>自分宛コメント一括 Resolve
-  MON->>GH: 親 subsystem Issue に<br>確認:subsystem-conductor 付与 +<br>インターフェース確定報告コメント投稿<br>（@subsystem-conductor 宛・待機なし）
+  MON->>GH: 親 subsystem Issue に<br>インターフェース確定報告コメント投稿<br>（@subsystem-conductor 宛・待機なし） +<br>確認:subsystem-conductor 付与
   Note over MON: 以降（ER図 → 結合フロー →<br>モジュール構成）は正常シナリオと同一<br>（subsystem PR の手番は手放していないので<br>設計をそのまま継続）
   deactivate MON
 ```

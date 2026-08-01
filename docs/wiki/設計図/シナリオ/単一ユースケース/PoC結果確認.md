@@ -86,7 +86,7 @@ sequenceDiagram
   MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}）+ 空 commit push
   MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
-  MON->>GH: epic PR に 確認:mock-designer 付与 +<br>指示コメント投稿（@mock-designer 宛・<br>画面方針の要点）
+  MON->>GH: epic PR に 指示コメント投稿（@mock-designer 宛・<br>画面方針の要点） +<br>確認:mock-designer 付与
   MON->>GH: epic Issue の 確認:epic-conductor 除去
   Note over MON: セッションは epic Issue close まで常駐
 ```

@@ -42,7 +42,7 @@ sequenceDiagram
   MON->>REPO: 検証実行（成功条件を満たす）
   MON->>GH: 結果・所感を PoC PR 本文に記録
   MON->>GH: 検証指示コメントを Resolve
-  MON->>GH: PoC PR に 確認:architect 付与 +<br>完了報告コメント（@architect 宛）
+  MON->>GH: PoC PR に 完了報告コメント（@architect 宛） +<br>確認:architect 付与
   MON->>GH: PoC PR の<br>確認:library-poc-runner 除去
   deactivate MON
   Note over MON: セッションは PoC PR close まで常駐
@@ -83,7 +83,7 @@ sequenceDiagram
   MON->>REPO: 追加の検証を実行
   MON->>GH: 結果を PoC PR 本文に追記
   MON->>GH: 再検証指示コメントを Resolve
-  MON->>GH: PoC PR に 確認:architect 付与 +<br>再検証の完了報告コメント（@architect 宛）
+  MON->>GH: PoC PR に 再検証の完了報告コメント（@architect 宛） +<br>確認:architect 付与
   MON->>GH: PoC PR の<br>確認:library-poc-runner 除去
   deactivate MON
 ```
@@ -113,7 +113,7 @@ sequenceDiagram
 
   MON->>REPO: 検証実行 → 成功条件を満たさない
   MON->>GH: NG の実測値・理由を PoC PR 本文に記録
-  MON->>GH: PoC PR に 確認:architect 付与 +<br>完了報告コメント（NG・@architect 宛）+<br>確認:library-poc-runner 除去
+  MON->>GH: PoC PR に 完了報告コメント（NG・@architect 宛）+<br>確認:library-poc-runner 除去 +<br>確認:architect 付与
 ```
 
 ### 期待値

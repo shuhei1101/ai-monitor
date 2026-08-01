@@ -165,7 +165,7 @@ sequenceDiagram
   MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}）+ 空 commit push
   MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue +<br>タスク一覧）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
-  MON->>GH: epic PR に 確認:mock-designer 付与 +<br>指示コメント投稿（@mock-designer 宛・<br>画面方針の要点）
+  MON->>GH: epic PR に 指示コメント投稿（@mock-designer 宛・<br>画面方針の要点） +<br>確認:mock-designer 付与
   deactivate MON
   Note over MON: セッションは epic Issue close まで常駐
 ```
@@ -203,7 +203,7 @@ sequenceDiagram
   MON->>REPO: worktree + PoC ブランチ作成<br>（poc/epic/{ドメイン}/{テーマ}）+<br>空 commit push
   MON->>GH: PoC Draft PR 作成（base=master・<br>タイトル PoC: {検証テーマ}（epic #35;N）・<br>本文は 紐づく Issue のみ）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
-  MON->>GH: PoC PR に 確認:epic-poc-runner 付与 +<br>指示コメント投稿（@epic-poc-runner 宛・<br>検証テーマの背景 + 成立条件の想定）
+  MON->>GH: PoC PR に 指示コメント投稿（@epic-poc-runner 宛・<br>検証テーマの背景 + 成立条件の想定） +<br>確認:epic-poc-runner 付与
   deactivate MON
   Note over MON: セッションは epic Issue close まで常駐
 ```
