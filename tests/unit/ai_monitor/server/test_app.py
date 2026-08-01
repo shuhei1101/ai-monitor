@@ -211,3 +211,71 @@ def test_create_app_when_cycle_raised(
             time.sleep(0.05)
     # 検証
     assert exited, "ループが無言で消えている"
+
+
+
+def _real_settings(*project_names: str):
+    """`mon_settings`（SimpleNamespace）ではなく実物の Settings を作る（中身の書き換えを伴うため）。"""
+    from ai_monitor.shared.settings import _AGENT_NAMES, AgentSettings, MonitoredProject, Settings
+
+    return Settings(
+        github_token="github_pat_test",
+        ai_monitor_wiki_base="https://example.com/ai-monitor-wiki",
+        agents={name: AgentSettings(model="sonnet") for name in _AGENT_NAMES},
+        projects=[
+            MonitoredProject(
+                name=name,
+                repo=f"shuhei1101/{name}",
+                local_path=f"/tmp/{name}",
+                wiki_base="https://example.com/wiki",
+            )
+            for name in project_names
+        ],
+    )
+
+
+@pytest.fixture
+def _no_cycle(monkeypatch):
+    """lifespan が起動するポーリングループを空回しにする。"""
+    import ai_monitor.main as main_mod
+
+    monkeypatch.setattr(main_mod, "run_cycle", lambda *args, **kwargs: ({}, "1970-01-01T00:00:00+00:00"))
+
+
+def test_receive_reload(mon_registry, agents, label_settings, notify, _no_cycle):
+    """再読込の反映を確認する（正常系）。"""
+    # 準備
+    settings = _real_settings("sandbox")
+    latest = _real_settings("sandbox", "extra")
+    app = app_mod.create_app(
+        settings, registry=mon_registry, agents=agents, label_settings=label_settings, notify=notify,
+        read_settings=lambda: latest, build_agents=lambda s: list(agents),
+    )
+    # 実行
+    with TestClient(app, base_url="http://localhost:8765") as client:
+        response = client.post("/reload")
+    # 検証
+    assert response.status_code == 200
+    assert response.json()["added"] == ["extra"]
+    assert [p.name for p in settings.projects] == ["sandbox", "extra"]
+
+
+def test_receive_reload_when_read_fails(mon_registry, agents, label_settings, notify, _no_cycle):
+    """読込失敗時の 500 を確認する（異常系）。"""
+    # 準備
+    settings = _real_settings("sandbox")
+
+    def _raise():
+        raise ValueError("設定ファイルの構文が不正です")
+
+    app = app_mod.create_app(
+        settings, registry=mon_registry, agents=agents, label_settings=label_settings, notify=notify,
+        read_settings=_raise, build_agents=lambda s: list(agents),
+    )
+    # 実行
+    with TestClient(app, base_url="http://localhost:8765") as client:
+        response = client.post("/reload")
+    # 検証
+    assert response.status_code == 500
+    assert "構文" in response.json()["detail"]
+    assert [p.name for p in settings.projects] == ["sandbox"]

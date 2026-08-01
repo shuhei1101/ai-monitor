@@ -118,7 +118,9 @@ PYTHONPATH=src uv run python -m ai_monitor
 起動すると監視役（`python -m ai_monitor.watchdog`）も一緒に立ち上がり、以降は互いの生存を見張る。
 片方が落ちたらもう片方が再起動し、Webhook へ通知する（一定期間内の再起動が上限に達したら通知だけになる。設定は `watchdog`）。
 
-`projects[]` を書き換えたときは再起動が必要。
+`projects[]` を書き換えたときは `curl -X POST http://127.0.0.1:8765/reload` で反映する（再起動は不要）。
+応答に追加・削除されたプロジェクトと、反映しなかった項目が返る。
+待受ポート（`port`）とセッション台帳のパス（`state_path`）だけは実行中に変えられないため、変更したときは再起動が要る。
 エージェントはモニターが tmux セッションとして起動する（手動でのスキル呼び出しは行わない）。
 どのフェーズページを起動プロンプトに載せるかは [`config/agent_phases.yaml`](./config/agent_phases.yaml) が持つ。
 

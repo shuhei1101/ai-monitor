@@ -16,6 +16,8 @@ from pydantic import BaseModel
 
 from ai_monitor.features.agents.service import reset_session
 from ai_monitor.features.agents.types import Agent
+from ai_monitor.features.config.service import reload_settings
+from ai_monitor.features.config.types import BuildAgents, ReadSettings, ReloadResult
 from ai_monitor.features.notify.types import NotifyFn
 from ai_monitor.features.rate_limit.gate import RateLimitGate
 from ai_monitor.features.rate_limit.service import resolve_reset_at
@@ -51,6 +53,18 @@ class RateLimitRequest(BaseModel):
     transcript_path: str
 
 
+def _default_build_agents(label_settings: LabelSettings) -> BuildAgents:
+    """ラベル設定を束ねたエージェント組立関数を返す。"""
+
+    def _build(settings: Settings) -> list[Agent]:
+        # composition root への循環 import を避けるため呼び出し時に取り込む
+        from ai_monitor.main import build_agents
+
+        return build_agents(label_settings, agent_settings=settings.agents)
+
+    return _build
+
+
 def create_app(
     settings: Settings,
     *,
@@ -61,8 +75,12 @@ def create_app(
     heartbeat_path: Path | None = None,
     supervise_watchdog: Callable[[datetime], None] | None = None,
     exit_process: Callable[[], None] = _exit_process,
+    read_settings: ReadSettings = Settings,
+    build_agents: BuildAgents | None = None,
 ) -> FastAPI:
     """FastAPI アプリを生成し、MCP のマウントと lifespan を配線する。"""
+    # 設定リロードで使うエージェント組立（指定が無ければラベル設定を束ねた既定を使う）
+    build_agents_fn = build_agents if build_agents is not None else _default_build_agents(label_settings)
     # MCP サーバーの ASGI アプリを組み立てる
     mcp_app = build_mcp_app(settings, registry=registry, agents=agents, label_settings=label_settings)
     # 上限の待機状態は到達通知の受信とポーリングループで共有する（上限はアカウント単位なので 1 つだけ持つ）
@@ -173,6 +191,20 @@ def create_app(
             f"セッション: {session.session_name}\nリセット: {resets_at.isoformat()}",
         )
         return {"resets_at": resets_at.isoformat()}
+
+    @app.post("/reload")
+    def receive_reload() -> ReloadResult:
+        """再読込要求を受け、稼働中の設定とエージェント定義を書き換える。"""
+        # 読み直しの失敗は理由を添えて 500 で返す（稼働中の設定は書き換わっていない）
+        try:
+            return reload_settings(
+                settings, agents, read_settings=read_settings, build_agents=build_agents_fn
+            )
+        except Exception as exc:
+            logger.error("設定を読み直せませんでした: %s", exc, exc_info=True)
+            raise HTTPException(
+                status_code=500, detail=f"設定を読み直せませんでした: {exc}"
+            ) from exc
 
     # MCP の ASGI アプリをルートにマウントする（接続先は /mcp）
     # マウントは後続の全パスを引き受けるため、自前のルート登録より後に行う

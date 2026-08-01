@@ -186,3 +186,75 @@ def test_normal_when_bug_return(monitor, gh_live, repo_ctx, epic_issue_factory, 
         "失敗報告コメントに差し戻し結果が返信追記されていない"
     )
     assert server._is_minimized(report.node_id), "失敗報告コメントが未 Resolve"
+
+
+STATUS_CHECK = """> from: @epic-conductor
+> to: @story-conductor
+
+統合テストの委任にあたり、配下 subsystem の進捗とブロッカーを確認させてください。
+
+---
+"""
+
+
+def test_normal_when_status_reply(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until,
+):
+    """状況確認への応答と手番の返却を実環境で確認する（正常系）。"""
+    from tests.e2e.統合テスト import STORY_PR_BODY, setup_story
+
+    owner, repo = repo_ctx
+
+    def _get(number):
+        return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
+
+    # 準備: 要件確定済み story（本文記入済み + story Draft PR 作成済み）
+    ctx = setup_story(
+        gh_live, owner, repo,
+        epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
+        pr_body=STORY_PR_BODY, files={},
+    )
+    story = ctx["story"]
+    story_pr = ctx["pr"]
+    body_before = (_get(story.number).body or "").replace("\r\n", "\n")
+
+    # 準備: architect へ委任済みで作業中の子 subsystem（進行中の担当あり）
+    subsystem = subsystem_issue_factory(
+        story.number, "タスク編集 バックエンド", labels=["layer:subsystem", "確認:architect"]
+    )
+    child_labels_before = {label.name for label in _get(subsystem.number).labels}
+
+    # 準備: 親からの状況確認コメント + 確認ラベル（起動条件）
+    check = gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=story.number, body=STATUS_CHECK
+    ).parsed_data
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=story.number, labels=["確認:story-conductor"]
+    )
+    prs_before = {pr.number for pr in gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data}
+
+    # 実行: 問い合わせに答えて手番を返すのを待つ（確認:story-conductor の除去）
+    def _replied():
+        data = _get(story.number)
+        return data if not any(label.name.startswith("確認:") for label in data.labels) else None
+
+    data = wait_until(_replied, timeout_sec=1200, message="問い合わせ応答の完了（確認:* 除去）")
+
+    # 検証: 状況確認コメントに現状が返信追記され Resolve 済み
+    updated = gh_live.rest.issues.get_comment(owner=owner, repo=repo, comment_id=check.id).parsed_data
+    assert "> from: @story-conductor" in (updated.body or ""), "状況確認コメントに現状が返信追記されていない"
+    assert server._is_minimized(check.node_id), "状況確認コメントが未 Resolve"
+
+    # 検証: 新しい Draft PR が作成されていない（要件確定をやり直していない）
+    prs_after = {pr.number for pr in gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data}
+    assert prs_after <= prs_before, f"新しい PR が作成されている: {sorted(prs_after - prs_before)}"
+    assert story_pr.number in prs_after
+
+    # 検証: story Issue の本文が変更されていない
+    assert (data.body or "").replace("\r\n", "\n") == body_before
+
+    # 検証: 進行中の子のラベル・assignee が変わっていない
+    child = _get(subsystem.number)
+    assert {label.name for label in child.labels} == child_labels_before
+    assert not child.assignees

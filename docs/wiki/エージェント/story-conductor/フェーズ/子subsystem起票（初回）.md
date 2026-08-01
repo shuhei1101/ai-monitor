@@ -2,11 +2,16 @@
 
 single-scenario-writer の完了報告を受けて、単一シナリオを元に subsystem 分担を洗い出し、依存順の先頭グループのみを起票する。
 
+単一ユースケースへの影響なしと確定した story では、シナリオ設計を挟まずに要件確定の次のターンで本フェーズへ入る。
+この場合は完了報告コメントが無いため「完了報告の Resolve と起票結果の記録」の Resolve は行わない。
+
 ## 手順
 
 ### 単一シナリオの確認
 
 epic ブランチ配下の worktree に切り替えて（story ブランチの worktree）、single-scenario-writer が commit した `docs/wiki/設計図/シナリオ/単一ユースケース/{UC名}.md` を読む。
+
+単一 UC 影響なしの経路では新規シナリオが無いため、代わりに master 側の既存シナリオと story Issue 本文の `## ユースケース要件` を材料にする。
 
 ### subsystem の洗い出しと依存順の決定
 
@@ -47,7 +52,7 @@ MCP `update_body` を呼ぶ:
 
 ### 完了報告の Resolve と起票結果の記録
 
-MCP `resolve_comments` で single-scenario-writer の完了報告コメントを Resolve する。
+single-scenario-writer の完了報告コメントがある場合、MCP `resolve_comments` で Resolve する（単一 UC 影響なしの経路では省略する）。
 
 続けて MCP `comment` を呼ぶ（待機なし）:
 - `number`: $issue_number

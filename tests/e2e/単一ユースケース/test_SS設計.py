@@ -714,3 +714,87 @@ def test_normal_when_reverse(
         ).parsed_data.labels
     }
     assert "確認:tester" in labels and "確認:architect" not in labels
+
+
+def _addressed_review_comments(gh_live, owner, repo, pr_number, login: str) -> list:
+    """ユーザー宛のインライン確認事項だけを返す。"""
+    return [
+        c
+        for c in gh_live.rest.pulls.list_review_comments(
+            owner=owner, repo=repo, pull_number=pr_number
+        ).parsed_data
+        if f"@{login}" in (c.body or "")
+    ]
+
+
+def test_normal_when_thumbs_up(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
+):
+    """インライン確認事項への 👍 を推奨への同意として扱うことを確認する（正常系・👍 で回答）。"""
+    owner, repo = repo_ctx
+    login = gh_live.rest.users.get_authenticated().parsed_data.login
+    ctx = _setup_ss_design(
+        gh_live, owner, repo, sandbox,
+        _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, subsystem_issue_factory),
+        commit_file, pr_body=SUBSYSTEM_PR_BODY_TEMPLATE,
+    )
+    pr_number = ctx["pr"].number
+
+    # 準備: 設計提案の待機（議論中 + assignee）まで進め、インライン確認事項が出るのを待つ
+    def _gate_with_question():
+        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=pr_number).parsed_data
+        labels = {label.name for label in data.labels}
+        if "議論中" not in labels or not data.assignees:
+            return None
+        questions = _addressed_review_comments(gh_live, owner, repo, pr_number, login)
+        return (data, questions) if questions else None
+
+    data, questions = wait_until(
+        _gate_with_question, timeout_sec=1800, message="設計提案の待機とインライン確認事項の投稿"
+    )
+    target = questions[-1]
+    question_ids_before = {c.id for c in questions}
+    design_before = set(_design_paths(gh_live, owner, repo, ctx["subsystem_branch"]))
+
+    # 実行: 本文のコメントは書かず 👍 だけを付けて assignee を外す
+    gh_live.rest.reactions.create_for_pull_request_review_comment(
+        owner=owner, repo=repo, comment_id=target.id, content="+1"
+    )
+    for assignee in data.assignees:
+        gh_live.rest.issues.remove_assignees(
+            owner=owner, repo=repo, issue_number=pr_number, assignees=[assignee.login]
+        )
+
+    # 実行: スレッドへの返信と再待機（assignee 再設定）を待つ
+    def _replied():
+        threads = gh_live.rest.pulls.list_review_comments(
+            owner=owner, repo=repo, pull_number=pr_number
+        ).parsed_data
+        replies = [c for c in threads if getattr(c, "in_reply_to_id", None) == target.id]
+        if not replies:
+            return None
+        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=pr_number).parsed_data
+        return (data, replies) if data.assignees else None
+
+    after, replies = wait_until(
+        _replied, timeout_sec=1800, message="👍 への応答（スレッド返信 + assignee 再設定）"
+    )
+
+    # 検証: 該当スレッドに確定内容の返信が投稿されている
+    assert any((r.body or "").lstrip().startswith("> from: @architect") for r in replies), (
+        "スレッドに architect の返信が投稿されていない"
+    )
+
+    # 検証: 回答内容を問い直す確認事項が増えていない（👍 だけで判断できている）
+    now_questions = _addressed_review_comments(gh_live, owner, repo, pr_number, login)
+    added = [c for c in now_questions if c.id not in question_ids_before and c.id != target.id]
+    assert not added, f"回答を問い直す確認事項が投稿されている: {[c.html_url for c in added]}"
+
+    # 検証: 別案へ差し替えられていない（設計ページの構成が推奨のまま）
+    design_after = set(_design_paths(gh_live, owner, repo, ctx["subsystem_branch"]))
+    assert design_before <= design_after, f"設計ページが削除・改名されている: {design_before - design_after}"
+
+    # 検証: 議論中 + assignee=ユーザー が残っている（確定はユーザーの 議論中 除去で行う）
+    assert "議論中" in {label.name for label in after.labels}
+    assert after.assignees

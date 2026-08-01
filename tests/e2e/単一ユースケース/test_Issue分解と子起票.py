@@ -80,3 +80,77 @@ def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, wait_until):
     assert agent_comments, "エージェントのコメントが見つからない"
     for comment in agent_comments:
         assert server._is_minimized(comment.node_id), f"コメント {comment.html_url} が未 Resolve"
+
+
+DUPLICATE_TITLE = "タスク期限のメール通知を追加したい"
+EXISTING_BODY = """タスクの期限が近づいたらメールで通知する機能を追加したいです。
+
+- 通知の on/off はユーザー設定で切り替えたい
+"""
+DUPLICATE_BODY = """期限が近いタスクをメールで知らせてほしいです。
+
+- 通知タイミング（1 日前 / 1 時間前）も選べるようにしたい
+"""
+
+# 統合先にだけ現れる固有内容（転記されたことの目印）
+DUPLICATE_MARKER = "1 時間前"
+
+
+def test_normal_when_duplicated(
+    monitor, gh_live, repo_ctx, intake_issue_factory, issue_factory, wait_until
+):
+    """目的が重複する既存 Issue への統合とクローズを実環境で確認する（正常系）。"""
+    owner, repo = repo_ctx
+
+    def _get(number):
+        return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
+
+    # 準備: 同じ目的で進行中の既存 Issue（担当エージェントの確認ラベル付き）
+    existing = issue_factory(
+        title=DUPLICATE_TITLE,
+        body=EXISTING_BODY,
+        labels=["layer:epic", "確認:epic-conductor"],
+    )
+    existing_labels_before = {label.name for label in _get(existing.number).labels}
+
+    # 準備: 同じ目的の intake Issue（確認ラベル付き・assignee なし）
+    issue = intake_issue_factory(title=DUPLICATE_TITLE, body=DUPLICATE_BODY)
+
+    # 実行: 統合判定によるクローズを待つ（ユーザーの確認は挟まれない）
+    def _merged():
+        data = _get(issue.number)
+        return data if data.state == "closed" else None
+
+    data = wait_until(_merged, timeout_sec=1200, message="既存 Issue への統合（intake Issue の closed）")
+
+    # 検証: サブ Issue が起票されていない
+    subs = gh_live.rest.issues.list_sub_issues(owner=owner, repo=repo, issue_number=issue.number).parsed_data
+    assert not subs, f"サブ Issue が起票されている: {[s.number for s in subs]}"
+
+    # 検証: intake Issue に統合先へのリンクが残っている
+    own_comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=issue.number
+    ).parsed_data
+    assert any(f"#{existing.number}" in c.body for c in own_comments), (
+        f"統合先 #{existing.number} へのリンクが残っていない"
+    )
+
+    # 検証: ユーザーの確認を挟んでいない（議論中 / assignee なし）
+    labels = {label.name for label in data.labels}
+    assert "議論中" not in labels
+    assert not data.assignees
+
+    # 検証: 既存 Issue に固有内容と出典が転記されている
+    merged_comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=existing.number
+    ).parsed_data
+    transferred = [c for c in merged_comments if c.body.lstrip().startswith("> from:")]
+    assert transferred, "統合先に転記コメントが投稿されていない"
+    joined = "\n".join(c.body for c in transferred)
+    assert DUPLICATE_MARKER in joined, f"固有内容が転記されていない: {joined[:200]}"
+    assert f"#{issue.number}" in joined, "出典（intake Issue 番号）が書かれていない"
+
+    # 検証: 既存 Issue のラベルと担当が変わっていない
+    after = _get(existing.number)
+    assert {label.name for label in after.labels} == existing_labels_before
+    assert not after.assignees

@@ -269,3 +269,103 @@ def test_normal_when_impl_review(
     ), "subsystem-conductor の最終確認依頼が投稿されていない"
     pr_now = gh_live.rest.pulls.get(owner=owner, repo=repo, pull_number=ctx["pr"].number).parsed_data
     assert pr_now.merged is False, "ユーザー最終確認の前にマージされている"
+
+
+# 実装タスクがチェック済み（実装レビューまで進んだ状態）の PR 本文
+def _implemented_pr_body() -> str:
+    return _pr_body(" ").replace("- [ ] `update_task` を実装", "- [x] `update_task` を実装")
+
+
+def test_normal_when_test_bounce(
+    monitor,
+    gh_live,
+    repo_ctx,
+    epic_issue_factory,
+    epic_pr_factory,
+    draft_pr_factory,
+    story_issue_factory,
+    subsystem_issue_factory,
+    commit_file,
+    wait_until,
+    sandbox,
+):
+    """実装レビューのテストコード側差し戻し → 修正 → 実装後の再レビューへの復帰を確認する（正常系）。"""
+    from tests.e2e.実装対象 import IMPLEMENTED_SERVICE_PY, WRONG_EXPECTATION_TEST_PY
+
+    owner, repo = repo_ctx
+    ctx = setup_subsystem(
+        gh_live, owner, repo,
+        epic_issue_factory, epic_pr_factory, draft_pr_factory,
+        story_issue_factory, subsystem_issue_factory, commit_file,
+        pr_body=_implemented_pr_body(),
+    )
+    # 実装は設計どおり、テストの期待値だけが誤っている状態を積む（fail の原因をテスト側に決める）
+    seed_subsystem_branch(gh_live, owner, repo, commit_file, ctx["subsystem_branch"])
+    commit_file(
+        ctx["subsystem_branch"], "tests/tasks/__init__.py", "", "chore: e2e 用のテストパッケージを配置"
+    )
+    commit_file(
+        ctx["subsystem_branch"], RED_TEST_PATH, WRONG_EXPECTATION_TEST_PY,
+        "test: 単体テストを追加（期待値が設計と食い違う状態）",
+    )
+    commit_file(
+        ctx["subsystem_branch"], "src/tasks/service.py", IMPLEMENTED_SERVICE_PY, "feat: update_task を実装"
+    )
+    service_sha_before = gh_live.rest.repos.get_content(
+        owner=owner, repo=repo, path="src/tasks/service.py", ref=ctx["subsystem_branch"]
+    ).parsed_data.sha
+
+    # 準備: implementer の完了報告 → 確認:architect 付与（実装レビューの起動トリガー）
+    gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, body=IMPLEMENTER_REPORT
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
+    )
+
+    # 実行: 差し戻し → 修正 → 実装後の再レビューの収束を待つ（確認:subsystem-conductor が終端）
+    def _converged():
+        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=ctx["pr"].number).parsed_data
+        labels = {label.name for label in data.labels}
+        return data if "確認:subsystem-conductor" in labels else None
+
+    data = wait_until(
+        _converged, timeout_sec=3600, message="差し戻し → 修正 → 再レビューの収束（確認:subsystem-conductor）"
+    )
+
+    # 検証: 経路上で tester への差し戻しが発生している
+    comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number
+    ).parsed_data
+    joined = "\n".join(c.body or "" for c in comments)
+    assert "> to: @tester" in joined, "tester への差し戻しが発生していない"
+
+    # 検証: implementer へ再度の実装割り当てが行われていない
+    assert "> to: @implementer" not in joined, "implementer へ再度の実装割り当てが行われている"
+
+    # 検証: 実装コードに commit が発生していない（直したのはテストコードだけ）
+    service_sha_after = gh_live.rest.repos.get_content(
+        owner=owner, repo=repo, path="src/tasks/service.py", ref=ctx["subsystem_branch"]
+    ).parsed_data.sha
+    assert service_sha_after == service_sha_before, "実装コードが変更されている"
+
+    # 検証: 最終的にテストが Green（実装後の再レビューが Red を期待していない）
+    result = run_branch_tests(sandbox["local_path"], ctx["subsystem_branch"])
+    assert result.returncode == 0, f"テストが Green になっていない: {result.stdout[-2000:]}"
+
+    # 検証: タスク一覧の実装タスクがチェック済みのまま
+    impl_line = next(
+        line for line in (data.body or "").replace("\r\n", "\n").splitlines()
+        if "`update_task` を実装" in line
+    )
+    assert impl_line.strip().startswith("- [x]"), f"実装タスクのチェックが外れている: {impl_line}"
+
+    # 検証: 一式完了報告が投稿されている
+    assert "> to: @subsystem-conductor" in joined, "subsystem-conductor 宛の一式完了報告が投稿されていない"
+
+    # 検証: ループ中にユーザー操作を挟んでいない（議論中 付与・assignee 設定の履歴なし）
+    labeled, assigned = _label_and_assignee_events(gh_live, owner, repo, ctx["pr"].number)
+    assert not [e for e in labeled if getattr(getattr(e, "label", None), "name", "") == "議論中"], (
+        "議論中 が付与されている（ユーザー操作なしで収束していない）"
+    )
+    assert not assigned, "assignee が設定されている（ユーザー操作なしで収束していない）"

@@ -164,3 +164,109 @@ def test_error_when_pointed_out(
     assert _test_task_line(data.body).startswith("- [ ]"), (
         f"テスト作成タスクがチェックされている: {_test_task_line(data.body)}"
     )
+
+
+# 実装済み（タスク一覧の実装タスクがチェック済み）の PR 本文
+IMPLEMENTED_PR_BODY = PR_BODY.replace("- [ ] `update_task` を実装", "- [x] `update_task` を実装")
+
+# 実装レビューでテストコード側の問題と判定して tester へ差し戻した記録
+BOUNCE_RECORD = """> from: @architect
+> to: @tester
+
+実装レビューの結果、fail の原因はテストコード側でした。
+
+- 実装は設計どおりで変更不要（`src/tasks/service.py` は現状のまま）
+- テストの期待値が設計の単体テスト表と食い違っているため、テスト側を修正してください
+
+---
+"""
+
+# 差し戻しを受けた tester の修正完了報告（本ケースの起動条件）
+RETEST_REPORT = """> from: @tester
+> to: @architect
+
+差し戻しを受けてテストコードを修正しました。
+
+- 修正したテストファイル: `tests/tasks/test_service.py`
+- 実装は変更していません
+- 実行結果: 全 pass
+
+| commit | 内容 |
+| --- | --- |
+| seed | 単体テストの期待値を設計に合わせて修正 |
+
+---
+"""
+
+
+def test_normal_when_after_implementation(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
+):
+    """実装済みの状態でのテスト再レビューと一式完了報告を確認する（正常系・実装後の再レビュー）。"""
+    from tests.e2e.実装対象 import IMPLEMENTED_SERVICE_PY
+
+    owner, repo = repo_ctx
+    # 準備: 実装タスクがチェック済みの subsystem PR（実装コードは修正前のまま）
+    ctx = setup_subsystem(
+        gh_live, owner, repo,
+        epic_issue_factory, epic_pr_factory, draft_pr_factory,
+        story_issue_factory, subsystem_issue_factory, commit_file,
+        pr_body=IMPLEMENTED_PR_BODY,
+    )
+    seed_subsystem_branch(gh_live, owner, repo, commit_file, ctx["subsystem_branch"])
+    commit_file(ctx["subsystem_branch"], "tests/tasks/__init__.py", "", "chore: e2e 用のテストパッケージを配置")
+    commit_file(ctx["subsystem_branch"], RED_TEST_PATH, RED_TEST_PY, "test: 単体テストを追加")
+    commit_file(
+        ctx["subsystem_branch"], "src/tasks/service.py", IMPLEMENTED_SERVICE_PY, "feat: update_task を実装"
+    )
+    service_sha_before = gh_live.rest.repos.get_content(
+        owner=owner, repo=repo, path="src/tasks/service.py", ref=ctx["subsystem_branch"]
+    ).parsed_data.sha
+
+    # 準備: 差し戻しの経緯 + tester の修正完了報告（起動条件）
+    gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, body=BOUNCE_RECORD
+    )
+    report = gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, body=RETEST_REPORT
+    ).parsed_data
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
+    )
+
+    # 実行: subsystem-conductor への一式完了報告（確認ラベルの入れ替え）を待つ
+    data = _wait_handed_to(
+        gh_live, owner, repo, ctx["pr"].number, "subsystem-conductor", wait_until,
+        message="実装後の再レビュー通過（確認:subsystem-conductor 付与）",
+    )
+
+    # 検証: 修正完了報告スレッドにレビュー結果が返信追記され Resolve 済み
+    thread = next(c for c in comments(gh_live, owner, repo, ctx["pr"].number) if c.node_id == report.node_id)
+    assert "> from: @architect" in (thread.body or ""), "レビュー結果が返信追記されていない"
+    assert server._is_minimized(report.node_id), "修正完了報告スレッドが Resolve されていない"
+
+    # 検証: 未解決のインライン指摘スレッドが残っていない
+    unresolved = unresolved_review_threads(gh_live, owner, repo, ctx["pr"].number)
+    assert not unresolved, f"未解決のインライン指摘スレッドが残っている: {unresolved}"
+
+    # 検証: 実装タスクはチェック済みのまま
+    impl_line = next(
+        line for line in (data.body or "").replace("\r\n", "\n").splitlines()
+        if "`update_task` を実装" in line
+    )
+    assert impl_line.strip().startswith("- [x]"), f"実装タスクのチェックが外れている: {impl_line}"
+
+    # 検証: implementer へ差し戻していない（実装の割り当てコメントなし）
+    assigned = [c for c in comments(gh_live, owner, repo, ctx["pr"].number) if "> to: @implementer" in (c.body or "")]
+    assert not assigned, f"implementer への割り当てコメントが投稿されている: {[c.html_url for c in assigned]}"
+
+    # 検証: 実装コードが変わっていない
+    service_sha_after = gh_live.rest.repos.get_content(
+        owner=owner, repo=repo, path="src/tasks/service.py", ref=ctx["subsystem_branch"]
+    ).parsed_data.sha
+    assert service_sha_after == service_sha_before, "実装コードが変更されている"
+
+    # 検証: 一式完了報告が投稿されている
+    reports = [c for c in comments(gh_live, owner, repo, ctx["pr"].number) if "> to: @subsystem-conductor" in (c.body or "")]
+    assert reports, "subsystem-conductor 宛の一式完了報告が投稿されていない"

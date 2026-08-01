@@ -3,6 +3,9 @@
 complex-scenario-writer のシナリオ設計完了報告を受けて、ユースケース一覧の各 UC に対応する子 story Issue を起票する。
 UC 一覧は要件確定で承認済みのため、ユーザー承認なしの自動完了。
 
+複合ユースケースへの影響なしと確定した epic では、シナリオ設計を挟まずに要件確定の次のターンで本フェーズへ入る。
+この場合は完了報告コメントが無いため「完了報告の Resolve と起票結果の記録」の Resolve は行わない。
+
 ## 手順
 
 ### 子 story の起票
@@ -26,7 +29,7 @@ MCP `update_body` を呼ぶ:
 
 ### 完了報告の Resolve と起票結果の記録
 
-MCP `resolve_comments` で complex-scenario-writer の完了報告コメントを Resolve する。
+complex-scenario-writer の完了報告コメントがある場合、MCP `resolve_comments` で Resolve する（複合 UC 影響なしの経路では省略する）。
 
 続けて MCP `comment` を呼ぶ（待機なし）:
 - `number`: $issue_number
