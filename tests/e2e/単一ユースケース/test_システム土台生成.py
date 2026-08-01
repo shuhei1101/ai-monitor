@@ -13,6 +13,7 @@ from tests.e2e.実装対象 import add_worktree
 # 土台として生成されるべきページ（骨格の抜け漏れ検出用）
 EXPECTED_PAGES = [
     "README.md",
+    ".gitignore",
     "docs/rules.yaml",
     "docs/wiki/README.md",
     "docs/wiki/設計図/アーキテクチャ図.md",
@@ -72,6 +73,13 @@ def test_normal(
     # 検証: docs/rules.yaml が空の索引で作られている
     rules = _file_text(gh_live, owner, repo, "docs/rules.yaml", branch) or ""
     assert "rules:" in rules, f"rules.yaml が索引の形になっていない: {rules[:120]}"
+
+    # 検証: .gitignore に worktree と環境変数ファイルの除外が入っている
+    ignored = _file_text(gh_live, owner, repo, ".gitignore", branch) or ""
+    assert ".claude/worktrees/" in ignored, (
+        f"worktree の実体が追跡対象から外れていない: {ignored[:200]}"
+    )
+    assert ".env" in ignored, f"環境変数ファイルが追跡対象から外れていない: {ignored[:200]}"
 
     # 検証: テスト実行方法は見出しだけで本文が未確定
     howto = _file_text(gh_live, owner, repo, "docs/wiki/テスト/テスト実行方法.md", branch) or ""
