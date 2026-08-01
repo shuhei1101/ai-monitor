@@ -79,7 +79,8 @@ def test_normal_when_session_gone(gh_mon, tmux_calls, mon_settings, label_settin
     # 準備
     _register_timed_out(mon_registry)
     tmux_calls.has_session_rc = 1
-    gh_mon.rest.issues.list_for_repo.side_effect = [_resp([])]
+    # 対象は open のまま（個別解放の候補にしない）
+    gh_mon.rest.issues.list_for_repo.side_effect = [_resp([_target_ns(52, [])])]
     # 実行
     _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify)
     # 検証

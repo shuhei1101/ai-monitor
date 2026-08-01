@@ -16,7 +16,7 @@ from ai_monitor.features.cleanup.service import (
     close_completed_intakes,
     reap_timed_out_sessions,
     release_closed_roots,
-    release_closed_standalone,
+    release_closed_sessions,
 )
 from ai_monitor.features.health.service import check_dependencies
 from ai_monitor.features.notify.gates import notify_open_gates
@@ -73,7 +73,6 @@ def run_cycle(
     notify: NotifyFn,
 ) -> tuple[dict[str, list[MonitorTarget]], str]:
     """ポーリング + クリーンアップ検知 + heartbeat 判定の 1 周期を実行する。"""
-    standalone_names = {agent.name for agent in agents if agent.standalone}
     now = datetime.now(timezone.utc)
     # 前回 heartbeat からの経過を判定する
     elapsed_sec = (now - datetime.fromisoformat(last_heartbeat_at)).total_seconds()
@@ -118,7 +117,7 @@ def run_cycle(
                 confirm_prefix=labels.confirm_prefix,
                 notify=notify,
             )
-            release_closed_standalone(project, targets, registry=registry, standalone_names=standalone_names)
+            release_closed_sessions(project, targets, registry=registry, agents=agents)
             # heartbeat 間隔が経過していれば再開送信 → タイムアウト回収の順に実行する
             # （逆順だと待機で古くなった last_seen_at を回収が拾い、再開直後のセッションを kill する）
             if heartbeat_elapsed:

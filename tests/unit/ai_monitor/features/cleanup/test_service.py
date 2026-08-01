@@ -217,39 +217,53 @@ def test_collect_family_numbers_when_no_parent(io_mocks, mon_project):
     assert numbers == [35]
 
 
-def test_release_closed_standalone(io_mocks, registry, mon_project):
-    """close 確認後の解放を確認する（正常系）。"""
-    # 準備
-    registry.register(_session(agent="library-poc-runner", number=60))
+def _agent(name: str) -> Agent:
+    return Agent(
+        name=name,
+        confirm_label=f"確認:{name}",
+        processing_label=f"処理中:{name}",
+        model="sonnet",
+        effort="high",
+    )
+
+
+def test_release_closed_sessions(io_mocks, registry, mon_project):
+    """close 確認後の解放とラベル除去を確認する（正常系）。"""
+    # 準備: ワークフロー系のセッションも対象になる
+    registry.register(_session(agent="story-conductor", number=60))
     io_mocks.get_issue.return_value = _issue(60, state="closed")
     # 実行
-    cleanup.release_closed_standalone(mon_project, [], registry=registry, standalone_names={"library-poc-runner"})
+    cleanup.release_closed_sessions(mon_project, [], registry=registry, agents=[_agent("story-conductor")])
     # 検証
     assert registry.sessions == []
-    io_mocks.kill_session.assert_called_once_with("ai-monitor-sandbox-60-library-poc-runner")
+    io_mocks.kill_session.assert_called_once_with("ai-monitor-sandbox-60-story-conductor")
+    removed = [call.args[2] for call in io_mocks.remove_label.call_args_list]
+    assert removed == ["確認:story-conductor", "処理中:story-conductor"]
 
 
-def test_release_closed_standalone_when_still_open(io_mocks, registry, mon_project):
+def test_release_closed_sessions_when_still_open(io_mocks, registry, mon_project):
     """open のままの見送りを確認する（正常系）。"""
     # 準備
     registry.register(_session(agent="library-poc-runner", number=60))
     io_mocks.get_issue.return_value = _issue(60, state="open")
     # 実行
-    cleanup.release_closed_standalone(mon_project, [], registry=registry, standalone_names={"library-poc-runner"})
+    cleanup.release_closed_sessions(mon_project, [], registry=registry, agents=[_agent("library-poc-runner")])
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
+    io_mocks.remove_label.assert_not_called()
 
 
-def test_release_closed_standalone_when_workflow_agent(io_mocks, registry, mon_project):
-    """ワークフロー系の対象外を確認する（正常系）。"""
-    # 準備
-    registry.register(_session(agent="epic-conductor", number=35))
+def test_release_closed_sessions_when_label_missing(io_mocks, registry, mon_project):
+    """ラベル未付与でも解放が完了することを確認する（正常系）。"""
+    # 準備: remove_label は未付与を無視する冪等操作
+    registry.register(_session(agent="architect", number=52))
+    io_mocks.get_issue.return_value = _issue(52, state="closed")
     # 実行
-    cleanup.release_closed_standalone(mon_project, [], registry=registry, standalone_names={"library-poc-runner"})
+    cleanup.release_closed_sessions(mon_project, [], registry=registry, agents=[_agent("architect")])
     # 検証
-    io_mocks.get_issue.assert_not_called()
-    assert len(registry.sessions) == 1
+    assert registry.sessions == []
+    io_mocks.kill_session.assert_called_once_with("ai-monitor-sandbox-52-architect")
 
 
 def test_reap_timed_out_sessions(io_mocks, registry, mon_project, rate_limit_gate, notify):

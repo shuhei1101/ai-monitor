@@ -176,9 +176,11 @@ def test_normal_when_parent_remains(gh_mon, tmux_calls, mon_settings, label_sett
     prev = {"sandbox": [Issue(number=35, state="open", labels=["layer:epic"])]}
     # 実行
     _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
-    # 検証
-    assert len(mon_registry.sessions) == 2
-    assert _killed(tmux_calls) == []
+    # 検証: 一括解放は発火せず、親の system セッションは残る
+    # （closed の epic 自身のセッションは個別解放が拾うため対象外）
+    assert [s.primary_number for s in mon_registry.sessions] == [10]
+    assert _killed(tmux_calls) == ["ai-monitor-sandbox-35-epic-conductor"]
+    assert notify.calls == []
 
 
 def test_normal_when_confirm_remains(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):
@@ -203,9 +205,11 @@ def test_normal_when_confirm_remains(gh_mon, tmux_calls, mon_settings, label_set
     prev = {"sandbox": [Issue(number=35, state="open", labels=["layer:epic"])]}
     # 実行
     _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
-    # 検証
-    assert len(mon_registry.sessions) == 3
-    assert _killed(tmux_calls) == []
+    # 検証: 一括解放は発火せず、intake と配下 subsystem のセッションは残る
+    # （closed の epic 自身のセッションは個別解放が拾うため対象外）
+    assert sorted(s.primary_number for s in mon_registry.sessions) == [30, 40]
+    assert _killed(tmux_calls) == ["ai-monitor-sandbox-35-epic-conductor"]
+    assert notify.calls == []
 
 
 def test_error_when_api_error(
@@ -219,6 +223,7 @@ notify):
     prev = {"sandbox": [Issue(number=35, state="open", labels=["layer:epic"])]}
     # 実行
     _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, [], notify)
-    # 検証
+    # 検証: 単体取得の失敗で周期を見送るため、セッションは全て残る
     assert len(mon_registry.sessions) == 3
     assert _killed(tmux_calls) == []
+    assert notify.calls == []

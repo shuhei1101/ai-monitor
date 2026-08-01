@@ -145,18 +145,17 @@ def _collect_family_numbers(project: MonitoredProject, root_number: int) -> list
     return numbers
 
 
-def release_closed_standalone(
+def release_closed_sessions(
     project: MonitoredProject,
     targets: list[MonitorTarget],
     *,
     registry: SessionRegistry,
-    standalone_names: set[str],
+    agents: list[Agent],
 ) -> None:
-    """独立系エージェントのセッションを担当面の close / merge 検知で解放する。"""
+    """担当面が close / merge されたセッションを解放し、残った確認 / 処理中ラベルを除去する。"""
     open_numbers = {t.number for t in targets}
-    sessions = [
-        s for s in registry.sessions if s.project == project.name and s.agent_name in standalone_names
-    ]
+    agents_by_name = {agent.name: agent for agent in agents}
+    sessions = [s for s in registry.sessions if s.project == project.name]
     for session in sessions:
         # 主番号が open 一覧に無いものを候補にする
         if session.primary_number in open_numbers:
@@ -171,8 +170,12 @@ def release_closed_standalone(
             continue
         registry.remove(session.session_name)
         kill_session(session.session_name)
+        # 残ったラベルは reopen 時に不要な起動を招くため、解放と同じ周期で外す
+        agent = agents_by_name[session.agent_name]
+        remove_label(project, session.primary_number, agent.confirm_label)
+        remove_label(project, session.primary_number, agent.processing_label)
         logger.info(
-            "独立系セッションを解放しました: project=%s agent_name=%s number=%s",
+            "closed 対象のセッションを解放しました: project=%s agent_name=%s number=%s",
             project.name,
             session.agent_name,
             session.primary_number,
