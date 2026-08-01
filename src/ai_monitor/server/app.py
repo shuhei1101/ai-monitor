@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from ai_monitor.features.agents.service import reset_session
 from ai_monitor.features.agents.types import Agent
-from ai_monitor.features.notify.service import build_notifier, build_settings_reader
+from ai_monitor.features.notify.types import NotifyFn
 from ai_monitor.features.rate_limit.gate import RateLimitGate
 from ai_monitor.features.rate_limit.service import resolve_reset_at
 from ai_monitor.features.watchdog.heartbeat import touch_heartbeat
@@ -57,6 +57,7 @@ def create_app(
     registry: SessionRegistry,
     agents: list[Agent],
     label_settings: LabelSettings,
+    notify: NotifyFn,
     heartbeat_path: Path | None = None,
     supervise_watchdog: Callable[[datetime], None] | None = None,
     exit_process: Callable[[], None] = _exit_process,
@@ -66,8 +67,6 @@ def create_app(
     mcp_app = build_mcp_app(settings, registry=registry, agents=agents, label_settings=label_settings)
     # 上限の待機状態は到達通知の受信とポーリングループで共有する（上限はアカウント単位なので 1 つだけ持つ）
     gate = RateLimitGate()
-    # 送出のたびに設定を読み直す（Webhook の変更に再起動を要らなくする）
-    notify = build_notifier(build_settings_reader(lambda: Settings().notifies))
 
     # lifespan で MCP のセッション管理を開始し、その内側でポーリングループを起動する
     @asynccontextmanager

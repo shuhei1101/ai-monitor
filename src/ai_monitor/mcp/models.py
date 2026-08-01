@@ -116,6 +116,8 @@ class ReviewThread(BaseModel):
     line: int | None = None
     start_line: int | None = None
     is_resolved: bool = False
+    # スレッドの最後のコメントの宛先が addressee か（返信すべきスレッドの判定に使う）
+    is_addressed: bool = False
     comments: list[IssueCommentEntry] = []
 
 

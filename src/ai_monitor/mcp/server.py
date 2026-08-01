@@ -84,6 +84,10 @@ _MARK_READY_MUTATION = (
 _RESOLVE_THREAD_MUTATION = (
     "mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { isResolved } } }"
 )
+_REPLY_THREAD_MUTATION = (
+    "mutation($id: ID!, $body: String!) { addPullRequestReviewThreadReply("
+    "input: { pullRequestReviewThreadId: $id, body: $body }) { comment { id url } } }"
+)
 _REVIEW_THREADS_QUERY = """
 query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
@@ -285,8 +289,14 @@ def _parse_comment_blocks(body: str) -> list[CommentBlock]:
     return blocks
 
 
-def _format_block(sender: str, receiver: str | None, body: str, needs_separator: bool = False) -> str:
-    """from / to ヘッダー + 本文 + 末尾の区切り線の定型ブロックを組み立てる。"""
+def _format_block(
+    sender: str,
+    receiver: str | None,
+    body: str,
+    needs_separator: bool = False,
+    trailing_separator: bool = True,
+) -> str:
+    """from / to ヘッダー + 本文の定型ブロックを組み立てる。"""
     # > from: 行（receiver があれば > to: 行も）を組み立てる
     header = f"> from: {_ensure_at(sender)}"
     if receiver is not None:
@@ -295,8 +305,25 @@ def _format_block(sender: str, receiver: str | None, body: str, needs_separator:
     block = f"{header}\n\n{body}"
     if needs_separator:
         block = f"---\n{block}"
-    # 末尾に区切り線を足して返す（ユーザーが続きに書き足してそのまま次のブロックにできる状態にする）
-    return f"{block}\n\n---\n"
+    # 会話欄は末尾に区切り線を足す（ユーザーが続きに書き足してそのまま次のブロックにできる状態にする）
+    if trailing_separator:
+        return f"{block}\n\n---\n"
+    # インライン指摘・スレッド返信は返信で積むため区切り線を付けない
+    return block
+
+
+def _is_addressed(blocks: list[CommentBlock], addressee: str) -> bool:
+    """最後のブロックの宛先から、addressee 宛かを判定する。"""
+    # 判定材料が無い（本文が空）場合は自分宛としない
+    if not blocks:
+        return False
+    last = blocks[-1]
+    # to が addressee のもの・to なしのユーザー投稿（現担当宛）・from が addressee のもの（自身の投稿）を自分宛とする
+    return (
+        last.receiver == addressee
+        or (last.receiver is None and last.sender is None)
+        or last.sender == addressee
+    )
 
 
 def _ends_with_separator(body: str) -> bool:
@@ -577,7 +604,7 @@ def reply_comment(
     if not node or "body" not in node:
         raise ValueError(
             f"会話欄のコメントではないため追記できません: {comment_node_id}"
-            "（インライン指摘への指摘は create_review_comment で新規投稿する）"
+            "（インライン指摘への返信は reply_review_thread でスレッドに投稿する）"
         )
     # format の type に応じて本文（表を含む場合は表も）を組み立てる
     body = _render_format(format)
@@ -625,13 +652,8 @@ def list_comments(
             continue
         # 各コメント本文をブロック配列にパースする
         blocks = _parse_comment_blocks(c.body)
-        last = blocks[-1]
-        # 最後のブロックの to が addressee のもの・to なしのユーザー投稿・from が addressee のもの（自身の投稿）を自分宛と判定する
-        is_addressed = (
-            last.receiver == addressee
-            or (last.receiver is None and last.sender is None)
-            or last.sender == addressee
-        )
+        # 最後のブロックの宛先で自分宛かを判定する
+        is_addressed = _is_addressed(blocks, addressee)
         results.append(
             Comment(
                 node_id=c.node_id,
@@ -709,8 +731,8 @@ def create_review_comment(
     """PR の特定ファイル・行に紐づくレビューコメントを投稿する。"""
     client = _get_client()
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
-    # from / to ヘッダー + 本文を組み立てる
-    text = _format_block(sender, receiver, body)
+    # from / to ヘッダー + 本文を組み立てる（応答はスレッド返信で積むため末尾の区切り線は付けない）
+    text = _format_block(sender, receiver, body, trailing_separator=False)
     # PR の head commit SHA を取得する
     sha = client.rest.pulls.get(owner=owner, repo=repo, pull_number=pr_number).parsed_data.head.sha
     # REST でレビューコメントを投稿し、CommentResult を返す（範囲指定時は start_line も指定）
@@ -725,9 +747,9 @@ def create_review_comment(
 
 @_log_tool_call
 def list_review_threads(
-    pr_number: int, include_resolved: bool = False, *, ctx: Context, settings: Settings
+    pr_number: int, addressee: str, include_resolved: bool = False, *, ctx: Context, settings: Settings
 ) -> list[ReviewThread]:
-    """PR のレビュースレッド一覧を取得する。"""
+    """PR のレビュースレッド一覧を自分宛判定付きで取得する。"""
     client = _get_client()
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # GraphQL で PR のレビュースレッド一覧を取得する
@@ -750,6 +772,8 @@ def list_review_threads(
             )
             for c in node["comments"]["nodes"]
         ]
+        # スレッドの最後のコメントをブロックに分け、その宛先で自分宛かを判定する
+        last_body = node["comments"]["nodes"][-1]["body"] if node["comments"]["nodes"] else ""
         threads.append(
             ReviewThread(
                 node_id=node["id"],
@@ -757,10 +781,25 @@ def list_review_threads(
                 line=node["line"],
                 start_line=node["startLine"],
                 is_resolved=node["isResolved"],
+                is_addressed=_is_addressed(_parse_comment_blocks(last_body), addressee),
                 comments=thread_comments,
             )
         )
     return threads
+
+
+@_log_tool_call
+def reply_review_thread(
+    thread_node_id: str, sender: str, body: str, receiver: str | None = None
+) -> CommentResult:
+    """インライン指摘のスレッドに返信を投稿する。"""
+    client = _get_client()
+    # from / to ヘッダー + 本文を組み立てる（1 返信 = 1 コメントなので末尾の区切り線は付けない）
+    text = _format_block(sender, receiver, body, trailing_separator=False)
+    # GraphQL でスレッドへの返信を投稿する
+    data = client.graphql(_REPLY_THREAD_MUTATION, {"id": thread_node_id, "body": text})
+    comment = data["addPullRequestReviewThreadReply"]["comment"]
+    return CommentResult(node_id=comment["id"], url=comment["url"])
 
 
 @_log_tool_call
@@ -1331,6 +1370,7 @@ def build_mcp_app(
         (_log_tool_call(read_wiki_pages), "Wikiページ取得", _READ_ONLY),
         (create_review_comment, "インラインコメント投稿", None),
         (list_review_threads, "レビュースレッド一覧", _READ_ONLY),
+        (reply_review_thread, "レビュースレッド返信", None),
         (resolve_review_threads, "レビュースレッド一括Resolve", None),
         (create_label, "ラベル作成", None),
         (add_labels, "ラベル追加", None),

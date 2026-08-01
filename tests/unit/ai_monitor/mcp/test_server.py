@@ -46,6 +46,7 @@ EXPECTED_TOOLS = {
     "resolve_comments",
     "create_review_comment",
     "list_review_threads",
+    "reply_review_thread",
     "resolve_review_threads",
     "create_label",
     "add_labels",
@@ -562,6 +563,8 @@ def test_create_review_comment(gh, api):
     assert kwargs["side"] == "RIGHT"
     assert kwargs.get("start_line") is None
     assert kwargs["body"].startswith("> from: @architect\n> to: @implementer")
+    # 応答はスレッド返信で積むため末尾に区切り線を付けない
+    assert not kwargs["body"].endswith("---\n")
     assert res == CommentResult(node_id="PRRC_1", url="http://r/1")
 
 
@@ -595,10 +598,17 @@ def _threads_payload(nodes):
     return {"repository": {"pullRequest": {"reviewThreads": {"nodes": nodes}}}}
 
 
-def _thread_node(node_id, resolved=False, start_line=None, line=48, diff_hunk="@@ -40,3 +40,4 @@\n+added"):
+def _thread_node(
+    node_id,
+    resolved=False,
+    start_line=None,
+    line=48,
+    diff_hunk="@@ -40,3 +40,4 @@\n+added",
+    body="> from: @architect\n> to: @implementer\n\n指摘",
+):
     comment = {
         "id": f"{node_id}-c1",
-        "body": "指摘",
+        "body": body,
         "author": {"login": "shuhei1101"},
         "createdAt": "2026-07-20T00:00:00Z",
         "url": "http://r/1",
@@ -623,13 +633,13 @@ def test_list_review_threads(gh, api):
         [_thread_node("PRRT_1", line=42), _thread_node("PRRT_2", start_line=42, line=48)]
     )
     # 実行
-    res = api.list_review_threads(52)
+    res = api.list_review_threads(52, addressee="implementer")
     # 検証
     assert [t.node_id for t in res] == ["PRRT_1", "PRRT_2"]
     assert res[0].start_line is None and res[0].line == 42
     assert res[1].start_line == 42 and res[1].line == 48
     assert res[0].path == "src/a.py"
-    assert res[0].comments[0].body == "指摘"
+    assert res[0].comments[0].body.endswith("指摘")
     assert res[0].comments[0].diff_hunk == "@@ -40,3 +40,4 @@\n+added"
 
 
@@ -638,7 +648,7 @@ def test_list_review_threads_when_diff_hunk_missing(gh, api):
     # 準備
     gh.graphql.return_value = _threads_payload([_thread_node("PRRT_1", diff_hunk=None)])
     # 実行
-    res = api.list_review_threads(52)
+    res = api.list_review_threads(52, addressee="implementer")
     # 検証
     assert res[0].comments[0].diff_hunk is None
 
@@ -648,7 +658,7 @@ def test_list_review_threads_when_resolved_mixed(gh, api):
     # 準備
     gh.graphql.return_value = _threads_payload([_thread_node("PRRT_1"), _thread_node("PRRT_2", resolved=True)])
     # 実行
-    res = api.list_review_threads(52)
+    res = api.list_review_threads(52, addressee="implementer")
     # 検証
     assert [t.node_id for t in res] == ["PRRT_1"]
 
@@ -658,10 +668,64 @@ def test_list_review_threads_when_include_resolved(gh, api):
     # 準備
     gh.graphql.return_value = _threads_payload([_thread_node("PRRT_1"), _thread_node("PRRT_2", resolved=True)])
     # 実行
-    res = api.list_review_threads(52, include_resolved=True)
+    res = api.list_review_threads(52, addressee="implementer", include_resolved=True)
     # 検証
     assert [t.node_id for t in res] == ["PRRT_1", "PRRT_2"]
     assert res[1].is_resolved is True
+
+
+def test_list_review_threads_when_addressed_mixed(gh, api):
+    """スレッドの最後のコメントでの自分宛判定を確認する（正常系）。"""
+    # 準備: 自分宛 / 他エージェント宛 / 自分が最後に返信 / ユーザーの宛先なし返信
+    gh.graphql.return_value = _threads_payload(
+        [
+            _thread_node("PRRT_1"),
+            _thread_node("PRRT_2", body="> from: @architect\n> to: @tester\n\n他人宛の指摘"),
+            _thread_node("PRRT_3", body="> from: @implementer\n> to: @architect\n\n修正しました"),
+            _thread_node("PRRT_4", body="ここも直しておいて"),
+        ]
+    )
+    # 実行
+    res = api.list_review_threads(52, addressee="implementer")
+    # 検証
+    assert [t.node_id for t in res] == ["PRRT_1", "PRRT_2", "PRRT_3", "PRRT_4"]
+    assert [t.is_addressed for t in res] == [True, False, True, True]
+
+
+# ---- レビュースレッド返信 ----
+
+
+def test_reply_review_thread(gh, api):
+    """スレッドへの返信投稿を確認する（正常系）。"""
+    # 準備
+    gh.graphql.return_value = {
+        "addPullRequestReviewThreadReply": {"comment": {"id": "PRRC_9", "url": "http://r/9"}}
+    }
+    # 実行
+    res = api.reply_review_thread(
+        "PRRT_1", sender="implementer", receiver="architect", body="commit abc1234 で修正しました。"
+    )
+    # 検証
+    query, variables = gh.graphql.call_args.args
+    assert "addPullRequestReviewThreadReply" in query
+    assert variables["id"] == "PRRT_1"
+    assert variables["body"].startswith("> from: @implementer\n> to: @architect")
+    # 1 返信 = 1 コメントなので末尾に区切り線を付けない
+    assert not variables["body"].endswith("---\n")
+    assert res == CommentResult(node_id="PRRC_9", url="http://r/9")
+
+
+def test_reply_review_thread_when_no_receiver(gh, api):
+    """宛先なしでの返信投稿を確認する（正常系）。"""
+    # 準備
+    gh.graphql.return_value = {
+        "addPullRequestReviewThreadReply": {"comment": {"id": "PRRC_9", "url": "u"}}
+    }
+    # 実行
+    api.reply_review_thread("PRRT_1", sender="implementer", body="対応しました。")
+    # 検証
+    variables = gh.graphql.call_args.args[1]
+    assert "> to:" not in variables["body"]
 
 
 # ---- レビュースレッド一括Resolve ----

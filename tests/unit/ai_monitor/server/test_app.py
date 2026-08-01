@@ -19,12 +19,14 @@ def agents() -> list[Agent]:
 
 
 @pytest.fixture
-def client(mon_settings, mon_registry, agents, monkeypatch, label_settings):
+def client(mon_settings, mon_registry, agents, monkeypatch, label_settings, notify):
     import ai_monitor.main as main_mod
 
     # lifespan が起動するポーリングループを空回しにする
     monkeypatch.setattr(main_mod, "run_cycle", lambda *args, **kwargs: ({}, "1970-01-01T00:00:00+00:00"))
-    app = app_mod.create_app(mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings)
+    app = app_mod.create_app(
+        mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings, notify=notify
+    )
     with TestClient(app, base_url="http://localhost:8765") as client:
         yield client
 
@@ -160,7 +162,9 @@ def test_receive_rate_limit_when_session_missing(client, blocked, monkeypatch):
 # ---- ポーリングループ ----
 
 
-def test_create_app_when_heartbeat(mon_settings, mon_registry, agents, monkeypatch, label_settings, tmp_path):
+def test_create_app_when_heartbeat(
+    mon_settings, mon_registry, agents, monkeypatch, label_settings, tmp_path, notify
+):
     """ループが 1 周ごとに最終周回時刻を書くことを確認する（正常系）。"""
     # 準備
     import ai_monitor.main as main_mod
@@ -169,7 +173,7 @@ def test_create_app_when_heartbeat(mon_settings, mon_registry, agents, monkeypat
     beat_path = tmp_path / "monitor.heartbeat"
     supervised: list[object] = []
     app = app_mod.create_app(
-        mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings,
+        mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings, notify=notify,
         heartbeat_path=beat_path, supervise_watchdog=lambda now: supervised.append(now),
     )
     # 実行
@@ -183,7 +187,9 @@ def test_create_app_when_heartbeat(mon_settings, mon_registry, agents, monkeypat
     assert supervised, "監視役の監視が呼ばれていない"
 
 
-def test_create_app_when_cycle_raised(mon_settings, mon_registry, agents, monkeypatch, label_settings):
+def test_create_app_when_cycle_raised(
+    mon_settings, mon_registry, agents, monkeypatch, label_settings, notify
+):
     """ポーリングループの異常終了でプロセス終了が呼ばれることを確認する（正常系）。"""
     # 準備
     import ai_monitor.main as main_mod
@@ -194,7 +200,7 @@ def test_create_app_when_cycle_raised(mon_settings, mon_registry, agents, monkey
     monkeypatch.setattr(main_mod, "run_cycle", _raise)
     exited: list[bool] = []
     app = app_mod.create_app(
-        mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings,
+        mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings, notify=notify,
         exit_process=lambda: exited.append(True),
     )
     # 実行

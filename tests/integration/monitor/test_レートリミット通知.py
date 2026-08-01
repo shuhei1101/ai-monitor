@@ -49,7 +49,7 @@ def gate_box(monkeypatch) -> list:
 
 
 @pytest.fixture
-def client(mon_settings, mon_registry, label_settings, agent_settings, monkeypatch, gate_box):
+def client(mon_settings, mon_registry, label_settings, agent_settings, monkeypatch, gate_box, notify):
     """到達通知を受けるアプリのテストクライアントを返す。"""
     import ai_monitor.main as main_mod
 
@@ -58,7 +58,9 @@ def client(mon_settings, mon_registry, label_settings, agent_settings, monkeypat
         main_mod, "run_cycle", lambda *args, **kwargs: ({}, "1970-01-01T00:00:00+00:00")
     )
     agents = build_agents(label_settings, agent_settings=agent_settings)
-    app = app_mod.create_app(mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings)
+    app = app_mod.create_app(
+        mon_settings, registry=mon_registry, agents=agents, label_settings=label_settings, notify=notify
+    )
     with TestClient(app, base_url="http://localhost:8765") as client:
         yield client
 

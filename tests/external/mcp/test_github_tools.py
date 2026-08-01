@@ -182,7 +182,7 @@ def test_ext_list_review_threads(pr_factory, api):
         pr.number, path=f"{pr.head.ref}.txt", line=3, start_line=1, sender="architect", body="スレッド確認用。"
     )
     # 実行
-    threads = api.list_review_threads(pr.number)
+    threads = api.list_review_threads(pr.number, addressee="implementer")
     # 検証
     assert len(threads) == 1
     assert threads[0].node_id.startswith("PRRT_")
@@ -193,17 +193,39 @@ def test_ext_list_review_threads(pr_factory, api):
     assert threads[0].comments[0].diff_hunk is not None
 
 
+def test_ext_reply_review_thread(pr_factory, api):
+    """スレッドへの返信が同一スレッド内に並ぶことを確認する（正常系）。"""
+    # 準備
+    pr = pr_factory()
+    api.create_review_comment(
+        pr.number, path=f"{pr.head.ref}.txt", line=1, sender="architect", receiver="implementer", body="指摘です。"
+    )
+    thread = api.list_review_threads(pr.number, addressee="implementer")[0]
+    # 実行
+    res = api.reply_review_thread(
+        thread.node_id, sender="implementer", receiver="architect", body="修正しました。"
+    )
+    # 検証
+    assert res.node_id.startswith("PRRC_")
+    after = api.list_review_threads(pr.number, addressee="architect")[0]
+    # 新規スレッドではなく同じスレッドにコメントが積まれている
+    assert after.node_id == thread.node_id
+    assert [c.id for c in after.comments][-1] == res.node_id
+    # 最後の発言者が implementer なので architect 宛と判定される
+    assert after.is_addressed is True
+
+
 def test_ext_resolve_review_threads(pr_factory, api):
     """resolveReviewThread でスレッドが解決済みになることを確認する（正常系）。"""
     # 準備
     pr = pr_factory()
     api.create_review_comment(pr.number, path=f"{pr.head.ref}.txt", line=1, sender="architect", body="解決対象。")
-    thread_id = api.list_review_threads(pr.number)[0].node_id
+    thread_id = api.list_review_threads(pr.number, addressee="architect")[0].node_id
     # 実行
     res = api.resolve_review_threads([thread_id])
     # 検証
     assert res.resolved_count == 1
-    threads = api.list_review_threads(pr.number, include_resolved=True)
+    threads = api.list_review_threads(pr.number, addressee="architect", include_resolved=True)
     assert threads[0].is_resolved is True
 
 

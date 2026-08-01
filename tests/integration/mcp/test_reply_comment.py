@@ -87,6 +87,6 @@ def test_error_when_not_issue_comment(gh, api):
         api.reply_comment("PRRC_1", sender="tester", format=PlainFormat(body="本文"))
     # 対象の node_id と代替手段がメッセージに含まれる
     assert "PRRC_1" in str(exc_info.value)
-    assert "create_review_comment" in str(exc_info.value)
+    assert "reply_review_thread" in str(exc_info.value)
     # 本文更新の API は呼ばれていない
     gh.rest.issues.update_comment.assert_not_called()

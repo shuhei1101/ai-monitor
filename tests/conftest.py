@@ -513,3 +513,24 @@ def tmp_git_repo(tmp_path, monkeypatch, mon_project):
     # プロセスの CWD はリポジトリの外に置き、対象リポジトリの取り違えを検出できるようにする
     monkeypatch.chdir(tmp_path)
     return clone
+
+
+@pytest.fixture(autouse=True)
+def block_real_http(request, monkeypatch):
+    """実 HTTP 送信を止める（Webhook へ送ろうとしたテストはその場で失敗させる）。
+
+    通知の送出先は設定ファイル由来なので、配線を 1 箇所間違えると実際の Discord / Slack へ飛ぶ。
+    テスト側で差し替えていれば後勝ちで上書きされるため、差し替え漏れだけがここで落ちる。
+    """
+    # 外部疎通テストは実接続の確認が目的なので対象外にする
+    if "external" in Path(request.node.fspath).parts:
+        return
+    import httpx
+
+    def _blocked(*args, **kwargs):
+        raise AssertionError(
+            "テストから実 HTTP 送信を行おうとしました。送信先はスタブに差し替えてください"
+        )
+
+    monkeypatch.setattr(httpx, "post", _blocked)
+    monkeypatch.setattr(httpx, "get", _blocked)

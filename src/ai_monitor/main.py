@@ -198,6 +198,7 @@ def main() -> int:
         registry=registry,
         agents=agents,
         label_settings=labels,
+        notify=notify,
         heartbeat_path=self_target.heartbeat_path,
         supervise_watchdog=_supervise_watchdog if settings.watchdog.enabled else None,
     )

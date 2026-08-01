@@ -34,7 +34,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | Resolved 状態取得 | `mcp/server.py` | 関数 | [`_is_minimized`](#resolved-状態取得) | コメントの `isMinimized` を GraphQL で取得 | - |
 | 共通 | コメント投稿実体 | `mcp/server.py` | 関数 | [`_create_issue_comment`](#コメント投稿実体) | REST でコメントを投稿 | PR も同エンドポイント |
 | 共通 | コメント解析 | `mcp/server.py` | 関数 | [`_parse_comment_blocks`](#コメント解析) | `---` 区切りブロックの from / to と本文をパース | - |
-| 共通 | 定型ブロック組立 | `mcp/server.py` | 関数 | [`_format_block`](#定型ブロック組立) | from / to ヘッダー + 本文 + 末尾の区切り線を組み立てる | 書式は `規約/コメント.md` |
+| 共通 | 定型ブロック組立 | `mcp/server.py` | 関数 | [`_format_block`](#定型ブロック組立) | from / to ヘッダー + 本文（会話欄は末尾に区切り線）を組み立てる | 書式は `規約/コメント.md` |
 | 共通 | 本文レンダリング | `mcp/server.py` | 関数 | [`_render_format`](#本文レンダリング) | `type` に応じて本文（+ 表）を組み立てる | plain / commit 表 / ページ範囲表 |
 | 共通 | 区切り線判定 | `mcp/server.py` | 関数 | [`_ends_with_separator`](#区切り線判定) | 本文の末尾が `---` かを判定する | 返信時の区切り線の重複を防ぐ |
 | 共通 | アット付与 | `mcp/server.py` | 関数 | [`_ensure_at`](#アット付与) | 先頭に `@` がなければ付与 | - |
@@ -61,7 +61,8 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | コメント一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_comments`](#コメント一覧) | 全コメントをブロック配列 + 自分宛判定付きで返す | 読み取り専用 |
 | Issue・PR検索 | MCP ツール | `mcp/server.py` | 関数 | [`search_issues_and_prs`](#issuepr検索) | キーワードで Issue / PR を横断検索 | 読み取り専用 |
 | インラインコメント投稿 | MCP ツール | `mcp/server.py` | 関数 | [`create_review_comment`](#インラインコメント投稿) | PR の特定ファイル・行に紐づくレビューコメントを投稿 | - |
-| レビュースレッド一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_review_threads`](#レビュースレッド一覧) | インライン指摘のスレッドを取得 | 読み取り専用 |
+| レビュースレッド一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_review_threads`](#レビュースレッド一覧) | インライン指摘のスレッドを自分宛判定付きで取得 | 読み取り専用 |
+| レビュースレッド返信 | MCP ツール | `mcp/server.py` | 関数 | [`reply_review_thread`](#レビュースレッド返信) | インライン指摘のスレッドに返信を投稿 | - |
 | レビュースレッド一括Resolve | MCP ツール | `mcp/server.py` | 関数 | [`resolve_review_threads`](#レビュースレッド一括resolve) | レビュースレッドを一括で解決 | - |
 | ラベル作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_label`](#ラベル作成) | リポジトリにラベル定義を作る | 既存なら何もしない |
 | ラベル追加 | MCP ツール | `mcp/server.py` | 関数 | [`add_labels`](#ラベル追加) | ラベルを追加して現況を返す | 冪等 |
@@ -354,7 +355,7 @@ classDiagram
   }
   class 定型ブロック組立 {
     <<function>>
-    +定型ブロック組立(送信者, 宛先, 本文, 区切り要否) str
+    +定型ブロック組立(送信者, 宛先, 本文, 先頭区切り要否, 末尾区切り要否) str
   }
   class 本文レンダリング {
     <<function>>
@@ -407,6 +408,9 @@ classDiagram
   レビュースレッド一括Resolve ..> Resolve実行 : スレッドを畳む
   インラインコメント投稿 ..> 定型ブロック組立 : 本文の組み立て
   レビュースレッド一覧 --> レビュースレッド : 返す
+  レビュースレッド一覧 ..> コメント解析 : 最後のコメントの宛先判定
+  レビュースレッド返信 ..> 定型ブロック組立 : 本文の組み立て
+  レビュースレッド返信 --> コメント結果 : 返す
 
   class コメント一括Resolve {
     <<function>>
@@ -422,7 +426,11 @@ classDiagram
   }
   class レビュースレッド一覧 {
     <<function>>
-    +レビュースレッド一覧(PR番号, 解決済み含む) list~レビュースレッド~
+    +レビュースレッド一覧(PR番号, 宛先, 解決済み含む) list~レビュースレッド~
+  }
+  class レビュースレッド返信 {
+    <<function>>
+    +レビュースレッド返信(スレッドnode_id, 送信者, 本文, 宛先) コメント結果
   }
   class レビュースレッド一括Resolve {
     <<function>>
@@ -447,6 +455,7 @@ classDiagram
   click コメント一覧 href "#コメント一覧"
   click インラインコメント投稿 href "#インラインコメント投稿"
   click レビュースレッド一覧 href "#レビュースレッド一覧"
+  click レビュースレッド返信 href "#レビュースレッド返信"
   click レビュースレッド一括Resolve href "#レビュースレッド一括resolve"
   click Resolve実行 href "#resolve-実行"
   click Resolved状態取得 href "#resolved-状態取得"
@@ -848,7 +857,8 @@ IssueSnapshot(number=35, title="プロフィール編集機能", state="OPEN", l
 > 物理名: `comment`<br>
 > 種別: 関数
 
-定型ブロック（from / to ヘッダー + 本文 + 末尾の区切り線）のコメントを投稿する。
+定型ブロック（from / to ヘッダー + 本文）のコメントを PR の特定行に投稿する。
+応答はスレッド返信で積むため、末尾に区切り線を付けない。
 
 #### 引数
 
@@ -1255,7 +1265,7 @@ CommentResult(node_id="PRRC_kwDO...", url="https://github.com/.../pull/52#discus
 
 #### 処理
 
-1. from / to ヘッダー + 本文を組み立てる（[定型ブロック組立](#定型ブロック組立)）
+1. from / to ヘッダー + 本文を組み立てる（[定型ブロック組立](#定型ブロック組立)・`trailing_separator=False`）
 2. PR の head commit SHA を取得する（`rest.pulls.get`）
 3. REST でレビューコメントを投稿し、`CommentResult` を返す（`path` / `line` / `side` / `commit_id`、範囲指定時は `start_line` も指定）
 
@@ -1269,7 +1279,7 @@ CommentResult(node_id="PRRC_kwDO...", url="https://github.com/.../pull/52#discus
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_review_comment` | 正常 | インライン投稿 | path / line / sender / body | githubkit | head SHA + 定型ブロック（末尾が `---`）で投稿 API が呼ばれ `CommentResult` を返す | - |
+| `test_create_review_comment` | 正常 | インライン投稿 | path / line / sender / body | githubkit | head SHA + 定型ブロック（末尾に `---` を付けない）で投稿 API が呼ばれ `CommentResult` を返す | - |
 | `test_create_review_comment_when_multi_line` | 正常 | 範囲指定の投稿 | `start_line=42`・`line=48` | githubkit | `start_line` 付きで投稿 API が呼ばれる | - |
 | `test_create_review_comment_when_out_of_diff` | 異常 | diff 外の行 | REST が 422 を返す | githubkit | `RequestFailed` がそのまま伝播 | 例外表「422 等」に対応 |
 
@@ -1286,38 +1296,40 @@ CommentResult(node_id="PRRC_kwDO...", url="https://github.com/.../pull/52#discus
 > 物理名: `list_review_threads`<br>
 > 種別: 関数
 
-PR のレビュースレッド（インライン指摘のスレッド）を、各コメントの指摘箇所の周辺 diff 付きで取得する。
+PR のレビュースレッド（インライン指摘のスレッド）を、各コメントの指摘箇所の周辺 diff と自分宛判定付きで取得する。
 
 #### 引数
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | PR 番号 | `pr_number` | `int` | ✅ | - | 対象の PR 番号 | - |
+| 宛先名 | `addressee` | `str` | ✅ | - | 自分宛判定に使う名前 | スレッドの最後のコメントで判定する |
 | Resolved 込み | `include_resolved` | `bool` | - | `False` | 解決済みスレッドも含めるか | - |
 
 引数例:
 
 ```python
-list_review_threads(52)
+list_review_threads(52, addressee="implementer")
 ```
 
 #### 戻り値
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| [`list[ReviewThread]`](#レビュースレッド) | レビュースレッドの配列 | - |
+| [`list[ReviewThread]`](#レビュースレッド) | レビュースレッドの配列 | 返信すべきスレッドは `is_addressed` で判別する |
 
 戻り値例:
 
 ```python
-[ReviewThread(node_id="PRRT_kwDO...", path="src/ai_monitor/features/agents/service.py", line=48, start_line=42, is_resolved=False, comments=[...])]
+[ReviewThread(node_id="PRRT_kwDO...", path="src/ai_monitor/features/agents/service.py", line=48, start_line=42, is_resolved=False, is_addressed=True, comments=[...])]
 ```
 
 #### 処理
 
 1. GraphQL で PR のレビュースレッド一覧（path / startLine / line / isResolved / コメント群 + diffHunk）を取得する
 2. `include_resolved` が `False` の場合、解決済みスレッドを除外する
-3. [レビュースレッド](#レビュースレッド)の配列に変換して返す
+3. スレッドの最後のコメントをブロックに分け、最終ブロックの to / from で自分宛かを判定する（[コメント解析](#コメント解析)）
+4. 判定結果を `is_addressed` に入れた [レビュースレッド](#レビュースレッド)の配列に変換して返す
 
 #### 例外
 
@@ -1333,12 +1345,74 @@ list_review_threads(52)
 | `test_list_review_threads_when_resolved_mixed` | 正常 | 解決済みの除外 | 未解決 + 解決済みが混在する応答 | githubkit | 未解決スレッドだけが返る | - |
 | `test_list_review_threads_when_include_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` | githubkit | 解決済みも `is_resolved=True` で返る | - |
 | `test_list_review_threads_when_diff_hunk_missing` | 正常 | diffHunk 欠落時の既定 | `diffHunk` を含まない GraphQL 応答 | githubkit | コメントの `diff_hunk` が `None` になる | - |
+| `test_list_review_threads_when_addressed_mixed` | 正常 | 最後のコメントでの自分宛判定 | 自分宛・他エージェント宛・自分が最後に返信したスレッドが混在 | githubkit | 全スレッドが返り、自分宛だけ `is_addressed=True` になる | 宛先違いも落とさない |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
 | `test_ext_list_review_threads` | GitHub | レビュースレッドの取得 | `startLine` / `line` / `isResolved` / コメント群 / `diffHunk` | 副作用: なし（読み取りのみ） |
+
+---
+
+### レビュースレッド返信
+> 物理名: `reply_review_thread`<br>
+> 種別: 関数
+
+インライン指摘のスレッドに、GitHub ネイティブの返信としてコメントを投稿する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| スレッド node_id | `thread_node_id` | `str` | ✅ | - | 返信先スレッドの GraphQL node_id | [レビュースレッド一覧](#レビュースレッド一覧) で取得（`PRRT_` 始まり） |
+| 送信者 | `sender` | `str` | ✅ | - | 送信者のエージェント名 | `@` は不要 |
+| 本文 | `body` | `str` | ✅ | - | 返信本文 | ヘッダーはツールが付ける |
+| 宛先 | `receiver` | `str \| None` | - | `None`（to 行なし = 現担当宛） | 宛先名 | 指摘した相手を指定する |
+
+引数例:
+
+```python
+reply_review_thread("PRRT_kwDO...", sender="implementer", receiver="architect", body="commit abc1234 で修正しました。")
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`CommentResult`](#コメント結果) | 投稿した返信の node_id / url | `PRRC_` 始まり |
+
+戻り値例:
+
+```python
+CommentResult(node_id="PRRC_kwDO...", url="https://github.com/.../pull/52#discussion_r123456")
+```
+
+#### 処理
+
+1. from / to ヘッダー + 本文を組み立てる（[定型ブロック組立](#定型ブロック組立)）
+   - 会話欄と違い 1 返信 = 1 コメントなので、末尾の区切り線は付けない
+2. GraphQL `addPullRequestReviewThreadReply` でスレッドへ返信を投稿する
+3. 投稿した返信の node_id / url を `CommentResult` で返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `GraphQLFailed` | GraphQL がエラーを返す（スレッド不存在・権限不足 等） | `errors[].message` | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_reply_review_thread` | 正常 | スレッドへの返信投稿 | sender / receiver / body | githubkit | 引用ヘッダー付き本文で `addPullRequestReviewThreadReply` が呼ばれ `CommentResult` を返す | 末尾に区切り線を付けない |
+| `test_reply_review_thread_when_no_receiver` | 正常 | 宛先なしの投稿 | `receiver=None` | githubkit | to 行を含まない本文で投稿される | 現担当宛の扱い |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_reply_review_thread` | GitHub | スレッドへの返信投稿 | スレッド内に返信が並ぶこと / 返信の node_id | 副作用: sandbox の PR に返信投稿 |
 
 ---
 
@@ -3168,10 +3242,14 @@ _parse_comment_blocks(body)
 > 物理名: `_format_block`<br>
 > 種別: 関数
 
-`> from: @sender` + `> to: @receiver` + 本文 + 末尾の区切り線を組み立てる。
+`> from: @sender` + `> to: @receiver` + 本文を組み立てる。
 書式の SoT は `規約/コメント.md`。
 
-末尾に `---` と空行を置くのは、ユーザーがそのコメントの続きに書き足してそのまま返信できるようにするため。
+会話欄のコメントは末尾に `---` と空行を置く。
+ユーザーがそのコメントの続きに書き足して、そのまま次のブロックにできるようにするため。
+
+インライン指摘とスレッド返信は末尾の区切り線を付けない。
+応答は本文への書き足しではなくスレッドへの返信で積むため、書き足し用の区切りが要らない。
 
 #### 引数
 
@@ -3181,6 +3259,7 @@ _parse_comment_blocks(body)
 | 宛先 | `receiver` | `str \| None` | ✅ | - | to 行の宛先名 | `None` で to 行を省略 |
 | 本文 | `body` | `str` | ✅ | - | ブロック本文 | - |
 | 先頭区切りフラグ | `needs_separator` | `bool` | - | `False` | `True` で先頭に `---` を付ける | 追記先が区切り線で終わっていない場合に `True` |
+| 末尾区切りフラグ | `trailing_separator` | `bool` | - | `True` | `False` で末尾の `---` を省く | インライン指摘・スレッド返信で `False` |
 
 引数例:
 
@@ -3192,7 +3271,7 @@ _format_block("architect", "implementer", "L42 に null チェックを追加し
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `str` | 定型ブロック文字列 | 常に `---` + 改行で終わる |
+| `str` | 定型ブロック文字列 | `trailing_separator=True` のときだけ `---` + 改行で終わる |
 
 戻り値例:
 
@@ -3204,7 +3283,9 @@ _format_block("architect", "implementer", "L42 に null チェックを追加し
 
 1. `> from:` 行（`receiver` があれば `> to:` 行も）を組み立てる（[アット付与](#アット付与)で `@` を補完）
 2. ヘッダーと本文を連結する（`needs_separator=True` なら先頭に `---` を付ける）
-3. 末尾に `---` と改行を足して返す
+3. `trailing_separator` で末尾を決めて返す
+   - `True` の場合、末尾に `---` と改行を足す
+   - `False` の場合、本文のまま返す
 
 #### 例外
 
@@ -3762,11 +3843,12 @@ list_review_threads が返すレビュースレッド 1 件（Pydantic `BaseMode
 
 | 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| node_id | `node_id` | `str` | 公開 | - | スレッドの GraphQL node_id | `"PRRT_kwDO..."` | レビュースレッド一括Resolve の対象指定に使う |
+| node_id | `node_id` | `str` | 公開 | - | スレッドの GraphQL node_id | `"PRRT_kwDO..."` | レビュースレッド一括Resolve・レビュースレッド返信の対象指定に使う |
 | 対象ファイル | `path` | `str` | 公開 | - | 対象ファイルパス（リポジトリルート相対） | `"src/ai_monitor/features/agents/service.py"` | - |
 | 対象行 | `line` | `int \| None` | 公開 | `None` | 対象行番号（範囲コメントは終端行） | `48` | diff の変化で outdated になった場合 `None` |
 | 開始行 | `start_line` | `int \| None` | 公開 | `None` | 範囲コメントの開始行 | `42` | 単一行コメントは `None` |
 | 解決済み | `is_resolved` | `bool` | 公開 | `False` | 解決済みか | `false` | `include_resolved=True` のときのみ `true` があり得る |
+| 自分宛 | `is_addressed` | `bool` | 公開 | `False` | `addressee` 宛か | `true` | 返信すべきスレッドの判定に使う |
 | コメント | `comments` | [`list[IssueCommentEntry]`](#コメントエントリ) | 公開 | `[]` | スレッド内のコメント（投稿順） | - | - |
 
 ### メソッド
