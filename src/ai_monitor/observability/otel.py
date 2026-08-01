@@ -72,6 +72,12 @@ def _configure_logs(resource: Resource, settings: ObservabilitySettings) -> None
     root.addHandler(handler)
     # root の既定レベル（WARNING）のままでは INFO ログがレコード化されない
     root.setLevel(logging.INFO)
+    # 指定があるときだけ標準エラー出力にも出す（OTel への送出はレベルに関わらず続ける）
+    if settings.console_log_level is not None:
+        console = logging.StreamHandler()
+        console.setLevel(settings.console_log_level)
+        console.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        root.addHandler(console)
 
 
 def _configure_traces(resource: Resource, settings: ObservabilitySettings) -> None:

@@ -131,6 +131,7 @@ Claude Code から tmux 上で起動・再起動する手順は [`CLAUDE.md`](./
 | 見たいもの | 場所 |
 | --- | --- |
 | モニター / エージェントのログ | OTel バックエンド（`ai_monitor.project` / `ai_monitor.agent` / `ai_monitor.number` 属性で絞る） |
+| tmux 画面のモニターのログ | 既定では出ない。`AI_MONITOR_OTEL_CONSOLE_LOG_LEVEL`（`INFO` / `WARNING` 等）を設定すると標準エラー出力にも出る |
 | uvicorn のアクセスログとプロセスの異常終了 | `data/monitor.log`（追記。再起動しても消えない） |
 | 監視役のログ | `data/watchdog.log` |
 | tmux セッションの画面 | `tmux capture-pane -p -t ai-monitor-server -S -100` |

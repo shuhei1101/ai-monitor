@@ -15,3 +15,5 @@ class ObservabilitySettings(BaseSettings):
     otlp_insecure: bool = True
     deployment_environment: Literal["dev", "staging", "prod"] = "dev"
     service_namespace: str = "ai-monitor"
+    # 標準エラー出力へ出すレベル（None なら出さない。tmux でプロセスの画面を見るときに使う）
+    console_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] | None = None

@@ -15,19 +15,40 @@ def _find(records, body: str):
     return next(record for record in records if record.log_record.body == body)
 
 
-def test_normal(otel_stub):
+def test_normal(otel_stub, capsys):
     """初期化後の logging 出力が共通属性付きで送出される（正常系）。"""
     # 準備
     otel.configure("monitor")
     # 実行
     logging.getLogger("ai_monitor.polling").info("ポーリングを開始します: project=%s", "sandbox")
     get_logger_provider().force_flush()
-    # 検証
+    # 検証: 既定ではコンソールに出さない
+    assert MESSAGE not in capsys.readouterr().err
     record = _find(otel_stub.log_exporters[0].records, MESSAGE)
     assert record.log_record.severity_text == "INFO"
     assert record.resource.attributes["service.name"] == "monitor"
     assert record.resource.attributes["service.namespace"] == "ai-monitor"
     assert record.resource.attributes["deployment.environment"] == "dev"
+
+
+def test_normal_when_console_enabled(otel_stub, monkeypatch, capsys):
+    """コンソール出力の設定時に標準エラー出力と OTel の両方へ出る（正常系）。"""
+    # 準備
+    monkeypatch.setenv("AI_MONITOR_OTEL_CONSOLE_LOG_LEVEL", "WARNING")
+    otel.configure("monitor")
+    logger = logging.getLogger("ai_monitor.polling")
+    # 実行
+    logger.warning(MESSAGE)
+    logger.info("設定レベル未満のログ")
+    get_logger_provider().force_flush()
+    # 検証
+    err = capsys.readouterr().err
+    assert MESSAGE in err
+    # 設定したレベル未満はコンソールに出さない（OTel には従来どおり送る）
+    assert "設定レベル未満のログ" not in err
+    records = otel_stub.log_exporters[0].records
+    assert _find(records, MESSAGE) is not None
+    assert _find(records, "設定レベル未満のログ") is not None
 
 
 def test_normal_when_process_exit(otel_stub):
