@@ -20,6 +20,7 @@ architect:
   - エージェント/architect/フェーズ/実装レビュー.md
   - エージェント/architect/フェーズ/設計差し戻し対応.md
   - エージェント/architect/フェーズ/設計差し戻しの再開指示.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 complex-scenario-writer:
   - エージェント/complex-scenario-writer/README.md
@@ -32,6 +33,7 @@ complex-scenario-writer:
   - エージェント/complex-scenario-writer/フェーズ/シナリオ修正の再開指示.md
   - エージェント/complex-scenario-writer/フェーズ/再テストの実行.md
   - エージェント/complex-scenario-writer/フェーズ/統合テスト割り当て.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 complex-scenario-tester:
   - エージェント/complex-scenario-tester/README.md
@@ -60,6 +62,7 @@ epic-conductor:
   - エージェント/epic-conductor/フェーズ/バグ差し戻し（方針確認）.md
   - エージェント/epic-conductor/フェーズ/バグ差し戻し（実行）.md
   - エージェント/epic-conductor/フェーズ/epicマージ.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 epic-poc-runner:
   - エージェント/epic-poc-runner/README.md
@@ -68,6 +71,7 @@ epic-poc-runner:
   - エージェント/epic-poc-runner/フェーズ/応答ループ.md
   - エージェント/epic-poc-runner/フェーズ/検証実行.md
   - エージェント/epic-poc-runner/フェーズ/完了処理.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 library-poc-runner:
   - エージェント/library-poc-runner/README.md
@@ -102,6 +106,7 @@ single-scenario-writer:
   - エージェント/single-scenario-writer/フェーズ/シナリオ修正の再開指示.md
   - エージェント/single-scenario-writer/フェーズ/再テストの実行.md
   - エージェント/single-scenario-writer/フェーズ/統合テスト割り当て.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 single-scenario-tester:
   - エージェント/single-scenario-tester/README.md
@@ -132,6 +137,7 @@ story-conductor:
   - エージェント/story-conductor/フェーズ/バグ差し戻しの中継（下り）.md
   - エージェント/story-conductor/フェーズ/バグ差し戻しの中継（上り）.md
   - エージェント/story-conductor/フェーズ/storyマージ.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 subsystem-conductor:
   - エージェント/subsystem-conductor/README.md
@@ -153,6 +159,7 @@ subsystem-conductor:
   - エージェント/subsystem-conductor/フェーズ/インターフェース確定の中継.md
   - エージェント/subsystem-conductor/フェーズ/マージ起動.md
   - エージェント/subsystem-conductor/フェーズ/subsystemマージ.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 tester:
   - エージェント/tester/README.md
@@ -172,6 +179,7 @@ questioner:
   - エージェント/questioner/フェーズ/応答ループ.md
   - エージェント/questioner/フェーズ/回答.md
   - エージェント/questioner/フェーズ/完了処理.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 resetter:
   - エージェント/resetter/README.md
@@ -179,6 +187,7 @@ resetter:
   - エージェント/resetter/フェーズ/応答ループ.md
   - エージェント/resetter/フェーズ/巻き戻しの実行.md
   - エージェント/resetter/フェーズ/巻き戻し対象の洗い出し.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 system-conductor:
   - エージェント/system-conductor/README.md
@@ -193,6 +202,7 @@ system-conductor:
   - エージェント/system-conductor/フェーズ/構成確定（完了処理）.md
   - エージェント/system-conductor/フェーズ/systemマージ.md
   - エージェント/system-conductor/フェーズ/子epic起票.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 system-architect:
   - エージェント/system-architect/README.md
@@ -200,6 +210,7 @@ system-architect:
   - エージェント/system-architect/フェーズ/土台生成（初回）.md
   - エージェント/system-architect/フェーズ/応答ループ.md
   - エージェント/system-architect/フェーズ/完了処理.md
+  - エージェント/共通/フェーズ/問い合わせ応答.md
 
 architecture-reverse-engineer:
   - エージェント/architecture-reverse-engineer/README.md

@@ -40,3 +40,4 @@ template_version: 2.0.0
 | [構成確定（完了処理）](./フェーズ/構成確定（完了処理）.md) | system Draft PR の作成と system-architect への引き継ぎ | `議論中` なし + `## 構成要件` 記入済み + system Draft PR 未作成 |
 | [systemマージ](./フェーズ/systemマージ.md) | system PR の master へのマージと子epic起票への引き継ぎ | 未解決の自分宛コメントに system-architect の土台生成完了報告がある |
 | [子epic起票](./フェーズ/子epic起票.md) | エピック一覧からの epic Issue 一括起票 | system PR が merged + `## エピック一覧` の `対応 Issue` 列に `未起票` が残る |
+| [問い合わせ応答](../共通/フェーズ/問い合わせ応答.md) | 索引の他フェーズに該当しない問い合わせへの回答 | 他のどのフェーズにも該当しない + 未解決の自分宛コメントがある |
