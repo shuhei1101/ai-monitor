@@ -68,6 +68,44 @@ sequenceDiagram
 - intake Issue に `layer:intake` + `type:*` が残り、`確認:*` は除去済み
 - 自分宛コメントが全て Resolve 済み
 
+## 正常シナリオ（既存 Issue と重複）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| 既存 Issue | 同じ目的の Issue が open で存在し、担当エージェントの `確認:*` が付いている | 統合先 |
+| intake Issue | 応答ループ中の依頼から起票された Issue に `確認:intake-issue-triager` 付与済み | 本文は既存 Issue と同じ目的の内容 |
+| assignee | 未設定 | エージェント起動条件 |
+| モニター | 対象リポを polling 中 | - |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  participant GH as GitHub
+  participant ORC as モニター
+
+  ORC-->>GH: polling（確認ラベルあり + assignee なし を検知）
+  create participant MON as intake-issue-triager
+  ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
+  activate MON
+  MON-->>GH: 本文のキーワードで<br>関連 Issue / PR を調査
+  MON->>MON: 既存 Issue と目的が重複すると判定
+  MON->>GH: 既存 Issue に、intake Issue 固有の内容を<br>転記するコメントを投稿
+  MON->>GH: intake Issue に統合先へのリンクを残して<br>クローズ
+  deactivate MON
+```
+
+### 期待値
+
+- サブ Issue が 1 件も起票されていない
+- 既存 Issue に、統合した intake Issue の固有内容と出典（intake Issue 番号）が転記されている
+- intake Issue が closed になり、統合先へのリンクが残っている
+- intake Issue に `議論中` と `assignee` が設定されていない（ユーザーの確認を挟まずに統合する）
+- 既存 Issue のラベル・担当は変わっていない（進行中の作業を止めない）
+
 ## 異常シナリオ
 
 なし

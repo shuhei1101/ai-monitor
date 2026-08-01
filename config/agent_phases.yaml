@@ -47,6 +47,7 @@ epic-conductor:
   - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
   - エージェント/RE発注共通/フェーズ/RE完了確認.md
   - エージェント/RE発注共通/フェーズ/REマージ.md
+  - エージェント/RE発注共通/フェーズ/RE依頼中の待機.md
   - エージェント/epic-conductor/フェーズ/要件確定（完了処理）.md
   - エージェント/epic-conductor/フェーズ/PoC結果確認.md
   - エージェント/epic-conductor/フェーズ/モック完了確認.md
@@ -116,6 +117,7 @@ story-conductor:
   - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
   - エージェント/RE発注共通/フェーズ/RE完了確認.md
   - エージェント/RE発注共通/フェーズ/REマージ.md
+  - エージェント/RE発注共通/フェーズ/RE依頼中の待機.md
   - エージェント/story-conductor/フェーズ/要件確定（完了処理）.md
   - エージェント/story-conductor/フェーズ/子subsystem起票（初回）.md
   - エージェント/story-conductor/フェーズ/子subsystem起票（逐次）.md
@@ -139,6 +141,7 @@ subsystem-conductor:
   - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
   - エージェント/RE発注共通/フェーズ/RE完了確認.md
   - エージェント/RE発注共通/フェーズ/REマージ.md
+  - エージェント/RE発注共通/フェーズ/RE依頼中の待機.md
   - エージェント/subsystem-conductor/フェーズ/エスカレーション対応（方針確認）.md
   - エージェント/subsystem-conductor/フェーズ/エスカレーション対応（実行）.md
   - エージェント/subsystem-conductor/フェーズ/エスカレーション結果の中継（下り）.md
@@ -184,6 +187,7 @@ system-conductor:
   - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
   - エージェント/RE発注共通/フェーズ/RE完了確認.md
   - エージェント/RE発注共通/フェーズ/REマージ.md
+  - エージェント/RE発注共通/フェーズ/RE依頼中の待機.md
   - エージェント/system-conductor/フェーズ/構成確定（初回）.md
   - エージェント/system-conductor/フェーズ/構成確定（完了処理）.md
   - エージェント/system-conductor/フェーズ/systemマージ.md
