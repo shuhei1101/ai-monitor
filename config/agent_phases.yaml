@@ -16,6 +16,7 @@ architect:
   - エージェント/architect/フェーズ/設計ページ確定.md
   - エージェント/architect/フェーズ/テスト作成の委任.md
   - エージェント/architect/フェーズ/テストレビュー.md
+  - エージェント/architect/フェーズ/実装後の再レビュー.md
   - エージェント/architect/フェーズ/実装レビュー.md
   - エージェント/architect/フェーズ/設計差し戻し対応.md
   - エージェント/architect/フェーズ/設計差し戻しの再開指示.md
