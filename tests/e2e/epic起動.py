@@ -110,6 +110,20 @@ def assert_linked_issue_only_body(pr) -> None:
     assert sections == ["## 紐づく Issue"], f"PR 本文のセクションが 紐づく Issue のみでない: {sections}"
 
 
+def assert_task_list_body(pr) -> None:
+    """PR 本文が 紐づく Issue + 全行未チェックのタスク一覧であることを確認する。"""
+    body = (pr.body or "").replace("\r\n", "\n")
+    sections = [line for line in body.splitlines() if line.startswith("## ")]
+    assert sections == ["## 紐づく Issue", "## タスク一覧"], (
+        f"PR 本文のセクションが 紐づく Issue + タスク一覧 でない: {sections}"
+    )
+    tasks = [line.strip() for line in body.splitlines() if line.strip().startswith("- [")]
+    assert tasks, "タスク一覧に行がない"
+    assert all(line.startswith("- [ ]") for line in tasks), (
+        f"作成時点でチェック済みの行がある（チェックは各作業者が入れる）: {tasks}"
+    )
+
+
 def assert_comments_resolved(gh_live, owner, repo, number: int) -> None:
     """エージェント投稿のコメントが全て Resolve 済みであることを確認する。"""
     agent_comments = [

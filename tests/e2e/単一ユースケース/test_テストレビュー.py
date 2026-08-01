@@ -20,7 +20,8 @@ PR_BODY = """## 紐づく Issue
 - [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成
 - [ ] `設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成
 - [ ] `update_task` を実装
-- [ ] 単体テストを作成して実行
+- [x] 単体テストを追加
+- [ ] 単体テストを実行
 
 ## 単体テスト結果
 
@@ -96,8 +97,15 @@ def _wait_handed_to(gh_live, owner, repo, pr_number, target: str, wait_until, *,
 
 def _test_task_line(body: str) -> str:
     """タスク一覧のテスト作成タスク行を返す。"""
-    lines = [line for line in (body or "").replace("\r\n", "\n").splitlines() if "単体テストを作成して実行" in line]
+    lines = [line for line in (body or "").replace("\r\n", "\n").splitlines() if "単体テストを追加" in line]
     assert lines, "タスク一覧にテスト作成タスクの行がない"
+    return lines[0].strip()
+
+
+def _test_run_task_line(body: str) -> str:
+    """タスク一覧のテスト実行タスク行を返す。"""
+    lines = [line for line in (body or "").replace("\r\n", "\n").splitlines() if "単体テストを実行" in line]
+    assert lines, "タスク一覧にテスト実行タスクの行がない"
     return lines[0].strip()
 
 
@@ -126,9 +134,12 @@ def test_normal(
     assert "> from: @architect" in (thread.body or ""), "レビュー結果が返信追記されていない"
     assert server._is_minimized(report.node_id), "完了報告スレッドが Resolve されていない"
 
-    # 検証: タスク一覧のテスト作成タスクがチェック済み
+    # 検証: テスト作成タスクは tester のチェックのまま、テスト実行タスクは未チェック（architect は入れない）
     assert _test_task_line(data.body).startswith("- [x]"), (
-        f"テスト作成タスクが未チェック: {_test_task_line(data.body)}"
+        f"テスト作成タスクのチェックが外れている: {_test_task_line(data.body)}"
+    )
+    assert _test_run_task_line(data.body).startswith("- [ ]"), (
+        f"テスト実行タスクに architect がチェックを入れている: {_test_run_task_line(data.body)}"
     )
 
 
@@ -160,9 +171,9 @@ def test_error_when_pointed_out(
         "完了報告スレッドが Resolve されている（修正確定まで同スレッドで往復する）"
     )
 
-    # 検証: タスク一覧のテスト作成タスクは未チェックのまま
-    assert _test_task_line(data.body).startswith("- [ ]"), (
-        f"テスト作成タスクがチェックされている: {_test_task_line(data.body)}"
+    # 検証: 差し戻しでも tester のチェックは外さない（タスク一覧は作業をやったかを表す）
+    assert _test_task_line(data.body).startswith("- [x]"), (
+        f"差し戻しでテスト作成タスクのチェックが外れている: {_test_task_line(data.body)}"
     )
 
 

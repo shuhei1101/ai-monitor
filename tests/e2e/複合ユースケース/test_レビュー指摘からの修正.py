@@ -29,7 +29,8 @@ def _pr_body(result: str) -> str:
 - [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成
 - [ ] `設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成
 - [ ] `update_task` を実装
-- [ ] 単体テストを作成して実行
+- [ ] 単体テストを追加
+- [ ] 単体テストを実行
 
 ## 単体テスト結果
 
@@ -172,9 +173,9 @@ def test_normal_when_test_review(
     result = run_branch_tests(sandbox["local_path"], ctx["subsystem_branch"], ref=converged_sha)
     assert result.returncode != 0, "テストが Red のままでない（実装が混入した可能性）"
 
-    # 検証: タスク一覧のテスト作成タスクがチェック済み
+    # 検証: タスク一覧のテスト作成タスクが tester によってチェック済み
     pr_body = (data.body or "").replace("\r\n", "\n")
-    test_task = [line for line in pr_body.splitlines() if "単体テストを作成して実行" in line]
+    test_task = [line for line in pr_body.splitlines() if "単体テストを追加" in line]
     assert test_task and test_task[0].startswith("- [x]"), f"テスト作成タスクが未チェック: {test_task}"
 
     # 検証: ループ中にユーザー操作を求めていない

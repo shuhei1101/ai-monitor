@@ -4,7 +4,7 @@ from __future__ import annotations
 from tests.e2e.epic起動 import (
     EPIC_SECTIONS,
     assert_comments_resolved,
-    assert_linked_issue_only_body,
+    assert_task_list_body,
     drive_requirements,
 )
 from tests.e2e.ゲート応答 import open_prs_for
@@ -88,7 +88,7 @@ def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, wait_until, e2
     pr = prs[0]
     assert pr.draft is True, "epic PR が Draft でない"
     assert pr.base.ref == "master", f"epic PR の base が master でない: {pr.base.ref}"
-    assert_linked_issue_only_body(pr)
+    assert_task_list_body(pr)
     assert "確認:complex-scenario-writer" in {label.name for label in pr.labels}, (
         f"epic PR に 確認:complex-scenario-writer がない: {sorted(label.name for label in pr.labels)}"
     )

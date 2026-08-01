@@ -79,6 +79,7 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
   MON->>GH: epic PR の自分宛コメント一括 Resolve<br>（指示コメント + モック URL コメント含む）
+  MON->>GH: タスク一覧のモック作成の行に<br>チェックを入れる（自分がやった行だけ）
   MON->>GH: epic PR の 確認:mock-designer 除去
   MON->>GH: 親 epic Issue に 確認:epic-conductor 付与 +<br>完了報告コメント投稿（@epic-conductor 宛・<br>確認後の Resolve 依頼付き）
   deactivate MON
@@ -89,6 +90,7 @@ sequenceDiagram
 
 - epic PR 本文に `## UI 設計`（`### 画面一覧` / `### 画面遷移` / `### モック`）が段階的に記入され、完了時点で 3 セクション全て記入済み
 - モックが `docs/mock/pages/{画面名}/issues/{epic番号}/{案名}/` に commit され、コメントに URL が共有されている
+- `## タスク一覧` のモック作成の行がチェック済み（シナリオ・E2E テストの行は未チェック）
 - 確認事項が 1 論点 = 1 コメントで投稿され、特定の要素に紐づく論点は該当行のインライン、画面全体の方向性は会話欄に振り分けられている
 - `確認:mock-designer` が除去され、親 epic Issue に `確認:epic-conductor` + 完了報告コメント（@epic-conductor 宛・未解決）が付与・投稿されている
 - epic PR の自分宛コメント（指示コメント + モック URL コメント含む）が全て Resolve 済み
@@ -162,6 +164,7 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
   MON->>GH: epic PR の自分宛コメント一括 Resolve
+  MON->>GH: タスク一覧のモック作成の行に<br>チェックを入れる（自分がやった行だけ）
   MON->>GH: epic PR の 確認:mock-designer 除去
   MON->>GH: 親 epic Issue に 確認:epic-conductor 付与 +<br>完了報告コメント投稿（@epic-conductor 宛・<br>確認後の Resolve 依頼付き）
   deactivate MON
@@ -175,6 +178,7 @@ sequenceDiagram
 - mock-designer が実装コードを読み出した記録がない（入力は UC 一覧・横断要件・現状モックに閉じる）
 - 実装にあるが UC 一覧に無い画面が確認事項コメントに挙がり、ユーザー判断が本文に反映されている
 - モックが `docs/mock/pages/{画面名}/issues/{epic番号}/{案名}/` に commit され、コメントに URL が共有されている
+- `## タスク一覧` のモック作成の行がチェック済み（シナリオ・E2E テストの行は未チェック）
 - `確認:mock-designer` が除去され、親 epic Issue に `確認:epic-conductor` + 完了報告コメントが付与・投稿されている
 - epic PR の自分宛コメントが全て Resolve 済み
 

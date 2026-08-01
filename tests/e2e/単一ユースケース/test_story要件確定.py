@@ -109,10 +109,16 @@ def test_normal(
     # 検証: base が親 epic ブランチで、本文は 紐づく Issue のみ
     assert pr.draft is True, "story PR が Draft でない"
     assert pr.base.ref == epic_branch, f"base が親 epic ブランチでない: {pr.base.ref}"
-    sections = [
-        line for line in (pr.body or "").replace("\r\n", "\n").splitlines() if line.startswith("## ")
-    ]
-    assert sections == ["## 紐づく Issue"], f"PR 本文のセクションが 紐づく Issue のみでない: {sections}"
+    pr_body = (pr.body or "").replace("\r\n", "\n")
+    sections = [line for line in pr_body.splitlines() if line.startswith("## ")]
+    assert sections == ["## 紐づく Issue", "## タスク一覧"], (
+        f"PR 本文のセクションが 紐づく Issue + タスク一覧 でない: {sections}"
+    )
+    tasks = [line.strip() for line in pr_body.splitlines() if line.strip().startswith("- [")]
+    assert tasks, "タスク一覧に行がない"
+    assert all(line.startswith("- [ ]") for line in tasks), (
+        f"作成時点でチェック済みの行がある（チェックは各作業者が入れる）: {tasks}"
+    )
 
     # 検証: 作成した PR の番号が自セッションの監視面に登録されている
     assert pr.number in _watch_numbers(e2e_state_path, story.number), (

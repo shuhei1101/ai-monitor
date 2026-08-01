@@ -24,7 +24,8 @@ SUBSYSTEM_PR_BODY = """## 紐づく Issue
 - [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成
 - [ ] `設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成
 - [ ] `update_task` を実装
-- [ ] 単体テストを作成して実行
+- [x] 単体テストを追加
+- [ ] 単体テストを実行
 
 ## 単体テスト結果
 
@@ -109,8 +110,21 @@ def test_normal(
     for row in result_rows:
         assert "✅" in row, f"結果列が ✅ で埋まっていない: {row}"
 
-    # 検証: タスク一覧のチェックは未変更（チェックは architect が検収時に入れる）
-    assert "- [x]" not in body, "タスク一覧にチェックが入っている"
+    # 検証: 自分がやった実装の行だけがチェック済みで、テスト実行の行には触れていない
+    impl_lines = [
+        line.strip() for line in body.splitlines()
+        if line.strip().startswith("- [") and "を実装" in line
+    ]
+    assert impl_lines and all(line.startswith("- [x]") for line in impl_lines), (
+        f"実装タスクが未チェック: {impl_lines}"
+    )
+    run_lines = [
+        line.strip() for line in body.splitlines()
+        if line.strip().startswith("- [") and "テストを実行" in line
+    ]
+    assert all(line.startswith("- [ ]") for line in run_lines), (
+        f"テスト実行の行に implementer がチェックを入れている: {run_lines}"
+    )
 
     # 検証: テストが実際に Green になっている
     result = run_branch_tests(sandbox["local_path"], ctx["subsystem_branch"])

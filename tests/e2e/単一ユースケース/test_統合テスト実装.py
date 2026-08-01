@@ -90,6 +90,23 @@ def _assert_implemented(gh_live, owner, repo, branch, seed_sha, data, level) -> 
     assert len(rows) >= 2, f"新規 + 回帰の行が並んでいない: {rows}"
     assert any(f in body for f in e2e_files), f"新規テストの行がない: {e2e_files}"
     assert "✅" not in body and "❌" not in body, "結果列が記入されている（記入は実行フェーズ）"
+
+    # 自分がやった E2E テストコード作成の行だけがチェック済み（実行の行は writer が入れる）
+    made = [
+        line.strip() for line in body.splitlines()
+        if line.strip().startswith("- [") and "テストコードを作成" in line
+    ]
+    assert made and all(line.startswith("- [x]") for line in made), (
+        f"E2E テストコード作成のタスクが未チェック: {made}"
+    )
+    run = [
+        line.strip() for line in body.splitlines()
+        if line.strip().startswith("- [") and "テストを実行" in line
+    ]
+    assert all(line.startswith("- [ ]") for line in run), (
+        f"テスト実行の行に tester がチェックを入れている: {run}"
+    )
+
     assert supplement_review_comments(gh_live, owner, repo, data.number), (
         "補足事項のインラインコメントが投稿されていない"
     )

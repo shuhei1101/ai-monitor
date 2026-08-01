@@ -58,7 +58,7 @@ sequenceDiagram
   MON->>GH: epic Issue の 確認:epic-conductor 除去
   alt PoC 不要・画面変更なし
     MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}）+ 空 commit push
-    MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
+    MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue +<br>タスク一覧）
     MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
     MON->>GH: epic PR に 確認:complex-scenario-writer 付与
   else PoC 不要・画面変更あり
@@ -74,7 +74,8 @@ sequenceDiagram
 
 - epic Issue 本文に `## 概要` / `## 背景` / `## ユースケース一覧` / `## 横断要件` が揃っている
 - ユースケース一覧の `対応 story` 列が全行 `未起票`
-- `確認:epic-conductor` が除去され、epic Draft PR（本文は `## 紐づく Issue` のみ）が作成されて `確認:complex-scenario-writer` が付与されている
+- `確認:epic-conductor` が除去され、epic Draft PR（本文に `## 紐づく Issue` と `## タスク一覧`）が作成されて `確認:complex-scenario-writer` が付与されている
+- `## タスク一覧` に複合 UC シナリオの作成 / 修正・シナリオ索引の更新・複合 UC E2E テストの実行が列挙され、全行が未チェック（チェックは各行を担当した作業者が入れる）
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - 自分宛コメントが全て Resolve 済み
 
@@ -114,7 +115,7 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
   MON->>REPO: worktree + epic ブランチ作成 + 空 commit push
-  MON->>GH: epic Draft PR 作成<br>（複合シナリオ設計へは渡さない）
+  MON->>GH: epic Draft PR 作成<br>（複合シナリオ設計へは渡さないので<br>タスク一覧は作らない）
   deactivate MON
 
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
@@ -132,6 +133,7 @@ sequenceDiagram
 - `議論中` が付与されず assignee も設定されていない（ユーザーを止めずに通り抜けている）
 - 完了報告コメントに、質問せずに前提として置いた判断とその根拠が書かれている
 - epic Draft PR が作成され、`確認:complex-scenario-writer` も `確認:mock-designer` も付与されていない
+- epic PR の本文に `## タスク一覧` が無い（epic PR 上で作業する担当が居ないため）
 - 子 story Issue が起票され `確認:story-conductor` が付与されている
 - epic Issue から `確認:epic-conductor` が除去されている
 
@@ -161,7 +163,7 @@ sequenceDiagram
   MON->>GH: epic Issue の自分宛コメント一括 Resolve
   MON->>GH: epic Issue の 確認:epic-conductor 除去
   MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}）+ 空 commit push
-  MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
+  MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue +<br>タスク一覧）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
   MON->>GH: epic PR に 確認:mock-designer 付与 +<br>指示コメント投稿（@mock-designer 宛・<br>画面方針の要点）
   deactivate MON
@@ -170,7 +172,8 @@ sequenceDiagram
 
 ### 期待値
 
-- epic Draft PR（base=master・本文は `## 紐づく Issue` のみ）が作成され、`確認:mock-designer` と指示コメント（@mock-designer 宛・未解決）が付与・投稿されている
+- epic Draft PR（base=master・本文に `## 紐づく Issue` と `## タスク一覧`）が作成され、`確認:mock-designer` と指示コメント（@mock-designer 宛・未解決）が付与・投稿されている
+- `## タスク一覧` の先頭にモック作成が並び、続けて複合 UC シナリオの作成 / 修正・シナリオ索引の更新・複合 UC E2E テストの実行が列挙されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 
 ## 正常シナリオ（PoC 必要判定）
@@ -262,7 +265,7 @@ sequenceDiagram
   MON->>GH: epic Issue の自分宛コメント一括 Resolve
   MON->>GH: epic Issue の 確認:epic-conductor 除去
   MON->>REPO: worktree + epic ブランチ作成<br>（docs/epic/{ドメイン}）+ 空 commit push
-  MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
+  MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue +<br>タスク一覧）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
   MON->>GH: epic PR に 確認:mock-designer +<br>指示コメントを付与
   deactivate MON
@@ -275,7 +278,7 @@ sequenceDiagram
 - epic-conductor が実装コードを読み出した記録がない（入力は親 system Issue のエピック一覧と master の現状の設計書に閉じる）
 - ユースケース一覧の `対応 story` 列が全行 `未起票`
 - 現状の設計書と要件が乖離している箇所が確認事項コメントに挙がり、ユーザー判断が本文に反映されている
-- `確認:epic-conductor` が除去され、epic Draft PR が作成されて `確認:mock-designer` が付与されている
+- `確認:epic-conductor` が除去され、epic Draft PR（本文に `## 紐づく Issue` と `## タスク一覧`）が作成されて `確認:mock-designer` が付与されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - 自分宛コメントが全て Resolve 済み
 

@@ -55,7 +55,7 @@ sequenceDiagram
   activate MON
   MON->>GH: story Issue の自分宛コメント一括 Resolve
   MON->>REPO: worktree + story ブランチ作成<br>（{type}/story/{ドメイン}/{UC名}）+<br>空 commit push
-  MON->>GH: story Draft PR 作成<br>（base=親 epic ブランチ・<br>本文は 紐づく Issue のみ）
+  MON->>GH: story Draft PR 作成<br>（base=親 epic ブランチ・<br>本文は 紐づく Issue + タスク一覧）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
   MON->>GH: story PR に 確認:single-scenario-writer 付与・<br>story Issue の 確認:story-conductor 除去
   deactivate MON
@@ -68,7 +68,8 @@ sequenceDiagram
 - `## 背景` に「親 epic #N の UC「{UC 名}」に対応」の 1 行が含まれる
 - 横断要件を参照する要件行の補足に `epic 横断要件「{要件の要旨}」に基づく` が明記されている
 - RE PR が先に作られてマージされ、base に現状のシナリオが入っている
-- story Draft PR（base=親 epic ブランチ・本文は `## 紐づく Issue` のみ）が作成され、`確認:single-scenario-writer` が付与されている
+- story Draft PR（base=親 epic ブランチ・本文に `## 紐づく Issue` と `## タスク一覧`）が作成され、`確認:single-scenario-writer` が付与されている
+- `## タスク一覧` に単一 UC シナリオの作成 / 修正・シナリオ索引の更新・単一 UC E2E テストの実行が列挙され、全行が未チェック（チェックは各行を担当した作業者が入れる）
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 
 ## 正常シナリオ（確認事項なし・単一 UC 影響なし）
@@ -106,7 +107,7 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
   MON->>REPO: worktree + story ブランチ作成 + 空 commit push
-  MON->>GH: story Draft PR 作成<br>（単一シナリオ設計へは渡さない）
+  MON->>GH: story Draft PR 作成<br>（単一シナリオ設計へは渡さないので<br>タスク一覧は作らない）
   deactivate MON
 
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
@@ -124,6 +125,7 @@ sequenceDiagram
 - `議論中` が付与されず assignee も設定されていない（ユーザーを止めずに通り抜けている）
 - 完了報告コメントに、質問せずに前提として置いた判断とその根拠が書かれている
 - story Draft PR が作成され、`確認:single-scenario-writer` が付与されていない
+- story PR の本文に `## タスク一覧` が無い（story PR 上で作業する担当が居ないため）
 - 子 subsystem Issue が起票され `確認:subsystem-conductor` が付与されている
 - story Issue から `確認:story-conductor` が除去されている
 
@@ -178,7 +180,7 @@ sequenceDiagram
   activate MON
   MON->>GH: story Issue の自分宛コメント一括 Resolve
   MON->>REPO: worktree + story ブランチ作成<br>（docs/story/{ドメイン}/{UC名}）+<br>空 commit push
-  MON->>GH: story Draft PR 作成<br>（base=親 epic ブランチ・<br>本文は 紐づく Issue のみ）
+  MON->>GH: story Draft PR 作成<br>（base=親 epic ブランチ・<br>本文は 紐づく Issue + タスク一覧）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
   MON->>GH: story PR に 確認:single-scenario-writer 付与・<br>story Issue の 確認:story-conductor 除去
   deactivate MON
@@ -192,7 +194,8 @@ sequenceDiagram
 - `## ユースケース要件` の各行が現状のシナリオの振る舞い、またはユーザーが承認したあるべき姿になっている
 - story-conductor が実装コードを読み出した記録がない（入力は親 epic の UC 一覧と base のシナリオに閉じる）
 - 現状のシナリオから意図が読み取れなかった挙動が確認事項コメントに挙がり、ユーザー判断が本文に反映されている
-- story Draft PR（base=親 epic ブランチ・本文は `## 紐づく Issue` のみ）が作成され、`確認:single-scenario-writer` が付与されている
+- story Draft PR（base=親 epic ブランチ・本文に `## 紐づく Issue` と `## タスク一覧`）が作成され、`確認:single-scenario-writer` が付与されている
+- `## タスク一覧` に単一 UC シナリオの作成 / 修正・シナリオ索引の更新・単一 UC E2E テストの実行が列挙され、全行が未チェック（チェックは各行を担当した作業者が入れる）
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 
 ## 異常シナリオ

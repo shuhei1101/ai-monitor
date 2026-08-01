@@ -33,10 +33,11 @@ PR_BODY = """## 紐づく Issue
 
 ## タスク一覧
 
-- [ ] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成
-- [ ] `設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成
-- [ ] `update_task` を実装
-- [x] 単体テストを作成して実行
+- [x] `設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成
+- [x] `設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成
+- [x] `update_task` を実装
+- [x] 単体テストを追加
+- [ ] 単体テストを実行
 
 ## 単体テスト結果
 
@@ -171,7 +172,7 @@ def test_normal(
     body = (data.body or "").replace("\r\n", "\n")
     for row in _result_rows(body):
         assert "✅" in row, f"テスト結果表の結果列が ✅ で埋まっていない: {row}"
-    assert "- [ ]" not in body, "タスク一覧に未チェックの行が残っている"
+    assert "- [ ]" not in body, "タスク一覧に未チェックの行が残っている（architect がテスト実行の行を入れて全行が埋まる）"
 
     # 検証: PR が Ready 化されている
     pr_now = gh_live.rest.pulls.get(owner=owner, repo=repo, pull_number=ctx["pr"].number).parsed_data

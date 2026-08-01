@@ -185,6 +185,16 @@ def _run_retest(gh_live, owner, repo, level, factories, wait_until, sandbox):
     for row in rows:
         assert "✅" in row, f"再実行後の結果列が ✅ で埋まっていない: {row}"
 
+    # 検証: 実行したのは自分なのでテスト実行の行がチェックされ、全行チェック済みになる
+    run = [
+        line.strip() for line in body.splitlines()
+        if line.strip().startswith("- [") and "テストを実行" in line
+    ]
+    assert run and all(line.startswith("- [x]") for line in run), (
+        f"テスト実行のタスクが未チェック: {run}"
+    )
+    assert "- [ ]" not in body, f"タスク一覧に未チェックの行が残っている: {body}"
+
     # 検証: レビュー済みテストの再実行なので tester への割り当てを経由していない
     assert f"確認:{level['tester']}" not in _labeled_names(gh_live, owner, repo, ctx["pr"].number), (
         "再テストなのに tester への割り当てを経由している"

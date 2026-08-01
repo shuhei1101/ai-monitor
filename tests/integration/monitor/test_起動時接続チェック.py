@@ -31,9 +31,12 @@ def boot(monkeypatch, mon_settings, label_settings, agent_settings, tmp_state_pa
     monkeypatch.setattr(main_mod, "ensure_watchdog_started", lambda *a, **k: None)
     monkeypatch.setattr(main_mod, "build_settings_reader", lambda read: read)
     monkeypatch.setattr(main_mod, "build_notifier", lambda read: (lambda *a, **k: None))
+    # 待受ソケットの確保は本テストの対象外なので実ポートを掴まない（確保自体は test_待受ポート確定.py が見る）
+    monkeypatch.setattr(main_mod, "bind_listen_socket", lambda settings, port_path: MagicMock())
     # uvicorn の起動をフックして「起動したか」を観測する
+    # 実装は uvicorn.Server(...).run(sockets=[...]) で待つため、モジュール関数ではなく Server.run を差し替える
     monkeypatch.setattr(
-        main_mod.uvicorn, "run", lambda app, host=None, port=None: started.append(True)
+        main_mod.uvicorn.Server, "run", lambda self, sockets=None: started.append(True)
     )
 
     def _run() -> tuple[int, bool]:

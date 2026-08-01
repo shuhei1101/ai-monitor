@@ -7,7 +7,7 @@ from githubkit.exception import RequestFailed
 
 from tests.e2e.epic起動 import (
     assert_comments_resolved,
-    assert_linked_issue_only_body,
+    assert_task_list_body,
     drive_poc_verification,
     drive_requirements,
 )
@@ -114,7 +114,7 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_
     # 検証: epic Draft PR（base=master・本文は 紐づく Issue のみ）が作成されている
     assert epic_pr.draft is True, "epic PR が Draft でない"
     assert epic_pr.base.ref == "master", f"epic PR の base が master でない: {epic_pr.base.ref}"
-    assert_linked_issue_only_body(epic_pr)
+    assert_task_list_body(epic_pr)
 
     # 検証: 監視面が epic Draft PR へ入れ替わり、発注時と同一セッションが結果確認まで担っている
     confirmed = session_entry(e2e_state_path, "epic-conductor", epic.number)

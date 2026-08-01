@@ -80,8 +80,17 @@ def test_normal(
         assert section in body, f"PR 本文に {section} がない"
     assert "✅" not in body, "結果列が記入されている（記入は implementer の担当）"
 
-    # 検証: タスク一覧のチェックが未変更（チェックは architect が検収時に入れる）
-    assert "- [x]" not in body, "タスク一覧にチェックが入っている"
+    # 検証: 自分がやったテスト作成の行だけがチェック済み（他人の行には触れない）
+    task_lines = [line.strip() for line in body.splitlines() if line.strip().startswith("- [")]
+    assert task_lines, "タスク一覧の行がない"
+    tested = [line for line in task_lines if "テスト" in line and "実行" not in line]
+    assert tested and all(line.startswith("- [x]") for line in tested), (
+        f"テスト作成タスクが未チェック: {tested}"
+    )
+    others = [line for line in task_lines if line not in tested]
+    assert all(line.startswith("- [ ]") for line in others), (
+        f"自分の担当以外の行にチェックが入っている: {others}"
+    )
 
     # 検証: commit がテストコードだけで、実装コードを含まない
     compare = gh_live.rest.repos.compare_commits(

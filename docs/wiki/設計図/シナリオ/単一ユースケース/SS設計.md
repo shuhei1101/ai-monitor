@@ -6,7 +6,8 @@ template_version: 2.0.0
 
 architect が設計 Wiki（インターフェース → ER図 → 画面構成 → インターフェース定義（バックエンド / フロントエンド）（フロー）→ モジュール構成）をタスク一覧の上流順に 1 ページずつ作成し、応答ループでユーザーと確定させる単一ユースケース。
 BE / FE の設計 Wiki とも architect が担当する（画面ありの subsystem は epic の全体UI設計で確定した画面方向性を前提にインターフェース定義（フロントエンド）を書く）。
-インターフェースのページを確定した時点で subsystem-conductor へインターフェース確定報告を投稿する（待機なし・設計は継続。後続 subsystem を起票するかの判断は story-conductor が行う）。
+インターフェースのページを確定した時点で、親 subsystem Issue に subsystem-conductor 宛のインターフェース確定報告を投稿する（後続 subsystem を起票するかの判断は story-conductor が行う）。
+報告を subsystem PR ではなく親 Issue の面で行うため、subsystem PR の手番は architect が持ったままで、待機せずに残りの設計を続ける。
 ライブラリ選定で必要なら PoC（カテゴリ A〜E）も本 UC 内で実施する。
 全 Wiki 確定後は内部パイプラインの指揮役として tester にタスクを割り当てる。
 配下 worker（tester / implementer）から設計の差し戻しを受けた場合も本 UC で設計 Wiki を修正して差し戻し元に返す。
@@ -114,16 +115,16 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信
   activate MON
   MON->>GH: subsystem PR の<br>自分宛コメント一括 Resolve
-  MON->>GH: subsystem PR に<br>確認:subsystem-conductor 付与 +<br>インターフェース確定報告コメント投稿<br>（@subsystem-conductor 宛・待機なし）
-  Note over MON: 以降（ER図 → 結合フロー →<br>モジュール構成）は正常シナリオと同一<br>（設計を継続）
+  MON->>GH: 親 subsystem Issue に<br>確認:subsystem-conductor 付与 +<br>インターフェース確定報告コメント投稿<br>（@subsystem-conductor 宛・待機なし）
+  Note over MON: 以降（ER図 → 結合フロー →<br>モジュール構成）は正常シナリオと同一<br>（subsystem PR の手番は手放していないので<br>設計をそのまま継続）
   deactivate MON
 ```
 
 ### 期待値
 
 - `設計図/インターフェース定義/バックエンド/{論理名}.md` の `## インターフェース` が確定され、subsystem ブランチに commit されている
-- subsystem PR に `確認:subsystem-conductor` + インターフェース確定報告コメント（@subsystem-conductor 宛・未解決）が付与・投稿されている
-- subsystem PR の `確認:architect` は保持されている（設計続行中）
+- 親 subsystem Issue に `確認:subsystem-conductor` + インターフェース確定報告コメント（@subsystem-conductor 宛・未解決）が付与・投稿されている
+- subsystem PR には `確認:architect` だけが残っている（報告を別の面で行うので設計が止まらず、1 つの面に確認ラベルも 2 つ立たない）
 
 ## 正常シナリオ（タスク一覧に ER図 なし）
 

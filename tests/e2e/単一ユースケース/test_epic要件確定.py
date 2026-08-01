@@ -6,6 +6,7 @@ from tests.e2e.epic起動 import (
     EPIC_SECTIONS,
     assert_comments_resolved,
     assert_linked_issue_only_body,
+    assert_task_list_body,
     drive_requirements,
 )
 from tests.e2e.ゲート応答 import open_prs_for
@@ -50,7 +51,7 @@ def test_normal_when_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory
     pr = prs[0]
     assert pr.draft is True
     assert pr.base.ref == "master"
-    assert_linked_issue_only_body(pr)
+    assert_task_list_body(pr)
     pr_labels = {label.name for label in pr.labels}
     assert "確認:complex-scenario-writer" in pr_labels
 
@@ -80,7 +81,7 @@ def test_normal_when_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_facto
     pr = prs[0]
     assert pr.draft is True
     assert pr.base.ref == "master"
-    assert_linked_issue_only_body(pr)
+    assert_task_list_body(pr)
     pr_labels = {label.name for label in pr.labels}
     assert "確認:mock-designer" in pr_labels
 
@@ -186,7 +187,7 @@ def test_normal_when_reverse(
     assert len(prs) == 1, f"epic Draft PR が 1 件でない: {[pr.number for pr in prs]}"
     pr = prs[0]
     assert pr.draft is True
-    assert_linked_issue_only_body(pr)
+    assert_task_list_body(pr)
     assert "確認:mock-designer" in {label.name for label in pr.labels}
 
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
@@ -265,7 +266,7 @@ def test_normal_when_no_questions(
     assert len(prs) == 1, f"epic Draft PR が 1 件でない: {[pr.number for pr in prs]}"
     pr = prs[0]
     assert pr.draft is True
-    assert_linked_issue_only_body(pr)
+    assert_task_list_body(pr)
     assert "確認:complex-scenario-writer" in {label.name for label in pr.labels}
 
     # 検証: 作成した PR の番号が自セッションの監視面に登録されている

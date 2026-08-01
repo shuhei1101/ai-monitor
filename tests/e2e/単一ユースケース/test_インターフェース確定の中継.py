@@ -33,6 +33,38 @@ STORY_BODY_TEMPLATE = """## 前提条件
 | frontend | 編集画面と保存導線 | backend | 未起票 |
 """
 
+# SA 確定済みの subsystem 本文（未記入だと索引が要件確定（初回）にマッチしてしまう）
+SUBSYSTEM_BODY_TEMPLATE = """## 前提条件
+
+なし
+
+## 概要
+
+タスク編集のバックエンド側（タスク更新 API と入力検証）を担当する。
+
+## 背景
+
+親 story #{story_number} の バックエンド 担当。
+
+## システム要件（SA）
+
+### 機能要件
+
+| 要件 | 補足 |
+| --- | --- |
+| タイトルと本文を更新して更新後のタスクを返す | - |
+
+### 非機能要件
+
+| 要件 | 補足 |
+| --- | --- |
+| 更新は 1 秒以内に応答する | - |
+
+### スコープ外
+
+- 編集画面と保存導線（frontend subsystem が担当）
+"""
+
 INTERFACE_REPORT = """> from: @architect
 > to: @subsystem-conductor
 
@@ -72,15 +104,21 @@ def test_normal(
         body=STORY_BODY_TEMPLATE.format(epic_number=ctx["epic"].number),
     )
     pr_number = ctx["pr"].number
-    # 準備: 設計続行中（確認:architect 保持）+ architect のインターフェース確定報告
+    subsystem_number = ctx["subsystem"].number
+    # 準備: SA 確定済みの本文にする（要件確定へのマッチを避ける）
+    gh_live.rest.issues.update(
+        owner=owner, repo=repo, issue_number=subsystem_number,
+        body=SUBSYSTEM_BODY_TEMPLATE.format(story_number=ctx["story"].number),
+    )
+    # 準備: subsystem PR は設計続行中（確認:architect）+ 親 Issue に architect の確定報告
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=pr_number, labels=["確認:architect"]
     )
     report = gh_live.rest.issues.create_comment(
-        owner=owner, repo=repo, issue_number=pr_number, body=INTERFACE_REPORT
+        owner=owner, repo=repo, issue_number=subsystem_number, body=INTERFACE_REPORT
     ).parsed_data
     gh_live.rest.issues.add_labels(
-        owner=owner, repo=repo, issue_number=pr_number, labels=["確認:subsystem-conductor"]
+        owner=owner, repo=repo, issue_number=subsystem_number, labels=["確認:subsystem-conductor"]
     )
 
     # 実行: 中継の完了を待つ（親 story に 確認:story-conductor + 報告コメント）
@@ -91,10 +129,12 @@ def test_normal(
         relayed = comments_from(gh_live, owner, repo, ctx["story"].number, "subsystem-conductor")
         if not relayed:
             return None
-        pr_now = issue(gh_live, owner, repo, pr_number)
-        return (pr_now, relayed[-1]) if "確認:subsystem-conductor" not in label_names(pr_now) else None
+        subsystem_now = issue(gh_live, owner, repo, subsystem_number)
+        if "確認:subsystem-conductor" in label_names(subsystem_now):
+            return None
+        return (subsystem_now, relayed[-1])
 
-    pr_now, relayed = wait_until(
+    subsystem_now, relayed = wait_until(
         _relayed, timeout_sec=1800, message="インターフェース確定の中継（確認:story-conductor 付与 + 報告）"
     )
 
@@ -105,7 +145,13 @@ def test_normal(
     # 検証: 元のインターフェース確定報告が Resolve 済み
     assert server._is_minimized(report.node_id), "architect のインターフェース確定報告が未 Resolve"
 
-    # 検証: subsystem PR は 確認:architect を保持したまま 確認:subsystem-conductor だけが外れている
-    names = label_names(pr_now)
-    assert "確認:architect" in names, f"確認:architect が保持されていない: {sorted(names)}"
+    # 検証: 中継を終えた subsystem Issue から 確認:subsystem-conductor が外れている
+    names = label_names(subsystem_now)
     assert "確認:subsystem-conductor" not in names, f"確認:subsystem-conductor が残っている: {sorted(names)}"
+
+    # 検証: subsystem PR は触られておらず、確認:architect だけが残っている（設計が止まらない）
+    pr_names = label_names(issue(gh_live, owner, repo, pr_number))
+    assert "確認:architect" in pr_names, f"確認:architect が保持されていない: {sorted(pr_names)}"
+    assert "確認:subsystem-conductor" not in pr_names, (
+        f"subsystem PR に確認ラベルが 2 つ立っている: {sorted(pr_names)}"
+    )

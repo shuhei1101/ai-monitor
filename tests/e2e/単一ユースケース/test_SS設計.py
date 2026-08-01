@@ -569,29 +569,40 @@ def test_normal_when_interface_report(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
     )
 
-    # 実行: インターフェース確定報告（確認:subsystem-conductor 付与）を待つ
+    # 実行: 親 subsystem Issue へのインターフェース確定報告（確認:subsystem-conductor 付与）を待つ
     def _reported():
-        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=ctx["pr"].number).parsed_data
+        data = gh_live.rest.issues.get(
+            owner=owner, repo=repo, issue_number=ctx["subsystem"].number
+        ).parsed_data
         labels = {label.name for label in data.labels}
         if "確認:subsystem-conductor" not in labels:
             return None
         comments = gh_live.rest.issues.list_comments(
-            owner=owner, repo=repo, issue_number=ctx["pr"].number
+            owner=owner, repo=repo, issue_number=ctx["subsystem"].number
         ).parsed_data
         reports = [c for c in comments if "> to: @subsystem-conductor" in (c.body or "")]
         return (data, reports) if reports else None
 
-    data, reports = wait_until(
+    _, reports = wait_until(
         _reported, timeout_sec=2400, message="インターフェース確定報告（確認:subsystem-conductor 付与）"
     )
 
-    # 検証: インターフェース定義が commit され、確認:architect は保持されている（設計続行中）
+    # 検証: インターフェース定義が commit されている
     paths = _design_paths(gh_live, owner, repo, ctx["subsystem_branch"])
     assert [p for p in paths if p.startswith("docs/wiki/設計図/インターフェース定義/バックエンド/")], (
         f"インターフェース定義が commit されていない: {paths}"
     )
-    assert "確認:architect" in {label.name for label in data.labels}, (
-        "確認:architect が除去されている（設計は続行中）"
+
+    # 検証: 報告は別の面で行われ、subsystem PR には 確認:architect だけが残っている
+    pr_labels = {
+        label.name
+        for label in gh_live.rest.issues.get(
+            owner=owner, repo=repo, issue_number=ctx["pr"].number
+        ).parsed_data.labels
+    }
+    assert "確認:architect" in pr_labels, "確認:architect が除去されている（設計は続行中）"
+    assert "確認:subsystem-conductor" not in pr_labels, (
+        f"subsystem PR に確認ラベルが 2 つ立っている: {sorted(pr_labels)}"
     )
 
     # 検証: 中間報告が未 Resolve のまま投稿されている

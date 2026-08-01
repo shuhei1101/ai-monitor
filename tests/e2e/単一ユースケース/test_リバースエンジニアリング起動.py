@@ -8,7 +8,7 @@ from __future__ import annotations
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
-from tests.e2e.エスカレーション import comments, comments_from, design_paths, issue, label_names, waiting_for_user
+from tests.e2e.エスカレーション import comments_from, issue, label_names, waiting_for_user
 from tests.e2e.システム import RE_DONE_REPORT, setup_re_target, watch_numbers
 from tests.e2e.実装対象 import SUBSYSTEM_TITLE
 
@@ -100,13 +100,17 @@ def test_normal_when_request(
     assert requests, "RE の依頼コメントが投稿されていない"
     assert not server._is_minimized(requests[-1].node_id), "依頼コメントが Resolve されている"
 
-    # 検証: 通常 PR はまだ作られておらず、対象 Issue の担当は conductor のまま
+    # 検証: 通常 PR はまだ作られていない
     open_prs = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
     linked = [p for p in open_prs if f"#{subsystem_number}" in (p.body or "")]
     assert len(linked) == 1, f"RE PR 以外の PR が作られている: {[p.number for p in linked]}"
-    assert "確認:subsystem-conductor" in label_names(issue(gh_live, owner, repo, subsystem_number)), (
-        "対象 Issue の 確認:subsystem-conductor が外れている（マージまで担当を持つ）"
-    )
+
+    # 検証: 手番が依頼先へ渡り、依頼元は起動条件を満たさなくなる（依頼中の再起動が起きない）
+    def _handed_over():
+        names = label_names(issue(gh_live, owner, repo, subsystem_number))
+        return True if "確認:subsystem-conductor" not in names else None
+
+    wait_until(_handed_over, timeout_sec=900, message="対象 Issue の 確認:subsystem-conductor の除去")
 
 
 def test_normal_when_merge(
@@ -164,10 +168,13 @@ def test_normal_when_merge(
 
     wait_until(_watch_updated, timeout_sec=900, message="RE PR の番号が監視面から除去")
 
-    # 検証: 対象 Issue は要件確定へ続くので担当と空の本文がそのまま残っている
-    subsystem_now = issue(gh_live, owner, repo, subsystem_number)
-    assert "確認:subsystem-conductor" in label_names(subsystem_now), (
-        "対象 Issue の 確認:subsystem-conductor が外れている（要件確定へ続く）"
+    # 検証: 手番が対象 Issue へ戻る（要件確定へ続く。本文はまだ空）
+    def _handed_back():
+        data = issue(gh_live, owner, repo, subsystem_number)
+        return data if "確認:subsystem-conductor" in label_names(data) else None
+
+    subsystem_now = wait_until(
+        _handed_back, timeout_sec=900, message="対象 Issue への 確認:subsystem-conductor 付与"
     )
     assert not (subsystem_now.body or "").strip(), f"対象 Issue の本文が埋まっている: {subsystem_now.body}"
 
@@ -223,74 +230,3 @@ def test_error_when_bounced(
     # 検証: RE PR はマージされていない
     pr_now = gh_live.rest.pulls.get(owner=owner, repo=repo, pull_number=re_pr.number).parsed_data
     assert pr_now.merged is False, "差し戻しのまま RE PR がマージされている"
-
-
-def test_normal_when_waiting(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
-    story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox, e2e_state_path,
-):
-    """依頼中の再起動で後段へフォールスルーしないことを確認する（正常系・依頼中の再起動）。"""
-    owner, repo = repo_ctx
-    ctx = setup_re_target(
-        gh_live, owner, repo,
-        epic_issue_factory, epic_pr_factory, draft_pr_factory,
-        story_issue_factory, subsystem_issue_factory, commit_file,
-        subsystem_labels=RE_LABELS,
-    )
-    subsystem_number = ctx["subsystem"].number
-
-    # 準備: RE PR が作成され依頼先へ渡るまで進める（ここまでが本ケースの前提状態）
-    def _requested():
-        pr = _find_re_pr(gh_live, owner, repo, subsystem_number)
-        if pr is None:
-            return None
-        pr_labels = label_names(issue(gh_live, owner, repo, pr.number))
-        return pr if "確認:ss-design-reverse-engineer" in pr_labels else None
-
-    re_pr = wait_until(_requested, timeout_sec=2400, message="RE Draft PR の作成と依頼")
-
-    # 準備: 依頼中の状態を記録する（比較用）
-    pr_before = issue(gh_live, owner, repo, re_pr.number)
-    pr_body_before = (pr_before.body or "").replace("\r\n", "\n")
-    pr_labels_before = label_names(pr_before)
-    pr_comment_ids_before = {c.id for c in comments(gh_live, owner, repo, re_pr.number)}
-    design_before = set(design_paths(gh_live, owner, repo, ctx["story_branch"]))
-    issue_comment_ids_before = {c.id for c in comments(gh_live, owner, repo, subsystem_number)}
-
-    # 実行: 依頼先の返答が無いまま subsystem-conductor を再起動する
-    gh_live.rest.issues.add_labels(
-        owner=owner, repo=repo, issue_number=subsystem_number, labels=["確認:subsystem-conductor"]
-    )
-
-    # 待機に入ると 処理中:* が外れる（確認:* は保持される）
-    def _waited():
-        data = issue(gh_live, owner, repo, subsystem_number)
-        names = label_names(data)
-        if "確認:subsystem-conductor" not in names:
-            return None
-        return data if not [n for n in names if n.startswith("処理中:")] else None
-
-    data = wait_until(_waited, timeout_sec=1800, message="RE依頼中の待機（処理中:* の除去）")
-
-    # 検証: 対象 Issue の本文に SA が書かれていない（要件確定へフォールスルーしていない）
-    assert "## システム要件（SA）" not in (data.body or ""), "要件確定へフォールスルーしている"
-
-    # 検証: 設計書への commit が発生していない
-    assert set(design_paths(gh_live, owner, repo, ctx["story_branch"])) == design_before, (
-        "設計書に commit が発生している"
-    )
-
-    # 検証: RE PR の本文・ラベル・コメントが変わっていない
-    pr_after = issue(gh_live, owner, repo, re_pr.number)
-    assert (pr_after.body or "").replace("\r\n", "\n") == pr_body_before
-    assert label_names(pr_after) == pr_labels_before
-    assert {c.id for c in comments(gh_live, owner, repo, re_pr.number)} == pr_comment_ids_before
-
-    # 検証: ユーザー宛のコメントが投稿されていない（待機であって判断を求めない）
-    added = [
-        c for c in comments(gh_live, owner, repo, subsystem_number)
-        if c.id not in issue_comment_ids_before
-    ]
-    assert not added, f"待機のはずがコメントが投稿されている: {[c.html_url for c in added]}"
-    assert "議論中" not in label_names(data)
-    assert not data.assignees

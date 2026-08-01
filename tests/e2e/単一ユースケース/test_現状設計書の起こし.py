@@ -109,6 +109,13 @@ def test_normal(
     design_files = [f for f in changed if f.startswith("docs/wiki/設計図/")]
     assert design_files, f"現状の設計書が commit されていない: {changed}"
 
+    # 検証: 起こした本人がタスク一覧にチェックを入れている
+    pr_body = (data.body or "").replace("\r\n", "\n")
+    tasks = [line.strip() for line in pr_body.splitlines() if line.strip().startswith("- [")]
+    assert tasks and all(line.startswith("- [x]") for line in tasks), (
+        f"起こしたページのタスクが未チェック: {tasks}"
+    )
+
     # 検証: 実装の物理名と一致し、実装に無い名前を推測で補完していない
     written = "\n".join(_file_text(gh_live, owner, repo, f, ctx["re_branch"]) for f in design_files)
     assert any(name in written for name in IMPLEMENTED_NAMES), (
@@ -164,7 +171,7 @@ def test_error_when_no_target(
     )
 
     # 実行: 差し戻し報告を待つ
-    _, report = _wait_handed_back(
+    data, report = _wait_handed_back(
         gh_live, owner, repo, re_pr.number, wait_until, message="実装が見つからない旨の差し戻し報告",
     )
 
@@ -172,6 +179,13 @@ def test_error_when_no_target(
     changed = _changed_files(gh_live, owner, repo, ctx["story_branch"], ctx["re_branch"])
     design_files = [f for f in changed if f.startswith("docs/wiki/設計図/")]
     assert not design_files, f"実装が無いのに設計書が commit されている: {design_files}"
+
+    # 検証: 起こせていないのでタスク一覧は全行未チェックのまま
+    pr_body = (data.body or "").replace("\r\n", "\n")
+    tasks = [line.strip() for line in pr_body.splitlines() if line.strip().startswith("- [")]
+    assert tasks and all(line.startswith("- [ ]") for line in tasks), (
+        f"起こしていないのにタスクがチェックされている: {tasks}"
+    )
 
     # 検証: 差し戻し報告が未解決で発注元宛に投稿されている
     assert "> to: @subsystem-conductor" in (report.body or ""), "差し戻し報告の宛先が発注元でない"
