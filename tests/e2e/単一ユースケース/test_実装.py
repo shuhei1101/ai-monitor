@@ -82,9 +82,9 @@ def test_normal(
     )
 
     # 準備: architect の実装の割り当て → 確認:implementer 付与（起動トリガー）
-    gh_live.rest.issues.create_comment(
+    assign = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, body=ASSIGN_COMMENT
-    )
+    ).parsed_data
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:implementer"]
     )
@@ -151,6 +151,9 @@ def test_normal(
     assert reports, "implementer の完了報告コメントが投稿されていない"
     assert not server._is_minimized(reports[-1].node_id), "完了報告が Resolve されている（Resolve は architect の担当）"
 
+    # 検証: 起動のトリガーになった割り当てコメントが Resolve されている
+    assert server._is_minimized(assign.node_id), "architect の割り当てコメントが未 Resolve"
+
     # 検証: commit 内容に対する補足事項がインラインコメントで残っている
     assert supplement_review_comments(gh_live, owner, repo, ctx["pr"].number), (
         "補足事項のインラインコメントが投稿されていない"
@@ -195,9 +198,9 @@ def test_normal_when_reverse(
     )
 
     # 準備: architect の実装の割り当て → 確認:implementer 付与（起動トリガー）
-    gh_live.rest.issues.create_comment(
+    assign = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, body=ASSIGN_COMMENT
-    )
+    ).parsed_data
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:implementer"]
     )
@@ -235,6 +238,9 @@ def test_normal_when_reverse(
     assert reports, "implementer の完了報告コメントが投稿されていない"
     assert not server._is_minimized(reports[-1].node_id), "完了報告が Resolve されている"
 
+    # 検証: 起動のトリガーになった割り当てコメントが Resolve されている
+    assert server._is_minimized(assign.node_id), "architect の割り当てコメントが未 Resolve"
+
     # 検証: commit 内容に対する補足事項がインラインコメントで残っている
     assert supplement_review_comments(gh_live, owner, repo, ctx["pr"].number), (
         "補足事項のインラインコメントが投稿されていない"
@@ -269,9 +275,9 @@ def test_error_when_design_decision_needed(
     )
 
     # 準備: architect の実装の割り当て → 確認:implementer 付与（起動トリガー）
-    gh_live.rest.issues.create_comment(
+    assign = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, body=ASSIGN_COMMENT
-    )
+    ).parsed_data
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:implementer"]
     )

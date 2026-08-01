@@ -127,7 +127,9 @@ def test_normal(
     labels = {label.name for label in data.labels}
     assert "議論中" not in labels, "議論中 が付与されている"
     assert not data.assignees, "assignee が設定されている"
-    assert assign is not None
+
+    # 検証: 起動のトリガーになった割り当てコメントが Resolve されている
+    assert server._is_minimized(assign.node_id), "architect の割り当てコメントが未 Resolve"
 
 
 def test_normal_when_reverse(
