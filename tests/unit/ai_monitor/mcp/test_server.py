@@ -60,6 +60,7 @@ EXPECTED_TOOLS = {
     "reopen_issue",
     "mark_pr_ready",
     "create_child_issue",
+    "set_blocked_by",
     "create_intake_issue",
     "create_defect_issue",
     "create_draft_pr",

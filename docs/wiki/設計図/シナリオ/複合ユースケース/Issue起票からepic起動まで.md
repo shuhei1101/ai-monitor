@@ -47,7 +47,7 @@ flowchart TD
 
 - intake Issue に epic Issue が Sub-issue として紐づき、`layer:epic` + `type:*` が付与されている
 - intake Issue の本文がユーザー起票時のまま書き換わっていない
-- epic Issue 本文に `## 前提条件` / `## 概要` / `## 背景` / `## ユースケース一覧` / `## 横断要件` が揃い、ユースケース一覧の `対応 story` 列が全行 `未起票`
+- epic Issue 本文に `## 概要` / `## 背景` / `## ユースケース一覧` / `## 横断要件` が揃い、ユースケース一覧の `対応 story` 列が全行 `未起票`
 - epic Draft PR（base=master・本文は `## 紐づく Issue` のみ）が作成され、`確認:complex-scenario-writer` が付与されている
 - epic PR の番号が epic-conductor セッションの監視面（モニターの台帳）に登録されている
 - intake Issue と epic Issue がともに open のまま（`確認:*` はどちらにも残っていない）

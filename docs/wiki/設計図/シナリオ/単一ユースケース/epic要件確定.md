@@ -4,7 +4,7 @@ template_version: 2.0.0
 
 # epic要件確定
 
-epic-conductor が epic Issue の本文（前提条件 / 概要 / 背景 / ユースケース一覧 / 横断要件）を確定し、実現可能性 PoC の要否と画面変更（新規作成 / レイアウト変更）の有無を判定する単一ユースケース。
+epic-conductor が epic Issue の本文（概要 / 背景 / ユースケース一覧 / 横断要件）を確定し、実現可能性 PoC の要否と画面変更（新規作成 / レイアウト変更）の有無を判定する単一ユースケース。
 
 対応エージェント: `epic-conductor`（初回呼び出し）
 
@@ -72,7 +72,7 @@ sequenceDiagram
 
 ### 期待値
 
-- epic Issue 本文に `## 前提条件` / `## 概要` / `## 背景` / `## ユースケース一覧` / `## 横断要件` が揃っている
+- epic Issue 本文に `## 概要` / `## 背景` / `## ユースケース一覧` / `## 横断要件` が揃っている
 - ユースケース一覧の `対応 story` 列が全行 `未起票`
 - `確認:epic-conductor` が除去され、epic Draft PR（本文は `## 紐づく Issue` のみ）が作成されて `確認:complex-scenario-writer` が付与されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
@@ -212,7 +212,7 @@ sequenceDiagram
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
 | `リバースエンジニアリング` ラベル | 対象の Issue / PR に付与済み | 本経路を選ぶ判定材料。ユーザーが system Issue に付け、子 Issue へ引き継がれる |
-| epic Issue | `layer:epic` + `type:docs` + `確認:epic-conductor` 付きで存在 | 本文の `## ユースケース一覧` と `## 前提条件` は起票時に記入済み |
+| epic Issue | `layer:epic` + `type:docs` + `確認:epic-conductor` 付きで存在 | 本文の `## ユースケース一覧` は起票時に記入済み |
 | エピック一覧 | 親 system Issue の `## エピック一覧` に当該 epic の所属 UC と着手順が確定済み | [システム構成確定](./システム構成確定.md) の成果物 |
 | assignee | 未設定 | エージェント起動条件 |
 | 現状の設計書 | 現状モックと現状の複合 UC シナリオが master に存在 | RE PR がマージ済みであることが前提 |

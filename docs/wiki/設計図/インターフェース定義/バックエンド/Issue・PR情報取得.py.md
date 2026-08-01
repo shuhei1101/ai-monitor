@@ -37,6 +37,7 @@ Issue / PR の情報を 1 コマンドで取得する。
 | `parent` | bool | - | `True` | parent を取得するか | - | Sub-issue リンクの親 |
 | `sub_issues` | bool | - | `True` | subIssues を取得するか | - | Sub-issue リンクの子一覧 |
 | `sub_issues_summary` | bool | - | `True` | subIssuesSummary を取得するか | - | 子の完了集計 |
+| `blocked_by` | bool | - | `True` | blockedBy を取得するか | - | 着手をブロックしている Issue 一覧 |
 
 リクエスト例:
 
@@ -80,6 +81,8 @@ Issue / PR の情報を 1 コマンドで取得する。
 | `sub_issues_summary.total` | int | 子 Issue の総数 | - | - |
 | `sub_issues_summary.completed` | int | クローズ済みの子 Issue 数 | - | - |
 | `sub_issues_summary.percent_completed` | float | 完了率 | - | - |
+| `blocked_by[].number` | int | 依存先の Issue 番号 | 先頭 50 件 | `title` / `url` / `state` も返る |
+| `blocked_by[].state` | str | 依存先の状態 | - | `OPEN` が残っている間は着手できない |
 
 レスポンス例:
 

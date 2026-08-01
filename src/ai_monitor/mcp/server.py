@@ -25,6 +25,7 @@ from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.integrations.github.labels import remove_label
 from ai_monitor.mcp.models import (
     AssigneesResult,
+    BlockedByResult,
     Comment,
     CommentBlock,
     CommentFormat,
@@ -87,6 +88,28 @@ _RESOLVE_THREAD_MUTATION = (
 _REPLY_THREAD_MUTATION = (
     "mutation($id: ID!, $body: String!) { addPullRequestReviewThreadReply("
     "input: { pullRequestReviewThreadId: $id, body: $body }) { comment { id url } } }"
+)
+_BLOCKED_BY_QUERY = """
+query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      id
+      blockedBy(first: 50) { nodes { number title url state } }
+    }
+  }
+}
+"""
+_ADD_BLOCKED_BY_MUTATION = (
+    "mutation($id: ID!, $blocking: ID!) { addBlockedBy(input: { issueId: $id, blockingIssueId: $blocking })"
+    " { issue { number } } }"
+)
+_REMOVE_BLOCKED_BY_MUTATION = (
+    "mutation($id: ID!, $blocking: ID!) { removeBlockedBy(input: { issueId: $id, blockingIssueId: $blocking })"
+    " { issue { number } } }"
+)
+_ISSUE_NODE_ID_QUERY = (
+    "query($owner: String!, $repo: String!, $number: Int!)"
+    " { repository(owner: $owner, name: $repo) { issue(number: $number) { id } } }"
 )
 _REVIEW_THREADS_QUERY = """
 query($owner: String!, $repo: String!, $number: Int!) {
@@ -319,6 +342,23 @@ def _thumbs_up_logins(comment: dict) -> list[str]:
     return [node["user"]["login"] for node in nodes if node.get("user")]
 
 
+def _fetch_blocked_by(number: int, *, owner: str, repo: str) -> tuple[str, list[IssueRef]]:
+    """対象 Issue の node_id と、着手をブロックしている Issue 一覧を返す。"""
+    data = _get_client().graphql(_BLOCKED_BY_QUERY, {"owner": owner, "repo": repo, "number": number})
+    issue = data["repository"]["issue"]
+    blocked = [
+        IssueRef(number=n["number"], title=n["title"], url=n["url"], state=n["state"].upper())
+        for n in issue["blockedBy"]["nodes"]
+    ]
+    return issue["id"], blocked
+
+
+def _issue_node_id(number: int, *, owner: str, repo: str) -> str:
+    """Issue 番号から GraphQL の node_id を引く。"""
+    data = _get_client().graphql(_ISSUE_NODE_ID_QUERY, {"owner": owner, "repo": repo, "number": number})
+    return data["repository"]["issue"]["id"]
+
+
 def _is_addressed(blocks: list[CommentBlock], addressee: str) -> bool:
     """最後のブロックの宛先から、addressee 宛かを判定する。"""
     # 判定材料が無い（本文が空）場合は自分宛としない
@@ -435,6 +475,7 @@ def get_issue_or_pr(
     parent: bool = True,
     sub_issues: bool = True,
     sub_issues_summary: bool = True,
+    blocked_by: bool = True,
     *,
     ctx: Context,
     settings: Settings,
@@ -500,6 +541,10 @@ def get_issue_or_pr(
                 percent_completed=raw_summary.percent_completed,
             )
 
+    blocked_by_value = None
+    if blocked_by and not is_pr:
+        _, blocked_by_value = _fetch_blocked_by(number, owner=owner, repo=repo)
+
     # 結果をイシュースナップショットに変換して返す（取得しなかったフィールドは None）
     return IssueSnapshot(
         number=data.number,
@@ -530,6 +575,7 @@ def get_issue_or_pr(
         parent=parent_value,
         sub_issues=sub_issues_value,
         sub_issues_summary=summary_value,
+        blocked_by=blocked_by_value,
     )
 
 
@@ -993,6 +1039,30 @@ def reopen_issue(number: int, *, ctx: Context, settings: Settings) -> EmptyResul
 
 
 @_log_tool_call
+def set_blocked_by(
+    number: int,
+    blocking_numbers: list[int],
+    remove: bool = False,
+    *,
+    ctx: Context,
+    settings: Settings,
+) -> BlockedByResult:
+    """Issue 間の依存（blocked by）を設定 / 解除する。"""
+    client = _get_client()
+    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
+    # 対象 Issue の node_id を取る（同時に現況も引ける）
+    issue_id, _ = _fetch_blocked_by(number, owner=owner, repo=repo)
+    # 依存先ごとに mutation を実行する（同じ組み合わせを繰り返しても増減しない冪等操作）
+    mutation = _REMOVE_BLOCKED_BY_MUTATION if remove else _ADD_BLOCKED_BY_MUTATION
+    for blocking_number in blocking_numbers:
+        blocking_id = _issue_node_id(blocking_number, owner=owner, repo=repo)
+        client.graphql(mutation, {"id": issue_id, "blocking": blocking_id})
+    # 操作後の一覧を取り直して返す
+    _, blocked = _fetch_blocked_by(number, owner=owner, repo=repo)
+    return BlockedByResult(blocked_by=blocked)
+
+
+@_log_tool_call
 def create_child_issue(
     parent_issue_number: int,
     title: str,
@@ -1391,6 +1461,7 @@ def build_mcp_app(
         (close, "クローズ", _DESTRUCTIVE),
         (reopen_issue, "Issue再オープン", None),
         (create_child_issue, "子Issue作成", None),
+        (set_blocked_by, "依存設定", None),
         (create_intake_issue, "新規Issue起票", None),
         (create_defect_issue, "不具合Issue起票", None),
         (create_draft_pr, "DraftPR作成", None),

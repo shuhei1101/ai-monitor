@@ -31,7 +31,24 @@ def test_normal(gh, resp, api):
     gh.rest.issues.list_comments.return_value = resp(
         [NS(node_id="IC_1", body="こんにちは", user=NS(login="shuhei1101"), html_url="http://c/1", created_at="t")]
     )
-    gh.graphql.return_value = {"node": {"isMinimized": False}}
+    # GraphQL はコメントの Resolved 判定と blockedBy の取得で使い分けられる
+    def _graphql(query, variables=None):
+        if "blockedBy" in query:
+            return {
+                "repository": {
+                    "issue": {
+                        "id": "I_35",
+                        "blockedBy": {
+                            "nodes": [
+                                {"number": 30, "title": "先行 Issue", "url": "http://i/30", "state": "OPEN"}
+                            ]
+                        },
+                    }
+                }
+            }
+        return {"node": {"isMinimized": False}}
+
+    gh.graphql.side_effect = _graphql
     gh.rest.issues.get_parent.return_value = resp(NS(number=12, title="親", html_url="http://i/12", state="open"))
     gh.rest.issues.list_sub_issues.return_value = resp(
         [NS(number=36, title="子", html_url="http://i/36", state="open")]
@@ -43,6 +60,8 @@ def test_normal(gh, resp, api):
     assert snap.parent.number == 12
     assert [s.number for s in snap.sub_issues] == [36]
     assert snap.sub_issues_summary.total == 2
+    # 着手をブロックしている Issue が状態付きで返る
+    assert [(b.number, b.state) for b in snap.blocked_by] == [(30, "OPEN")]
     assert snap.comments[0].id == "IC_1"
     assert snap.comments[0].is_minimized is False
     assert snap.head_ref is None

@@ -252,6 +252,14 @@ class IssueSnapshot(BaseModel):
     parent: IssueRef | None = None
     sub_issues: list[IssueRef] | None = []
     sub_issues_summary: SubIssuesSummary | None = None
+    # 着手をブロックしている Issue（GitHub の blocked by）。Issue のみ設定される
+    blocked_by: list[IssueRef] | None = None
+
+
+class BlockedByResult(BaseModel):
+    """set_blocked_by の結果（操作後の依存一覧）。"""
+
+    blocked_by: list[IssueRef]
 
 
 class MonitorAck(BaseModel):

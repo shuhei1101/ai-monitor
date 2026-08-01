@@ -35,6 +35,26 @@ def get_issue(project: MonitoredProject, number: int) -> Issue:
     return target
 
 
+_BLOCKED_BY_QUERY = """
+query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) { blockedBy(first: 50) { nodes { number state } } }
+  }
+}
+"""
+
+
+def has_open_blocker(project: MonitoredProject, number: int) -> bool:
+    """着手をブロックしている open の依存が残っているかを返す。"""
+    owner, repo = project.repo.split("/")
+    data = get_client().graphql(_BLOCKED_BY_QUERY, {"owner": owner, "repo": repo, "number": number})
+    issue = data["repository"]["issue"]
+    # PR を指定した場合など、Issue として解決できないものはブロックなしとして扱う
+    if issue is None:
+        return False
+    return any(node["state"].upper() == "OPEN" for node in issue["blockedBy"]["nodes"])
+
+
 def get_parent_number(project: MonitoredProject, number: int) -> int | None:
     """Sub-issue リンクの親 Issue 番号を取得する（親なしは None）。"""
     owner, repo = project.repo.split("/")

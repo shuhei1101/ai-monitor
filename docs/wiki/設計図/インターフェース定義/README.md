@@ -36,6 +36,7 @@ template_version: 2.0.0
 | バックエンド | 本文・状態 | [Issue再オープン](./バックエンド/Issue再オープン.py.md) | クローズ済み Issue の再オープン（バグ差し戻し用） |
 | バックエンド | 本文・状態 | [PR_Ready化](./バックエンド/PR_Ready化.py.md) | Draft PR を Ready 化 |
 | バックエンド | Issue / PR 作成・マージ | [子Issue作成](./バックエンド/子Issue作成.py.md) | 子 Issue 作成 + Sub-issue リンク付与 |
+| バックエンド | Issue / PR 作成・マージ | [依存設定](./バックエンド/依存設定.py.md) | Issue 間の依存（blocked by）の設定と解除 |
 | バックエンド | Issue / PR 作成・マージ | [新規Issue起票](./バックエンド/新規Issue起票.py.md) | 親を持たない intake Issue の作成（会話から派生した要望の受け口） |
 | バックエンド | Issue / PR 作成・マージ | [不具合Issue起票](./バックエンド/不具合Issue起票.py.md) | ai-monitor 自身のリポジトリへ 1 事象 = 1 件の不具合 Issue を起票（assignee = ユーザー・ラベルなしで承認待ち） |
 | バックエンド | Issue / PR 作成・マージ | [DraftPR作成](./バックエンド/DraftPR作成.py.md) | Draft PR 作成（Stacked PR の base 明示） |

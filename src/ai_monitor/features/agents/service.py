@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from ai_monitor.features.agents.docs import build_agent_docs, load_phase_config
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
+from ai_monitor.integrations.github.issues import has_open_blocker
 from ai_monitor.integrations.github.labels import add_label
 from ai_monitor.integrations.tmux.ops import create_session, kill_session, send_keys
 from ai_monitor.shared.settings import MonitoredProject, TelemetrySettings
@@ -66,6 +67,16 @@ def poll(
     # 優先度順にソートして 1 件ずつ処理する
     ranks = {priority_urgent: 0, priority_low: 2}
     for target in sorted(matched, key=lambda t: _sort_key(t, ranks)):
+        # 着手をブロックしている依存が残っている対象は送らない
+        # （起動しても待機して終わるだけで、Claude の利用枠を消費するため）
+        if isinstance(target, Issue) and has_open_blocker(project, target.number):
+            logger.info(
+                "依存先が open のため起動を見送りました: project=%s agent_name=%s number=%s",
+                project.name,
+                agent.name,
+                target.number,
+            )
+            continue
         _process_one(
             project,
             agent,

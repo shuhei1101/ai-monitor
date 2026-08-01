@@ -18,8 +18,24 @@
 - `title`: 案のタイトル
 - `body`: 空文字
 - `labels`:
-  - 「分解判定（初回）」で判定した種別に応じた `layer:*` の値
-  - 「分解判定（初回）」で判定した種別に応じた `確認:*` の値
+  - `$AI_MONITOR_LABEL_LAYER_EPIC` の値
+  - `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` の値
+
+### 依存の設定
+
+「分解判定（初回）」の調査とユーザーの回答から、着手順の依存が分かっている場合だけ実行する。
+
+- 分解した epic 同士に順序がある場合、後続の epic に先行 epic への依存を張る
+- 既存の open Issue の完了を待つ必要がある場合、その Issue への依存を張る
+
+依存 1 件ごとに MCP `set_blocked_by` を呼ぶ:
+- `number`: 待つ側（後続）の epic 番号
+- `blocking_numbers`: 先に終わっている必要がある Issue の番号
+
+対象は epic 間の依存だけ。
+epic 配下の story / subsystem には張らない（親の epic が着手可能になった時点で、配下は順に進む）。
+
+親 intake Issue への依存も張らない（Sub-issue リンクが持つ）。
 
 ### 一括 Resolve
 
