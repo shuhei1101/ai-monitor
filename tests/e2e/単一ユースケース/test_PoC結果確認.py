@@ -71,7 +71,7 @@ RUNNER_REPORT = """> from: @epic-poc-runner
 
 結論: 成立（epic を進めてよい）。結果は epic Issue 本文の `## PoC 結果` に記録済みです。
 
----
+------
 """
 
 # 本文の実測値と矛盾する結論（疑問ありを誘発する）
@@ -86,7 +86,7 @@ INCONSISTENT_REPORT = """> from: @epic-poc-runner
 
 結論: 成立（epic を進めてよい）。
 
----
+------
 """
 
 CONTINUE_ANSWER = (
@@ -258,7 +258,7 @@ def test_error_when_continue(
     # 実行: ユーザーが続行を指示（議論中 除去 + assignee 外し）
     latest = comments(gh_live, owner, repo, ctx["epic"].number)[-1]
     gh_live.rest.issues.update_comment(
-        owner=owner, repo=repo, comment_id=latest.id, body=f"{latest.body}\n\n---\n{CONTINUE_ANSWER}"
+        owner=owner, repo=repo, comment_id=latest.id, body=f"{latest.body}\n\n------\n{CONTINUE_ANSWER}"
     )
     try:
         gh_live.rest.issues.remove_label(
@@ -303,7 +303,7 @@ def test_error_when_reverify(
     # 実行: ユーザーが再検証を指示（議論中 除去 + assignee 外し）
     latest = comments(gh_live, owner, repo, ctx["epic"].number)[-1]
     gh_live.rest.issues.update_comment(
-        owner=owner, repo=repo, comment_id=latest.id, body=f"{latest.body}\n\n---\n{REVERIFY_ANSWER}"
+        owner=owner, repo=repo, comment_id=latest.id, body=f"{latest.body}\n\n------\n{REVERIFY_ANSWER}"
     )
     try:
         gh_live.rest.issues.remove_label(

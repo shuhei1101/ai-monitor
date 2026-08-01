@@ -37,9 +37,9 @@ BOUNCE_REPORT = """> from: @ss-design-reverse-engineer
 - 探した範囲: `src/` 配下の全ファイル
 - `scope:backend` に対応する実装が存在しません
 
----
+------
 
----
+------
 """
 
 

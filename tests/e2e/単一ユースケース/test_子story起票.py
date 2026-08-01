@@ -45,7 +45,7 @@ WRITER_REPORT = """> from: @complex-scenario-writer
 ユースケース一覧の 2 件（タスク編集 / タスク削除）に対応するシナリオが揃っています。
 子 story の起票をお願いします。
 
----
+------
 """
 
 

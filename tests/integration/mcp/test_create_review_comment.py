@@ -22,7 +22,7 @@ def test_normal(gh, resp, api):
     assert kwargs["side"] == "RIGHT"
     assert kwargs["body"].startswith("> from: @architect")
     # 応答はスレッド返信で積むため末尾に区切り線を付けない
-    assert not kwargs["body"].endswith("---\n")
+    assert not kwargs["body"].endswith("------\n")
     assert res.node_id == "PRRC_1"
 
 

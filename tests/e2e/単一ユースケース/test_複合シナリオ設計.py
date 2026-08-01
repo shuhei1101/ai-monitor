@@ -156,7 +156,7 @@ FIX_INSTRUCTION = """> from: @epic-conductor
 
 修正が終わったら親 epic Issue へ完了報告してください。
 
----
+------
 """
 
 

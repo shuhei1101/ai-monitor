@@ -30,7 +30,7 @@ def test_normal(gh, resp, api):
     assert posted.startswith("> from: @architect\n> to: @shuhei1101")
     assert "設計を更新しました。" in posted
     # ユーザーがそのまま書き足せるよう末尾が区切り線で終わる
-    assert posted.endswith("---\n")
+    assert posted.endswith("------\n")
     assert res == CommentResult(node_id="IC_1", url="http://c/1")
 
 
@@ -53,8 +53,8 @@ def test_normal_when_commits_format(gh, resp, api):
     # 行が entries の順に並び、commit ID がバッククォートで囲まれている
     assert posted.index("`a1b2c3d`") < posted.index("`e4f5g6h`")
     # 表は本文末尾（区切り線の手前）に入る
-    assert posted.endswith("---\n")
-    assert posted.index("`e4f5g6h`") < posted.rindex("---")
+    assert posted.endswith("------\n")
+    assert posted.index("`e4f5g6h`") < posted.rindex("------")
 
 
 def test_normal_when_pages_format(gh, resp, api):

@@ -40,7 +40,7 @@ SINGLE_CANDIDATE_COMPARISON = """> from: @architect
 
 - 候補と検証観点で問題なければ、このコメントに合意の返信をして assignee を外してください
 
----
+------
 """
 
 # 実績のある既知ライブラリのみ（PoC 要否判定に非該当 = PoC スキップを誘発）
@@ -58,7 +58,7 @@ KNOWN_CANDIDATE_COMPARISON = """> from: @architect
 
 - この推奨で問題なければ採用決定の返信をして assignee を外してください
 
----
+------
 """
 
 # 要件を満たす候補が残らないケース（相談を誘発する）
@@ -75,7 +75,7 @@ NO_CANDIDATE_COMPARISON = """> from: @architect
 
 対応の方向性をご相談させてください。
 
----
+------
 """
 
 AGREE_SINGLE = (

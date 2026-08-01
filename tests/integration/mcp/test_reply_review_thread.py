@@ -24,7 +24,7 @@ def test_normal(gh, api):
     assert variables["body"].startswith("> from: @implementer\n> to: @architect")
     assert "commit abc1234 で修正しました。" in variables["body"]
     # 1 返信 = 1 コメントなので末尾に区切り線を付けない
-    assert not variables["body"].endswith("---\n")
+    assert not variables["body"].endswith("------\n")
     assert (res.node_id, res.url) == ("PRRC_9", "http://r/9")
 
 

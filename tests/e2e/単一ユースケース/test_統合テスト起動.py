@@ -19,7 +19,7 @@ STORY_DONE_REPORT = """> from: @story-conductor
 
 story #{story_number} のマージが完了しました（story PR は epic ブランチへ merged 済み・story Issue は自動 close）。
 
----
+------
 """
 
 FAIL_REPORT = """> from: @complex-scenario-writer
@@ -31,7 +31,7 @@ FAIL_REPORT = """> from: @complex-scenario-writer
 - fail 内容: 通知メールの送信時刻が期限の 24 時間前を超過している（story #{story_number} の実装範囲）
 - 修正方針案: 通知スケジューラの起動条件を修正する
 
----
+------
 """
 
 
@@ -193,7 +193,7 @@ STATUS_CHECK = """> from: @epic-conductor
 
 統合テストの委任にあたり、配下 subsystem の進捗とブロッカーを確認させてください。
 
----
+------
 """
 
 

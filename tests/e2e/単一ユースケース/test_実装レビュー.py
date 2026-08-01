@@ -62,7 +62,7 @@ IMPLEMENTER_REPORT = """> from: @implementer
 | --- | --- |
 | seed | update_task を実装 |
 
----
+------
 """
 
 

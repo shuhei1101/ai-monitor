@@ -33,10 +33,10 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | Resolve 実行 | `mcp/server.py` | 関数 | [`_minimize_comment`](#resolve-実行) | GraphQL `minimizeComment` を実行 | `classifier=RESOLVED` |
 | 共通 | Resolved 状態取得 | `mcp/server.py` | 関数 | [`_is_minimized`](#resolved-状態取得) | コメントの `isMinimized` を GraphQL で取得 | - |
 | 共通 | コメント投稿実体 | `mcp/server.py` | 関数 | [`_create_issue_comment`](#コメント投稿実体) | REST でコメントを投稿 | PR も同エンドポイント |
-| 共通 | コメント解析 | `mcp/server.py` | 関数 | [`_parse_comment_blocks`](#コメント解析) | `---` 区切りブロックの from / to と本文をパース | - |
+| 共通 | コメント解析 | `mcp/server.py` | 関数 | [`_parse_comment_blocks`](#コメント解析) | `------` 区切りブロックの from / to と本文をパース | - |
 | 共通 | 定型ブロック組立 | `mcp/server.py` | 関数 | [`_format_block`](#定型ブロック組立) | from / to ヘッダー + 本文（会話欄は末尾に区切り線）を組み立てる | 書式は `規約/コメント.md` |
 | 共通 | 本文レンダリング | `mcp/server.py` | 関数 | [`_render_format`](#本文レンダリング) | `type` に応じて本文（+ 表）を組み立てる | plain / commit 表 / ページ範囲表 |
-| 共通 | 区切り線判定 | `mcp/server.py` | 関数 | [`_ends_with_separator`](#区切り線判定) | 本文の末尾が `---` かを判定する | 返信時の区切り線の重複を防ぐ |
+| 共通 | 区切り線判定 | `mcp/server.py` | 関数 | [`_ends_with_separator`](#区切り線判定) | 本文の末尾が `------` かを判定する | 返信時の区切り線の重複を防ぐ |
 | 共通 | アット付与 | `mcp/server.py` | 関数 | [`_ensure_at`](#アット付与) | 先頭に `@` がなければ付与 | - |
 | 共通 | git 実行入口 | `mcp/server.py` | 関数 | [`_run_git`](#git-実行入口) | git CLI 呼び出しの単一入口 | 失敗時 `CalledProcessError` |
 | 共通 | リポジトリルート解決 | `mcp/server.py` | 関数 | [`_repo_root`](#リポジトリルート解決) | 共通 `.git` からメインリポジトリのルートを解決 | worktree 内からの呼び出しに対応 |
@@ -45,7 +45,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | マージ可否待ち | `mcp/server.py` | 関数 | [`_wait_mergeable`](#マージ可否待ち) | GitHub のマージ可否計算が終わるまで PR を取り直す | base 更新直後の 405 を避ける |
 | 共通 | 質問 DTO | `mcp/models.py` | データモデル | [`Question`](#質問) / [`Choice`](#選択肢) | ask_questions の質問・選択肢 | - |
 | 共通 | 定数 | `mcp/server.py` | 定数 | `CHOICE_LETTERS` | 選択肢に振る記号（A / B / C ...） | 採番はコメントごとに先頭から振る |
-| 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`Comment`](#コメント) | `---` 区切りブロックのパース結果 | - |
+| 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`Comment`](#コメント) | `------` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
 | 共通 | 検索結果 DTO | `mcp/models.py` | データモデル | [`SearchResultItem`](#検索結果) | search_issues_and_prs の戻り値要素 | - |
 | 共通 | ラベル作成結果 DTO | `mcp/models.py` | データモデル | [`CreatedLabelResult`](#ラベル作成結果) | create_label の戻り値 | - |
@@ -57,7 +57,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | Issue・PR情報取得 | MCP ツール | `mcp/server.py` | 関数 | [`get_issue_or_pr`](#issuepr情報取得) | Issue / PR の情報を 1 コマンドで取得 | 読み取り専用 |
 | コメント投稿 | MCP ツール | `mcp/server.py` | 関数 | [`comment`](#コメント投稿) | 定型ブロックでコメントを投稿 | - |
 | 質問投稿 | MCP ツール | `mcp/server.py` | 関数 | [`ask_questions`](#質問投稿) | 選択肢 + 推奨付きの質問を 1 質問 1 コメントで投稿 | - |
-| コメント返信 | MCP ツール | `mcp/server.py` | 関数 | [`reply_comment`](#コメント返信) | 既存コメントに `---` 区切りで追記 | - |
+| コメント返信 | MCP ツール | `mcp/server.py` | 関数 | [`reply_comment`](#コメント返信) | 既存コメントに `------` 区切りで追記 | - |
 | コメント一括Resolve | MCP ツール | `mcp/server.py` | 関数 | [`resolve_comments`](#コメント一括resolve) | 複数コメントを一括 Resolve | - |
 | コメント一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_comments`](#コメント一覧) | 全コメントをブロック配列 + 自分宛判定付きで返す | 読み取り専用 |
 | Issue・PR検索 | MCP ツール | `mcp/server.py` | 関数 | [`search_issues_and_prs`](#issuepr検索) | キーワードで Issue / PR を横断検索 | 読み取り専用 |
@@ -910,7 +910,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_comment` | 正常 | 定型ブロックで投稿 | sender / receiver / body | githubkit | `_format_block` の出力（末尾が `---`）で投稿され `CommentResult` を返す | - |
+| `test_comment` | 正常 | 定型ブロックで投稿 | sender / receiver / body | githubkit | `_format_block` の出力（末尾が `------`）で投稿され `CommentResult` を返す | - |
 | `test_comment_when_commits_format` | 正常 | commit 表付きの投稿 | `format` が `CommitsFormat` | githubkit | 本文末尾（区切り線の手前）に `\| commit \| 内容 \|` の表が入る | - |
 | `test_comment_when_pages_format` | 正常 | ページ範囲表付きの投稿 | `format` が `PagesFormat` | githubkit | 本文末尾に `\| 対象ページ \| commit 範囲 \|` の表が入る | - |
 
@@ -977,7 +977,7 @@ CommentsResult(comments=[CommentResult(node_id="IC_kwDO...", url="https://github
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_ask_questions` | 正常 | 質問件数分の個別投稿 | `Question` x3 + recommended_index | githubkit | 投稿が 3 回呼ばれ、各本文が 1 質問だけを含み `---` で終わる。`CommentsResult.comments` が 3 件 | - |
+| `test_ask_questions` | 正常 | 質問件数分の個別投稿 | `Question` x3 + recommended_index | githubkit | 投稿が 3 回呼ばれ、各本文が 1 質問だけを含み `------` で終わる。`CommentsResult.comments` が 3 件 | - |
 | `test_ask_questions_when_single` | 正常 | 質問 1 件 | `Question` x1 | githubkit | 投稿が 1 回だけ呼ばれ、`comments` が 1 件 | - |
 | `test_ask_questions_when_no_recommendation` | 正常 | 推奨なしの省略 | `recommended_index=-1` | githubkit | 推奨行を含まない本文で投稿 | - |
 | `test_ask_questions_when_empty_background` | 正常 | 空文字セクションの省略 | `background` が空文字 | githubkit | 背景を含まない本文で投稿 | - |
@@ -997,7 +997,7 @@ CommentsResult(comments=[CommentResult(node_id="IC_kwDO...", url="https://github
 > 物理名: `reply_comment`<br>
 > 種別: 関数
 
-既存コメントに `---` 区切りで定型ブロックを追記する。
+既存コメントに `------` 区切りで定型ブロックを追記する。
 
 #### 引数
 
@@ -1047,8 +1047,8 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_reply_comment` | 正常 | 末尾が区切り線でない本文への追記 | 末尾が通常の文の既存コメント | githubkit | 先頭 `---` + 宛先ヘッダー付きで追記され、末尾が `---` で終わる | ユーザーが書き足した後 |
-| `test_reply_comment_when_ends_with_separator` | 正常 | 末尾が区切り線の本文への追記 | 末尾が `---` の既存コメント | githubkit | 先頭に `---` を足さずに追記され、境目の `---` が 1 本だけになる | 本ツールが投稿した後 |
+| `test_reply_comment` | 正常 | 末尾が区切り線でない本文への追記 | 末尾が通常の文の既存コメント | githubkit | 先頭 `------` + 宛先ヘッダー付きで追記され、末尾が `------` で終わる | ユーザーが書き足した後 |
+| `test_reply_comment_when_ends_with_separator` | 正常 | 末尾が区切り線の本文への追記 | 末尾が `------` の既存コメント | githubkit | 先頭に `------` を足さずに追記され、境目の `------` が 1 本だけになる | 本ツールが投稿した後 |
 | `test_reply_comment_when_commits_format` | 正常 | 表付きの追記 | `format` が `CommitsFormat` | githubkit | 追記ブロックの末尾（区切り線の手前）に表が入る | コメント投稿と同じ書式 |
 | `test_reply_comment_when_not_issue_comment` | 異常 | 会話欄のコメント以外の node_id | 照会が本文を含まない node を返す | githubkit | `ValueError` が送出され、コメント更新 API が呼ばれない | 例外表「照会は成功したが本文を取れない」に対応 |
 
@@ -1056,7 +1056,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_reply_comment` | GitHub | 既存コメントへ `---` 区切りで追記 | コメント更新 API / 追記後の本文 | 副作用: sandbox のコメント更新 |
+| `test_ext_reply_comment` | GitHub | 既存コメントへ `------` 区切りで追記 | コメント更新 API / 追記後の本文 | 副作用: sandbox のコメント更新 |
 
 ---
 
@@ -1293,7 +1293,7 @@ CommentResult(node_id="PRRC_kwDO...", url="https://github.com/.../pull/52#discus
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_create_review_comment` | 正常 | インライン投稿 | path / line / sender / body | githubkit | head SHA + 定型ブロック（末尾に `---` を付けない）で投稿 API が呼ばれ `CommentResult` を返す | - |
+| `test_create_review_comment` | 正常 | インライン投稿 | path / line / sender / body | githubkit | head SHA + 定型ブロック（末尾に `------` を付けない）で投稿 API が呼ばれ `CommentResult` を返す | - |
 | `test_create_review_comment_when_multi_line` | 正常 | 範囲指定の投稿 | `start_line=42`・`line=48` | githubkit | `start_line` 付きで投稿 API が呼ばれる | - |
 | `test_create_review_comment_when_out_of_diff` | 異常 | diff 外の行 | REST が 422 を返す | githubkit | `RequestFailed` がそのまま伝播 | 例外表「422 等」に対応 |
 
@@ -3201,10 +3201,10 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 > 物理名: `_parse_comment_blocks`<br>
 > 種別: 関数
 
-コメント本文を `---` 区切りごとに分割し、各ブロックの `> from:` / `> to:` 行と本文を抽出する。
+コメント本文を `------` 区切りごとに分割し、各ブロックの `> from:` / `> to:` 行と本文を抽出する。
 ヘッダーなしは sender / receiver とも `None`。
 
-エージェントのブロックは末尾が `---` で終わるため、ユーザーが続きに書いたコメントは「末尾が `---` の本文」にも「末尾が `---` でない本文」にもなる。
+エージェントのブロックは末尾が `------` で終わるため、ユーザーが続きに書いたコメントは「末尾が `------` の本文」にも「末尾が `------` でない本文」にもなる。
 どちらも同じ数のブロックとして取れるよう、区切り線で生じる空要素は捨てる。
 
 #### 引数
@@ -3233,7 +3233,7 @@ _parse_comment_blocks(body)
 
 #### 処理
 
-1. 本文を `---` 区切りでブロックに分割する
+1. 本文を `------` 区切りでブロックに分割する
 2. 空白・改行だけのブロックを捨てる（先頭 / 末尾の区切り線で生じる空要素）
 3. 各ブロック先頭の `> from:` / `> to:` 行を抽出して取り除く（無ければ sender / receiver とも `None`）
 4. 残りを本文とした `CommentBlock` の配列（投稿順）を返す
@@ -3246,10 +3246,10 @@ _parse_comment_blocks(body)
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_parse_comment_blocks` | 正常 | from / to ヘッダーと本文の抽出 | `---` 区切り 3 ブロックのコメント本文 | なし | 各ブロックの sender / receiver / body が取れる | - |
+| `test_parse_comment_blocks` | 正常 | from / to ヘッダーと本文の抽出 | `------` 区切り 3 ブロックのコメント本文 | なし | 各ブロックの sender / receiver / body が取れる | - |
 | `test_parse_comment_blocks_when_plain_user_comment` | 正常 | ヘッダーなしは宛先なしユーザー投稿 | 素のコメント | なし | sender / receiver とも `None`・本文がそのまま入る | - |
-| `test_parse_comment_blocks_when_user_appended_without_separator` | 正常 | ユーザーが区切り線を置かずに書き足した | エージェントブロック（末尾 `---`）+ ユーザーコメントで終わる本文 | なし | 2 ブロックが取れ、2 番目が sender `None` のユーザーコメント | 空要素が混じらない |
-| `test_parse_comment_blocks_when_user_appended_with_separator` | 正常 | ユーザーが末尾に区切り線を置いた | 同上 + 末尾が `---` の本文 | なし | 同じく 2 ブロックが取れる（末尾の空要素を捨てる） | 区切り線の有無で結果が変わらない |
+| `test_parse_comment_blocks_when_user_appended_without_separator` | 正常 | ユーザーが区切り線を置かずに書き足した | エージェントブロック（末尾 `------`）+ ユーザーコメントで終わる本文 | なし | 2 ブロックが取れ、2 番目が sender `None` のユーザーコメント | 空要素が混じらない |
+| `test_parse_comment_blocks_when_user_appended_with_separator` | 正常 | ユーザーが末尾に区切り線を置いた | 同上 + 末尾が `------` の本文 | なし | 同じく 2 ブロックが取れる（末尾の空要素を捨てる） | 区切り線の有無で結果が変わらない |
 
 ---
 
@@ -3260,7 +3260,7 @@ _parse_comment_blocks(body)
 `> from: @sender` + `> to: @receiver` + 本文を組み立てる。
 書式の SoT は `規約/コメント.md`。
 
-会話欄のコメントは末尾に `---` と空行を置く。
+会話欄のコメントは末尾に `------` と空行を置く。
 ユーザーがそのコメントの続きに書き足して、そのまま次のブロックにできるようにするため。
 
 インライン指摘とスレッド返信は末尾の区切り線を付けない。
@@ -3273,8 +3273,8 @@ _parse_comment_blocks(body)
 | 送信者 | `sender` | `str` | ✅ | - | from 行の送信者名 | - |
 | 宛先 | `receiver` | `str \| None` | ✅ | - | to 行の宛先名 | `None` で to 行を省略 |
 | 本文 | `body` | `str` | ✅ | - | ブロック本文 | - |
-| 先頭区切りフラグ | `needs_separator` | `bool` | - | `False` | `True` で先頭に `---` を付ける | 追記先が区切り線で終わっていない場合に `True` |
-| 末尾区切りフラグ | `trailing_separator` | `bool` | - | `True` | `False` で末尾の `---` を省く | インライン指摘・スレッド返信で `False` |
+| 先頭区切りフラグ | `needs_separator` | `bool` | - | `False` | `True` で先頭に `------` を付ける | 追記先が区切り線で終わっていない場合に `True` |
+| 末尾区切りフラグ | `trailing_separator` | `bool` | - | `True` | `False` で末尾の `------` を省く | インライン指摘・スレッド返信で `False` |
 
 引数例:
 
@@ -3286,7 +3286,7 @@ _format_block("architect", "implementer", "L42 に null チェックを追加し
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `str` | 定型ブロック文字列 | `trailing_separator=True` のときだけ `---` + 改行で終わる |
+| `str` | 定型ブロック文字列 | `trailing_separator=True` のときだけ `------` + 改行で終わる |
 
 戻り値例:
 
@@ -3297,9 +3297,9 @@ _format_block("architect", "implementer", "L42 に null チェックを追加し
 #### 処理
 
 1. `> from:` 行（`receiver` があれば `> to:` 行も）を組み立てる（[アット付与](#アット付与)で `@` を補完）
-2. ヘッダーと本文を連結する（`needs_separator=True` なら先頭に `---` を付ける）
+2. ヘッダーと本文を連結する（`needs_separator=True` なら先頭に `------` を付ける）
 3. `trailing_separator` で末尾を決めて返す
-   - `True` の場合、末尾に `---` と改行を足す
+   - `True` の場合、末尾に `------` と改行を足す
    - `False` の場合、本文のまま返す
 
 #### 例外
@@ -3310,9 +3310,9 @@ _format_block("architect", "implementer", "L42 に null チェックを追加し
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_format_block` | 正常 | 定型ブロックの組み立て | sender / receiver / body | なし | `> from: @sender` + `> to: @receiver` + 本文 + 末尾の `---` | - |
-| `test_format_block_when_needs_separator` | 正常 | 先頭にも `---` を付ける | `needs_separator=True` | なし | 先頭が `---` で始まり末尾も `---` で終わる | - |
-| `test_format_block_when_receiver_none` | 正常 | receiver 省略時は to 行なし | `receiver=None` | なし | from 行 + 本文 + 末尾の `---` | - |
+| `test_format_block` | 正常 | 定型ブロックの組み立て | sender / receiver / body | なし | `> from: @sender` + `> to: @receiver` + 本文 + 末尾の `------` | - |
+| `test_format_block_when_needs_separator` | 正常 | 先頭にも `------` を付ける | `needs_separator=True` | なし | 先頭が `------` で始まり末尾も `------` で終わる | - |
+| `test_format_block_when_receiver_none` | 正常 | receiver 省略時は to 行なし | `receiver=None` | なし | from 行 + 本文 + 末尾の `------` | - |
 
 ---
 
@@ -3378,7 +3378,7 @@ _render_format(CommitsFormat(body="テスト作成が完了しました。", ent
 > 物理名: `_ends_with_separator`<br>
 > 種別: 関数
 
-本文の末尾（末尾の空白・改行を除く）が `---` かを判定する。
+本文の末尾（末尾の空白・改行を除く）が `------` かを判定する。
 返信時に区切り線を重複させないための判定に使う。
 
 #### 引数
@@ -3397,7 +3397,7 @@ _ends_with_separator("> from: @architect\n\n設計を更新しました。\n\n--
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `bool` | 末尾が `---` なら `True` | - |
+| `bool` | 末尾が `------` なら `True` | - |
 
 戻り値例:
 
@@ -3408,7 +3408,7 @@ True
 #### 処理
 
 1. 末尾の空白・改行を除いた文字列を取り出す
-2. その末尾行が `---` と一致するかを返す
+2. その末尾行が `------` と一致するかを返す
 
 #### 例外
 
@@ -3801,7 +3801,7 @@ ask_questions の質問 1 件（Pydantic `BaseModel`）。
 > 種別: データモデル<br>
 > コンテナ: `mcp/models.py`
 
-コメント本文の `---` 区切りブロック 1 件のパース結果（Pydantic `BaseModel`）。
+コメント本文の `------` 区切りブロック 1 件のパース結果（Pydantic `BaseModel`）。
 
 ### プロパティ
 
@@ -3832,7 +3832,7 @@ list_comments が返すコメント 1 件（Pydantic `BaseModel`）。
 | 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | node_id | `node_id` | `str` | 公開 | - | コメントの GraphQL node_id | `"IC_kwDO..."` | Resolve / 返信の対象指定に使う |
-| ブロック配列 | `blocks` | [`list[CommentBlock]`](#コメントブロック) | 公開 | - | `---` 区切りのブロック配列（投稿順） | - | - |
+| ブロック配列 | `blocks` | [`list[CommentBlock]`](#コメントブロック) | 公開 | - | `------` 区切りのブロック配列（投稿順） | - | - |
 | 投稿者 | `author` | `str \| None` | 公開 | `None` | 投稿者の GitHub ログイン名 | `"shuhei1101"` | 欠落時 `None` |
 | URL | `url` | `str` | 公開 | - | コメントの html URL | - | - |
 | Resolved 済み | `is_resolved` | `bool` | 公開 | `False` | Resolved 済みか | `false` | `include_resolved=True` のときのみ `true` があり得る |

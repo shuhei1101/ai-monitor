@@ -56,7 +56,7 @@ TESTER_REPORT = """> from: @tester
 | --- | --- |
 | seed | 単体テストを追加 |
 
----
+------
 """
 
 IMPLEMENTER_REPORT = """> from: @implementer
@@ -72,7 +72,7 @@ IMPLEMENTER_REPORT = """> from: @implementer
 | --- | --- |
 | seed | update_task を実装 |
 
----
+------
 """
 
 

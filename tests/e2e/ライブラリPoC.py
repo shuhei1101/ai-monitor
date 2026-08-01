@@ -151,7 +151,7 @@ VERIFY_INSTRUCTION = """> from: @architect
 本文の `## 検証観点と結果` に沿って検証し、実測値・判定・所感を本文へ記録してください。
 追加インストールが要らない範囲で、最小のコードで実測できる形にしてください。
 
----
+------
 """
 
 REVERIFY_INSTRUCTION = """> from: @architect
@@ -165,7 +165,7 @@ REVERIFY_INSTRUCTION = """> from: @architect
 
 既存の観点はそのままで、この行を `## 検証観点と結果` に追加して実測値・判定を記入してください。
 
----
+------
 """
 
 PREVIOUS_REPORT = """> from: @library-poc-runner
@@ -183,7 +183,7 @@ sqlite3 の PoC 検証が完了しました。
 | --- | --- |
 | seed | sqlite3 の PoC コードを追加 |
 
----
+------
 """
 
 
@@ -228,7 +228,7 @@ CANDIDATE_COMPARISON = """> from: @architect
 - 候補と検証観点で問題なければ、このコメントに合意の返信をして assignee を外してください
 - 変更したい場合は修正内容を返信してください
 
----
+------
 """
 
 AGREE_INSTRUCTION = (

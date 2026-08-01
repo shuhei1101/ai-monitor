@@ -79,7 +79,7 @@ CONSULT_COMMENT = """> from: @architect
 
 推奨: B（ライセンス方針の判断は subsystem の裁量を超えるため）
 
----
+------
 """
 
 ESCALATE_INSTRUCTION = (
@@ -105,7 +105,7 @@ ESCALATION_REPORT = """> from: @architect
 - subsystem 内での待ち合わせ実装: 応答時間の前提を満たせないため却下
 - 承認基盤の同期 API への変更: 外部システムのため subsystem からは変更できない
 
----
+------
 """
 
 LOCAL_RESOLUTION = (
@@ -212,7 +212,7 @@ def comments_from(gh_live, owner, repo, number, sender: str) -> list:
 def append_user_block(gh_live, owner, repo, comment, text: str) -> None:
     """ユーザーの返信ブロックを既存コメントに追記する（reply_comment と同じ `---` 区切り）。"""
     gh_live.rest.issues.update_comment(
-        owner=owner, repo=repo, comment_id=comment.id, body=f"{comment.body}\n\n---\n{text}"
+        owner=owner, repo=repo, comment_id=comment.id, body=f"{comment.body}\n\n------\n{text}"
     )
 
 

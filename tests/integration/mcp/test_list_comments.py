@@ -45,13 +45,13 @@ def test_normal(gh, resp, api):
 def test_normal_when_user_appended(gh, resp, api):
     """末尾の区切り線の有無でブロック数が変わらないことを確認する（正常系）。"""
     # 準備
-    agent_block = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n---\n"
+    agent_block = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n------\n"
     gh.rest.issues.list_comments.return_value = resp(
         [
             # ユーザーが区切り線を置かずに書き足したコメント
             _comment_ns("IC_1", f"{agent_block}\n\nこの観点も追加してほしい。"),
             # ユーザーが書き足しの後にも区切り線を置いたコメント
-            _comment_ns("IC_2", f"{agent_block}\n\nこの観点も追加してほしい。\n\n---\n"),
+            _comment_ns("IC_2", f"{agent_block}\n\nこの観点も追加してほしい。\n\n------\n"),
         ]
     )
     gh.graphql.side_effect = [{"node": {"isMinimized": False}}, {"node": {"isMinimized": False}}]

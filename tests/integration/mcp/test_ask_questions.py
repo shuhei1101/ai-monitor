@@ -40,7 +40,7 @@ def test_normal(gh, resp, api):
         assert f"## 論点 {i + 1} をどうしますか？" in body
         assert "- A. 案 A: 単純" in body
         assert "推奨: A. 案 A — 十分なため" in body
-        assert body.endswith("---\n")
+        assert body.endswith("------\n")
     assert [c.node_id for c in res.comments] == ["IC_0", "IC_1", "IC_2"]
     assert [c.url for c in res.comments] == ["http://c/0", "http://c/1", "http://c/2"]
 

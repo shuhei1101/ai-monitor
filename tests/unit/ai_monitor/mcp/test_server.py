@@ -296,7 +296,7 @@ def test_ask_questions(gh, api):
         assert f"## {name}" in body
         assert sum(body.count(f"## {other}") for other in ["Q1", "Q2", "Q3"]) == 1
         assert body.startswith("> from: @epic-conductor")
-        assert body.endswith("---\n")
+        assert body.endswith("------\n")
     assert len(res.comments) == 3
 
 
@@ -382,7 +382,7 @@ def test_ask_questions_when_partial_failure(gh, resp, request_failed, api):
 
 
 def test_reply_comment(gh, api):
-    """`---` 区切りでの返信追記を確認する（正常系）。"""
+    """`------` 区切りでの返信追記を確認する（正常系）。"""
     # 準備
     gh.graphql.return_value = {"node": {"body": "元コメント", "databaseId": 111}}
     gh.rest.issues.update_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
@@ -392,7 +392,7 @@ def test_reply_comment(gh, api):
     kwargs = gh.rest.issues.update_comment.call_args.kwargs
     assert kwargs["comment_id"] == 111
     assert kwargs["body"].startswith("元コメント")
-    assert "\n---\n" in kwargs["body"]
+    assert "\n------\n" in kwargs["body"]
     assert "> from: @tester" in kwargs["body"]
     assert res == CommentResult(node_id="IC_1", url="http://c/1")
 
@@ -400,14 +400,14 @@ def test_reply_comment(gh, api):
 def test_reply_comment_when_ends_with_separator(gh, api):
     """末尾が区切り線の本文への追記を確認する（正常系）。"""
     # 準備
-    gh.graphql.return_value = {"node": {"body": "元コメント\n\n---\n", "databaseId": 111}}
+    gh.graphql.return_value = {"node": {"body": "元コメント\n\n------\n", "databaseId": 111}}
     gh.rest.issues.update_comment.return_value = _resp(NS(node_id="IC_1", html_url="http://c/1"))
     # 実行
     api.reply_comment("IC_1", sender="tester", format=PlainFormat(body="修正しました。"))
     # 検証
     posted = gh.rest.issues.update_comment.call_args.kwargs["body"]
-    assert "---\n---" not in posted, f"境目の区切り線が重複している: {posted!r}"
-    assert posted.count("---") == 2, f"区切り線の本数が想定と違う: {posted!r}"
+    assert "------\n------" not in posted, f"境目の区切り線が重複している: {posted!r}"
+    assert posted.count("------") == 2, f"区切り線の本数が想定と違う: {posted!r}"
     assert "> from: @tester" in posted
 
 
@@ -616,7 +616,7 @@ def test_create_review_comment(gh, api):
     assert kwargs.get("start_line") is None
     assert kwargs["body"].startswith("> from: @architect\n> to: @implementer")
     # 応答はスレッド返信で積むため末尾に区切り線を付けない
-    assert not kwargs["body"].endswith("---\n")
+    assert not kwargs["body"].endswith("------\n")
     assert res == CommentResult(node_id="PRRC_1", url="http://r/1")
 
 
@@ -779,7 +779,7 @@ def test_reply_review_thread(gh, api):
     assert variables["id"] == "PRRT_1"
     assert variables["body"].startswith("> from: @implementer\n> to: @architect")
     # 1 返信 = 1 コメントなので末尾に区切り線を付けない
-    assert not variables["body"].endswith("---\n")
+    assert not variables["body"].endswith("------\n")
     assert res == CommentResult(node_id="PRRC_9", url="http://r/9")
 
 
@@ -1508,9 +1508,9 @@ def test_parse_comment_blocks():
     # 準備
     body = (
         "> from: @architect\n> to: @implementer\n\nL42 を直してください。\n"
-        "\n---\n"
+        "\n------\n"
         "> from: @implementer\n> to: @architect\n\n修正しました。\n"
-        "\n---\n"
+        "\n------\n"
         "> from: @architect\n\n確認しました。"
     )
     # 実行
@@ -1537,7 +1537,7 @@ def test_parse_comment_blocks_when_plain_user_comment():
 def test_parse_comment_blocks_when_user_appended_without_separator():
     """ユーザーが区切り線を置かずに書き足した本文のパースを確認する（正常系）。"""
     # 準備
-    body = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n---\n\nこの観点も追加してほしい。"
+    body = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n------\n\nこの観点も追加してほしい。"
     # 実行
     blocks = server._parse_comment_blocks(body)
     # 検証
@@ -1550,7 +1550,7 @@ def test_parse_comment_blocks_when_user_appended_without_separator():
 def test_parse_comment_blocks_when_user_appended_with_separator():
     """ユーザーが末尾に区切り線を置いた本文のパースを確認する（正常系）。"""
     # 準備
-    body = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n---\n\nこの観点も追加してほしい。\n\n---\n"
+    body = "> from: @architect\n> to: @shuhei1101\n\n設計を更新しました。\n\n------\n\nこの観点も追加してほしい。\n\n------\n"
     # 実行
     blocks = server._parse_comment_blocks(body)
     # 検証
@@ -1564,16 +1564,16 @@ def test_format_block():
     # 実行
     out = server._format_block("architect", "implementer", "本文")
     # 検証
-    assert out == "> from: @architect\n> to: @implementer\n\n本文\n\n---\n"
+    assert out == "> from: @architect\n> to: @implementer\n\n本文\n\n------\n"
 
 
 def test_format_block_when_needs_separator():
-    """先頭にも `---` を付ける指定を確認する（正常系）。"""
+    """先頭にも `------` を付ける指定を確認する（正常系）。"""
     # 実行
     out = server._format_block("tester", None, "本文", needs_separator=True)
     # 検証
-    assert out.startswith("---\n")
-    assert out.endswith("---\n")
+    assert out.startswith("------\n")
+    assert out.endswith("------\n")
     assert "> from: @tester" in out
 
 
@@ -1582,25 +1582,25 @@ def test_format_block_when_receiver_none():
     # 実行
     out = server._format_block("tester", None, "本文")
     # 検証
-    assert out == "> from: @tester\n\n本文\n\n---\n"
+    assert out == "> from: @tester\n\n本文\n\n------\n"
 
 
 def test_ends_with_separator():
     """末尾が区切り線の本文の判定を確認する（正常系）。"""
     # 実行・検証
-    assert server._ends_with_separator("> from: @architect\n\n設計を更新しました。\n\n---\n") is True
+    assert server._ends_with_separator("> from: @architect\n\n設計を更新しました。\n\n------\n") is True
 
 
 def test_ends_with_separator_when_trailing_blank():
     """区切り線の後に空行がある本文の判定を確認する（正常系）。"""
     # 実行・検証
-    assert server._ends_with_separator("本文\n\n---\n\n\n") is True
+    assert server._ends_with_separator("本文\n\n------\n\n\n") is True
 
 
 def test_ends_with_separator_when_user_appended():
     """区切り線の後にユーザーが書き足した本文の判定を確認する（正常系）。"""
     # 実行・検証
-    assert server._ends_with_separator("本文\n\n---\n\nこの観点も追加してほしい。") is False
+    assert server._ends_with_separator("本文\n\n------\n\nこの観点も追加してほしい。") is False
 
 
 def test_ends_with_separator_when_empty():

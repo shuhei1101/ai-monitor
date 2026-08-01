@@ -76,7 +76,7 @@ MERGE_REQUEST = """> from: @subsystem-conductor
 
 - 問題なければ `議論中` ラベルを外して assignee を外してください
 
----
+------
 """
 
 WRITER_PASS_REPORT = """> from: @{writer}
@@ -90,7 +90,7 @@ WRITER_PASS_REPORT = """> from: @{writer}
 
 マージをお願いします。
 
----
+------
 """
 
 SIBLING_EPIC_TITLE = "タスク通知機能"
@@ -567,7 +567,7 @@ def test_error_when_conflict(
         latest = comments(gh_live, owner, repo, pr_number)[-1]
         gh_live.rest.issues.update_comment(
             owner=owner, repo=repo, comment_id=latest.id,
-            body=f"{latest.body}\n\n---\nPR 側（subsystem ブランチ）の内容を採用して解消してください。",
+            body=f"{latest.body}\n\n------\nPR 側（subsystem ブランチ）の内容を採用して解消してください。",
         )
         for assignee in current.assignees:
             gh_live.rest.issues.remove_assignees(
@@ -578,6 +578,6 @@ def test_error_when_conflict(
     # 検証: 解消 commit を含んでマージされ、解消内容が相談スレッドに記録されている
     assert merged.merged is True, "PR がマージされていない"
     thread = next(c for c in comments(gh_live, owner, repo, pr_number) if c.node_id == consult.node_id)
-    assert "> from: @subsystem-conductor" in (thread.body or "").split("---", 1)[-1], (
+    assert "> from: @subsystem-conductor" in (thread.body or "").split("------", 1)[-1], (
         "解消内容が相談スレッドに返信追記されていない"
     )

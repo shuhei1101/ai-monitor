@@ -198,7 +198,7 @@ FIX_INSTRUCTION = """> from: @story-conductor
 
 修正が終わったら親 Issue へ完了報告してください。
 
----
+------
 """
 
 

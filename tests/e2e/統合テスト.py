@@ -278,7 +278,7 @@ TESTER_DONE_REPORT = """> from: @single-scenario-tester
 | --- | --- |
 | seed | 単一UC の E2E テストを追加 |
 
----
+------
 """
 
 SCENARIO_INDEX_PATH = "docs/wiki/設計図/シナリオ/README.md"
@@ -472,7 +472,7 @@ COMPLEX_TESTER_DONE_REPORT = """> from: @complex-scenario-tester
 | --- | --- |
 | seed | 複合UC の E2E テストを追加 |
 
----
+------
 """
 
 _COMPLEX_NEW_ROW = (

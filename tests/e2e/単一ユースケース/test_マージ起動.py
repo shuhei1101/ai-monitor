@@ -56,7 +56,7 @@ ARCHITECT_DONE_REPORT = """> from: @architect
 
 タスク一覧は全てチェック済みです。マージの起動をお願いします。
 
----
+------
 """
 
 def test_normal(

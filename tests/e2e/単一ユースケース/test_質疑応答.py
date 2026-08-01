@@ -112,7 +112,7 @@ def test_normal_when_起票依頼(monitor, gh_live, repo_ctx, issue_factory, wai
     # 実行: 起票の依頼（議論中 は残したまま assignee だけ外す = 応答ループの継続）
     gh_live.rest.issues.update_comment(
         owner=owner, repo=repo, comment_id=answers[-1].id,
-        body=f"{answers[-1].body}\n\n---\n{CREATE_ISSUE_REQUEST}",
+        body=f"{answers[-1].body}\n\n------\n{CREATE_ISSUE_REQUEST}",
     )
     for assignee in data.assignees:
         gh_live.rest.issues.remove_assignees(

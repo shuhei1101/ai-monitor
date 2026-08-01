@@ -126,6 +126,9 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
 _client = None
 
+# 会話欄のコメント内でブロックを区切る線（Markdown の水平線 --- と衝突しないよう 6 本にする）
+_BLOCK_SEPARATOR = "------"
+
 _READ_ONLY = ToolAnnotations(readOnlyHint=True)
 _DESTRUCTIVE = ToolAnnotations(destructiveHint=True)
 
@@ -287,10 +290,10 @@ def _create_issue_comment(number: int, body: str, *, owner: str, repo: str) -> C
 
 
 def _parse_comment_blocks(body: str) -> list[CommentBlock]:
-    """`---` 区切りブロックの from / to と本文をパースする。"""
+    """`------` 区切りブロックの from / to と本文をパースする。"""
     blocks: list[CommentBlock] = []
-    # 本文を --- 区切りでブロックに分割する
-    for chunk in re.split(r"\n-{3,}[ \t]*(?:\n|\Z)", body):
+    # 本文を ------ 区切りでブロックに分割する（Markdown の水平線 --- と衝突させないため 6 本以上）
+    for chunk in re.split(r"\n-{6,}[ \t]*(?:\n|\Z)", body):
         # 先頭 / 末尾の区切り線で生じる空要素を捨てる（末尾の区切り線の有無でブロック数を変えないため）
         if not chunk.strip():
             continue
@@ -325,13 +328,13 @@ def _format_block(
     header = f"> from: {_ensure_at(sender)}"
     if receiver is not None:
         header += f"\n> to: {_ensure_at(receiver)}"
-    # ヘッダーと本文を連結する（needs_separator=True なら先頭に --- を付ける）
+    # ヘッダーと本文を連結する（needs_separator=True なら先頭に ------ を付ける）
     block = f"{header}\n\n{body}"
     if needs_separator:
-        block = f"---\n{block}"
+        block = f"{_BLOCK_SEPARATOR}\n{block}"
     # 会話欄は末尾に区切り線を足す（ユーザーが続きに書き足してそのまま次のブロックにできる状態にする）
     if trailing_separator:
-        return f"{block}\n\n---\n"
+        return f"{block}\n\n{_BLOCK_SEPARATOR}\n"
     # インライン指摘・スレッド返信は返信で積むため区切り線を付けない
     return block
 
@@ -375,13 +378,13 @@ def _is_addressed(blocks: list[CommentBlock], addressee: str) -> bool:
 
 
 def _ends_with_separator(body: str) -> bool:
-    """本文の末尾（末尾の空白・改行を除く）が `---` かを返す。"""
+    """本文の末尾（末尾の空白・改行を除く）が `------` かを返す。"""
     # 末尾の空白・改行を除いた文字列を取り出す
     stripped = body.rstrip()
     if not stripped:
         return False
-    # 末尾行が区切り線と一致するかを返す
-    return stripped.splitlines()[-1].strip() == "---"
+    # 末尾行がブロック区切り線（ハイフン 6 本以上のみ）かを返す
+    return re.fullmatch(r"-{6,}", stripped.splitlines()[-1].strip()) is not None
 
 
 def _render_format(format: CommentFormat) -> str:

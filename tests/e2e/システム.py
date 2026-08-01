@@ -95,7 +95,7 @@ ARCHITECTURE_RE_REPORT = """> from: @architecture-reverse-engineer
 
 実装から読み取れなかった箇所: 永続化層（現状はインメモリの dict のみで、保存先の想定が読み取れない）
 
----
+------
 """
 
 # 構成要件まで確定済みの system Issue 本文（土台生成 / 子epic起票 の起点）
@@ -162,7 +162,7 @@ BUILD_REQUEST = """> from: @system-conductor
 - 紐づく system Issue: #{system_number}
 - 構成要件は Issue 本文の `## 構成要件` を参照してください
 
----
+------
 """
 
 # system-architect が土台生成を終えたときの完了報告
@@ -181,7 +181,7 @@ BUILD_DONE_REPORT = """> from: @system-architect
 
 - 問題なければ `議論中` ラベルを外して assignee を外してください
 
----
+------
 """
 
 # conductor が reverse-engineer へ現状の起こしを依頼するコメント
@@ -193,7 +193,7 @@ RE_REQUEST = """> from: @{sender}
 - 対象: `src/tasks/`
 - 成果物は本 PR に commit してください
 
----
+------
 """
 
 # reverse-engineer が現状を起こし終えたときの完了報告
@@ -212,7 +212,7 @@ RE_DONE_REPORT = """> from: @{sender}
 | --- | --- |
 | seed | 現状のモジュール構成を追加 |
 
----
+------
 """
 
 

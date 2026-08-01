@@ -51,7 +51,7 @@ STORY_ESCALATION_REPORT = """> from: @subsystem-conductor
 論点:
 - 同期前提のシナリオを維持するのか、非同期の結末に変えるのかを決められない
 
----
+------
 """
 
 SCENARIO_FIX_DONE = """> from: @single-scenario-writer
@@ -65,7 +65,7 @@ SCENARIO_FIX_DONE = """> from: @single-scenario-writer
 
 修正はユーザー確認を経て確定済みです。
 
----
+------
 """
 
 
