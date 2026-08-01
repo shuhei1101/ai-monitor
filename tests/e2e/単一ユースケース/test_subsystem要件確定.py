@@ -263,7 +263,7 @@ def test_normal(
             owner=owner, repo=repo, issue_number=pr.number, assignees=[assignee.login]
         )
 
-    # タスク一覧確定の完了を待つ（PR に 確認:architect + Issue から 確認:subsystem-conductor 除去）
+    # 要件確定（完了処理）の完了を待つ（PR に 確認:architect + Issue から 確認:subsystem-conductor 除去）
     def _handed_off():
         pr_now = _get(pr.number)
         issue_now = _get(subsystem.number)
@@ -273,7 +273,7 @@ def test_normal(
             return None
         return (pr_now, issue_now) if not any(n.startswith("確認:") for n in issue_labels) else None
 
-    wait_until(_handed_off, timeout_sec=1200, message="タスク一覧確定の完了（確認:architect 付与 + 確認:* 除去）")
+    wait_until(_handed_off, timeout_sec=1200, message="要件確定（完了処理）の完了（確認:architect 付与 + 確認:* 除去）")
 
     # 検証: Issue / PR のエージェント投稿コメントが全て Resolve 済み
     for number in (subsystem.number, pr.number):

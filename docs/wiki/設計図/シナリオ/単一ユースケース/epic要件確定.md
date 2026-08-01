@@ -86,16 +86,15 @@ sequenceDiagram
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
 | epic Issue | `layer:epic` + `確認:epic-conductor` 付きで存在 | 親 intake Issue と Sub-issue リンク済み・本文は空 |
-| 親 intake Issue | 対象範囲・PoC 要否・画面変更の有無が本文から一意に読み取れる内容で書かれている | 確認事項が 0 件になる状況を決定的に誘発 |
+| 親 intake Issue | 対象範囲・PoC 要否・画面変更の有無・複合 UC への影響が本文から一意に読み取れる内容で書かれている | 確認事項が 0 件になる状況を決定的に誘発 |
+| 既存の設計書 | 対象の複合 UC シナリオが master に存在する | 修正箇所の有無を判定する材料 |
 | assignee | 未設定 | エージェント起動条件 |
 | モニター | polling 中 | - |
-| ユーザー回答 | 応答ループでの発言なし | 質問が出ないことを見るため |
 
 ### フロー
 
 ```mermaid
 sequenceDiagram
-  actor U as ユーザー
   participant GH as GitHub
   participant ORC as モニター
   participant REPO as リポジトリ
@@ -106,28 +105,36 @@ sequenceDiagram
   ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
   activate MON
   MON->>GH: 親 intake から範囲抽出・<br>5 セクションの草案を epic Issue 本文に反映
-  MON->>MON: 各観点を照合し<br>判断が分かれる論点が無いと確定
-  MON->>GH: epic Issue に完了報告コメントを投稿<br>（質問せずに置いた前提を明示）
-  MON->>GH: epic Issue に 議論中 付与 +<br>assignee=ユーザー 設定
+  MON-->>REPO: 既存の複合 UC シナリオと<br>照合して修正箇所の有無を判定
+  MON->>MON: 判断が分かれる論点が無く<br>複合 UC の修正も不要と確定
+  MON->>GH: epic Issue に完了報告コメントを投稿<br>（質問せずに置いた前提を明示・議論中 は付けない）
   deactivate MON
 
-  U->>GH: epic Issue の 議論中 除去 + assignee 外し
-  ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
-  MON->>GH: epic Issue の自分宛コメント一括 Resolve
-  MON->>GH: epic Issue の 確認:epic-conductor 除去
   MON->>REPO: worktree + epic ブランチ作成 + 空 commit push
-  MON->>GH: epic Draft PR 作成 +<br>確認:complex-scenario-writer 付与
+  MON->>GH: epic Draft PR 作成<br>（複合シナリオ設計へは渡さない）
   deactivate MON
+
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
+  ORC->>MON: 既存セッションへ送信（子story起票）
+  activate MON
+  MON->>GH: 子 story Issue を起票 +<br>確認:story-conductor 付与
+  MON->>GH: epic Issue の 確認:epic-conductor 除去
+  deactivate MON
+  Note over MON: セッションは epic Issue close まで常駐
 ```
 
 ### 期待値
 
 - 確認事項コメントが 1 件も投稿されていない（本文から一意に定まる論点を質問していない）
+- `議論中` が付与されず assignee も設定されていない（ユーザーを止めずに通り抜けている）
 - 完了報告コメントに、質問せずに前提として置いた判断とその根拠が書かれている
-- `議論中` + `assignee=ユーザー` が設定され、ユーザーが確認するタイミング自体は残っている
-- ユーザーの `議論中` 除去後、epic Draft PR が作成され `確認:complex-scenario-writer` が付与されている
+- epic Draft PR が作成され、`確認:complex-scenario-writer` も `確認:mock-designer` も付与されていない
+- 子 story Issue が起票され `確認:story-conductor` が付与されている
+- epic Issue から `確認:epic-conductor` が除去されている
+
 
 ## 正常シナリオ（PoC 不要・画面変更あり）
 

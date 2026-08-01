@@ -13,7 +13,6 @@ architect:
   - エージェント/architect/フェーズ/エスカレーション報告.md
   - エージェント/architect/フェーズ/応答ループ.md
   - エージェント/architect/フェーズ/再開指示の受領.md
-  - エージェント/architect/フェーズ/設計ページ確定.md
   - エージェント/architect/フェーズ/テスト作成の委任.md
   - エージェント/architect/フェーズ/テストレビュー.md
   - エージェント/architect/フェーズ/実装後の再レビュー.md
@@ -155,7 +154,6 @@ subsystem-conductor:
   - エージェント/subsystem-conductor/フェーズ/バグ修正着手.md
   - エージェント/subsystem-conductor/フェーズ/SA変更確定.md
   - エージェント/subsystem-conductor/フェーズ/要件確定（完了処理）.md
-  - エージェント/subsystem-conductor/フェーズ/タスク一覧確定.md
   - エージェント/subsystem-conductor/フェーズ/インターフェース確定の中継.md
   - エージェント/subsystem-conductor/フェーズ/マージ起動.md
   - エージェント/subsystem-conductor/フェーズ/subsystemマージ.md

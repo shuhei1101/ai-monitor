@@ -46,29 +46,30 @@ sequenceDiagram
 
   loop タスク一覧の設計 Wiki ごと<br>（インターフェース → ER図 → 画面構成 →<br>インターフェース定義（バックエンド / フロントエンド） →<br>モジュール構成 の上流順）
     MON->>REPO: 対象 Wiki を作成 / 更新して commit push
-    MON->>GH: 確認事項を 1 論点 = 1 コメントで投稿<br>（ページに紐づく論点は該当行にインライン・<br>紐づかない論点は会話欄）
-    MON->>GH: subsystem PR に設計の提案コメント<br>（確定させたい内容の要約）+<br>議論中 付与 + assignee=ユーザー 設定
-    deactivate MON
+  end
 
-    loop 応答ループ（修正指示がある間）
-      U->>GH: subsystem PR にフィードバックコメント +<br>assignee 外し
-      ORC-->>GH: polling（ユーザー返信 + assignee なし を検知）
-      ORC->>MON: 既存セッションへ送信
-      activate MON
-      MON->>REPO: Wiki 修正 commit push
-      alt ライブラリ選定論点あり
-        Note over MON: ライブラリ選定を実施<br>（採用決定後にループへ合流）
-      end
-      MON->>GH: subsystem PR の<br>assignee=ユーザー 再設定
-      deactivate MON
-    end
+  MON->>GH: 確認事項を 1 論点 = 1 コメントで投稿<br>（ページに紐づく論点は該当行にインライン・<br>紐づかない論点は会話欄）
+  MON->>GH: subsystem PR に全ページの提案コメント<br>（ページ一覧 + 確定させたい内容の要約）+<br>議論中 付与 + assignee=ユーザー 設定
+  deactivate MON
 
-    U->>GH: subsystem PR の 議論中 除去 +<br>assignee 外し（当該 Wiki の確定）
-    ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
+  loop 応答ループ（修正指示がある間）
+    U->>GH: subsystem PR にフィードバックコメント +<br>assignee 外し
+    ORC-->>GH: polling（ユーザー返信 + assignee なし を検知）
     ORC->>MON: 既存セッションへ送信
     activate MON
-    MON->>GH: subsystem PR の<br>自分宛コメント一括 Resolve
+    MON->>REPO: Wiki 修正 commit push
+    alt ライブラリ選定論点あり
+      Note over MON: ライブラリ選定を実施<br>（採用決定後にループへ合流）
+    end
+    MON->>GH: subsystem PR の<br>assignee=ユーザー 再設定
+    deactivate MON
   end
+
+  U->>GH: subsystem PR の 議論中 除去 +<br>assignee 外し（全ページの確定）
+  ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
+  ORC->>MON: 既存セッションへ送信
+  activate MON
+  MON->>GH: subsystem PR の<br>自分宛コメント一括 Resolve
 
   MON->>GH: タスク一覧の設計タスクに<br>チェックを入れる
   MON->>GH: subsystem PR の 確認:architect 除去
@@ -80,7 +81,8 @@ sequenceDiagram
 ### 期待値
 
 - 確認事項が 1 論点 = 1 コメントで投稿され、ページの特定箇所に紐づく論点は該当行のインライン、紐づかない論点は会話欄に振り分けられている
-- タスク一覧の担当分の設計 Wiki（`設計図/ER図/{分類}.md` / `設計図/画面構成/{画面名}.md` / `設計図/インターフェース定義/バックエンド/{論理名}.md` / `設計図/インターフェース定義/フロントエンド/{論理名}.md` / `設計図/モジュール構成/{サブシステム}/{分類}.md`）が上流順に 1 ページずつ確定され、subsystem ブランチに commit されている
+- タスク一覧の担当分の設計 Wiki（`設計図/ER図/{分類}.md` / `設計図/画面構成/{画面名}.md` / `設計図/インターフェース定義/バックエンド/{論理名}.md` / `設計図/インターフェース定義/フロントエンド/{論理名}.md` / `設計図/モジュール構成/{サブシステム}/{分類}.md`）が上流順に作成され、subsystem ブランチに commit されている
+- ユーザーの確認が全ページで 1 回にまとまっている（`議論中` の付与がページ数ぶん繰り返されていない）
 - `## タスク一覧` の設計タスクがチェック済み
 - テスト作成の割り当てコメントに、確定した設計 Wiki のページ名と各ページの commit 範囲が記載されている
 - subsystem PR に `確認:tester` が付与され、`確認:architect` が除去されている

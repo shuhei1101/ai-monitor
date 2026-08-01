@@ -71,6 +71,62 @@ sequenceDiagram
 - story Draft PR（base=親 epic ブランチ・本文は `## 紐づく Issue` のみ）が作成され、`確認:single-scenario-writer` が付与されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 
+## 正常シナリオ（確認事項なし・単一 UC 影響なし）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| story Issue | `layer:story` + `確認:story-conductor` 付きで存在 | 親 epic と Sub-issue リンク済み・本文は空 |
+| 親 epic Issue | ユースケース一覧に複合 UC への影響なしと記録済み | 上位が素通しで降ろしてきた状態 |
+| 既存の設計書 | 対象の単一 UC シナリオが master に存在する | 修正箇所の有無を判定する材料 |
+| assignee | 未設定 | エージェント起動条件 |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  participant GH as GitHub
+  participant ORC as モニター
+  participant REPO as リポジトリ
+
+  Note over GH: story Issue に 確認:story-conductor 付与済み
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
+  create participant MON as story-conductor
+  ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
+  activate MON
+  MON->>GH: 親 epic の UC を特定・<br>要件草案を story Issue 本文に反映
+  MON-->>REPO: 既存の単一 UC シナリオと<br>照合して修正箇所の有無を判定
+  MON->>MON: 判断が分かれる論点が無く<br>単一 UC の修正も不要と確定
+  MON->>GH: story Issue に完了報告コメントを投稿<br>（質問せずに置いた前提を明示・議論中 は付けない）
+  deactivate MON
+
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
+  ORC->>MON: 既存セッションへ送信（完了処理）
+  activate MON
+  MON->>REPO: worktree + story ブランチ作成 + 空 commit push
+  MON->>GH: story Draft PR 作成<br>（単一シナリオ設計へは渡さない）
+  deactivate MON
+
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
+  ORC->>MON: 既存セッションへ送信（子subsystem起票）
+  activate MON
+  MON->>GH: 子 subsystem Issue を起票 +<br>確認:subsystem-conductor 付与
+  MON->>GH: story Issue の 確認:story-conductor 除去
+  deactivate MON
+  Note over MON: セッションは epic Issue close まで常駐
+```
+
+### 期待値
+
+- 確認事項コメントが 1 件も投稿されていない
+- `議論中` が付与されず assignee も設定されていない（ユーザーを止めずに通り抜けている）
+- 完了報告コメントに、質問せずに前提として置いた判断とその根拠が書かれている
+- story Draft PR が作成され、`確認:single-scenario-writer` が付与されていない
+- 子 subsystem Issue が起票され `確認:subsystem-conductor` が付与されている
+- story Issue から `確認:story-conductor` が除去されている
+
 ## 正常シナリオ（リバースエンジニアリング）
 
 ### セットアップ

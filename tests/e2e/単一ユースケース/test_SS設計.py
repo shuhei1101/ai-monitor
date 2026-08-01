@@ -190,8 +190,8 @@ DESIGN_TASK_LINES = [
     "`設計図/インターフェース定義/バックエンド/タスク更新.py.md` を新規作成",
     "`設計図/モジュール構成/バックエンド/タスク.py.md` を新規作成",
 ]
-# 設計ページごとに 1 往復するため、往復回数の上限は設計タスク数 + 余裕分にする
-MAX_ROUNDS = 6
+# 全ページをまとめて 1 回確認する運用なので、往復は 1 回で終わるのが期待値（余裕を持たせて上限を置く）
+MAX_ROUNDS = 3
 
 
 def _design_paths(gh_live, owner: str, repo: str, branch: str) -> list[str]:
@@ -301,8 +301,8 @@ def test_normal_when_no_er(
     else:
         raise AssertionError(f"{MAX_ROUNDS} 往復しても tester へ引き渡されなかった")
 
-    assert rounds >= len(DESIGN_TASK_LINES), (
-        f"設計ページごとの確認ゲートが開いた回数が足りない: {rounds} 回（設計タスクは {len(DESIGN_TASK_LINES)} 件）"
+    assert rounds == 1, (
+        f"確認ゲートが 1 回にまとまっていない: {rounds} 回（設計タスクは {len(DESIGN_TASK_LINES)} 件）"
     )
 
     # 検証: 確認:tester が付与され、確認:architect が除去されている
@@ -484,8 +484,8 @@ def test_normal(
     )
 
     rounds = _drive_design(gh_live, owner, repo, ctx["pr"].number, wait_until, max_rounds=MAX_ROUNDS + 2)
-    assert rounds >= len(DESIGN_TASK_LINES_WITH_ER), (
-        f"設計ページごとの確認ゲートが足りない: {rounds} 回（設計タスクは {len(DESIGN_TASK_LINES_WITH_ER)} 件）"
+    assert rounds == 1, (
+        f"確認ゲートが 1 回にまとまっていない: {rounds} 回（設計タスクは {len(DESIGN_TASK_LINES_WITH_ER)} 件）"
     )
 
     # 検証: 担当分の設計 Wiki（ER図 含む）が上流順に commit されている
@@ -687,8 +687,8 @@ def test_normal_when_reverse(
     )
 
     rounds = _drive_design(gh_live, owner, repo, ctx["pr"].number, wait_until, max_rounds=MAX_ROUNDS)
-    assert rounds >= len(DESIGN_TASK_LINES), (
-        f"設計ページごとの確認ゲートが足りない: {rounds} 回"
+    assert rounds == 1, (
+        f"確認ゲートが 1 回にまとまっていない: {rounds} 回"
     )
 
     # 検証: 現状の設計書を起点にした差分（あるべき姿への変更）が積まれている

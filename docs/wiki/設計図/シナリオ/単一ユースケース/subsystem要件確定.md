@@ -39,7 +39,10 @@ sequenceDiagram
   MON->>REPO: 親 story のシナリオと<br>設計図 Wiki を調査<br>（関連 Issue / PR 収集のみサブエージェント並列）
   MON->>GH: 概要 / 背景 + 現状 セクションを<br>subsystem Issue 本文に反映
   MON->>GH: 機能・非機能要件の観点を洗い出し<br>→システム要件 SA セクションを<br>subsystem Issue 本文に反映
-  MON->>GH: subsystem Issue に完了報告 +<br>確認事項を投稿
+  MON->>REPO: worktree + subsystem ブランチ作成<br>（{type}/{scope}/{ドメイン}/{UC名}/{変更内容}）+<br>空 commit push
+  MON->>GH: subsystem Draft PR 作成<br>（base=親 story ブランチ・<br>紐づく Issue + タスク一覧を記入）
+  MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
+  MON->>GH: subsystem Issue に SA とタスク一覧を<br>まとめた確認コメント + 確認事項を投稿
   MON->>GH: subsystem Issue に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 
@@ -48,7 +51,7 @@ sequenceDiagram
     ORC-->>GH: polling（ユーザー返信 + assignee なし を検知）
     ORC->>MON: 既存セッションへ送信
     activate MON
-    MON->>GH: subsystem Issue の本文修正 +<br>assignee=ユーザー 再設定
+    MON->>GH: subsystem Issue の本文 /<br>PR のタスク一覧を修正 +<br>assignee=ユーザー 再設定
     deactivate MON
   end
 
@@ -57,11 +60,6 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
   MON->>GH: subsystem Issue の<br>自分宛コメント一括 Resolve
-  MON->>REPO: worktree + subsystem ブランチ作成<br>（{type}/{scope}/{ドメイン}/{UC名}/{変更内容}）+<br>空 commit push
-  MON->>GH: subsystem Draft PR 作成<br>（base=親 story ブランチ・<br>紐づく Issue + タスク一覧を記入）
-  MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
-  MON->>GH: subsystem PR にタスク一覧の確認コメント +<br>議論中 付与 + assignee=ユーザー 設定
-  deactivate MON
 
   loop 応答ループ（タスクの修正指示がある間）
     U->>GH: subsystem PR にフィードバックコメント +<br>assignee 外し
@@ -90,7 +88,7 @@ sequenceDiagram
 - 実装コード・テストコードを読み出した記録がない（要件の判断材料は親 story と設計 Wiki に閉じる）
 - subsystem Draft PR（base=親 story ブランチ）が作成され、本文に `## 紐づく Issue` と `## タスク一覧`（Wiki 修正・実装・テスト実行の To Do）が記入されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
-- タスク一覧の確認コメントが投稿されている
+- SA とタスク一覧をまとめた確認コメントが 1 件だけ投稿されている（SA とタスク一覧で 2 回待機していない）
 - subsystem PR に `確認:architect` が付与され、`確認:subsystem-conductor` が除去されている
 
 ## 正常シナリオ（リバースエンジニアリング）

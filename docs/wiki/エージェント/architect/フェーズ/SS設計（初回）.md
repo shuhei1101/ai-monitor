@@ -36,7 +36,29 @@ subsystem ブランチの worktree（`.claude/worktrees/{ブランチ名の / �
 
 ### 設計ページの作成
 
-`## タスク一覧` の設計タスクを上流順（インターフェース → ER図 → 画面構成 → インターフェース定義（バックエンド / フロントエンド）（フロー）→ モジュール構成）に並べ、先頭の 1 ページを作成 / 更新して subsystem ブランチに commit push する。
+`## タスク一覧` の設計タスクを上流順（インターフェース → ER図 → 画面構成 → インターフェース定義（バックエンド / フロントエンド）（フロー）→ モジュール構成）に並べ、担当分の全ページを作成 / 更新して subsystem ブランチに commit push する。
+
+ページごとにユーザーの確認を挟まない。
+上流のページが変わると下流のページも直すことになるため、全ページを揃えてから 1 回で確認する。
+
+`設計図/インターフェース定義/バックエンド/{論理名}.md` の `## インターフェース` を確定させた場合は、全ページの commit 後に subsystem-conductor へインターフェース確定報告を投稿する（後続 subsystem を起票するかの判断は story-conductor が行う）。
+
+MCP `comment` を呼ぶ:
+- `number`: $pr_number
+- `is_pr`: true
+- `sender`: `architect`
+- `receiver`: `subsystem-conductor`
+- `format`:
+  - `type`: `plain`
+  - `body`: インターフェース確定の報告（確定した結合ドキュメントのページ名 + リクエスト / レスポンスの要約）
+
+続けて MCP `add_labels` を呼ぶ:
+- `number`: $pr_number
+- `is_pr`: true
+- `labels`:
+  - `$AI_MONITOR_LABEL_CONFIRM_SUBSYSTEM_CONDUCTOR` の値
+
+`確認:architect` は除去せず、待機にも入らずに次の手順へ進む（設計を継続する）。
 
 ### 確認事項の投稿
 
