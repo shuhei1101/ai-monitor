@@ -37,7 +37,7 @@ from ai_monitor.mcp.models import (
 
 EXPECTED_TOOLS = {
     "get_issue_or_pr",
-    "list_addressed_comments",
+    "list_comments",
     "search_issues_and_prs",
     "read_wiki_pages",
     "comment",
@@ -136,7 +136,7 @@ def test_tool_annotations(mon_settings, mon_registry, mcp_agents, label_settings
     # 実行
     tools = {t.name: t for t in _list_tools(app)}
     # 検証
-    for name in ("get_issue_or_pr", "list_addressed_comments", "list_review_threads", "search_issues_and_prs"):
+    for name in ("get_issue_or_pr", "list_comments", "list_review_threads", "search_issues_and_prs"):
         assert tools[name].annotations.readOnlyHint is True
     for name in ("remove_labels", "remove_assignee", "close", "merge_pr", "worktree_remove", "remove_watch_targets"):
         assert tools[name].annotations.destructiveHint is True
@@ -401,15 +401,15 @@ def test_resolve_comments(gh, api):
         assert variables == {"id": node_id}
 
 
-# ---- 宛先コメント一覧 ----
+# ---- コメント一覧 ----
 
 
 def _comment_ns(node_id, body, login):
     return NS(node_id=node_id, body=body, user=NS(login=login), html_url=f"http://c/{node_id}")
 
 
-def test_list_addressed_comments(gh, api):
-    """最終ブロックの宛先での絞り込みを確認する（正常系）。"""
+def test_list_comments(gh, api):
+    """最終ブロックの宛先での自分宛判定を確認する（正常系）。"""
     # 準備
     gh.rest.issues.list_comments.return_value = _resp(
         [
@@ -420,29 +420,31 @@ def test_list_addressed_comments(gh, api):
     )
     gh.graphql.return_value = {"node": {"isMinimized": False}}
     # 実行
-    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
+    res = api.list_comments(52, is_pr=True, addressee="architect")
     # 検証
-    assert [c.node_id for c in res] == ["IC_1", "IC_3"]
+    assert [c.node_id for c in res] == ["IC_1", "IC_2", "IC_3"]
+    assert [c.is_addressed for c in res] == [True, False, True]
     assert res[0].blocks[-1].sender == "tester"
     assert res[0].blocks[-1].receiver == "architect"
-    assert res[1].blocks[-1].sender is None
+    assert res[2].blocks[-1].sender is None
 
 
-def test_list_addressed_comments_when_own_comment(gh, api):
-    """自身が投稿したコメント（最後のブロックの from が addressee）の包含を確認する（正常系）。"""
+def test_list_comments_when_own_comment(gh, api):
+    """自身が投稿したコメント（最後のブロックの from が addressee）の自分宛判定を確認する（正常系）。"""
     # 準備
     gh.rest.issues.list_comments.return_value = _resp(
         [_comment_ns("IC_1", "> from: @architect\n> to: @shuhei1101\n\n設計 Wiki を更新しました。", "shuhei1101")]
     )
     gh.graphql.return_value = {"node": {"isMinimized": False}}
     # 実行
-    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
+    res = api.list_comments(52, is_pr=True, addressee="architect")
     # 検証
     assert [c.node_id for c in res] == ["IC_1"]
+    assert res[0].is_addressed is True
     assert res[0].blocks[-1].sender == "architect"
 
 
-def test_list_addressed_comments_when_include_resolved(gh, api):
+def test_list_comments_when_include_resolved(gh, api):
     """Resolved 込みの取得と省略時の除外を確認する（正常系）。"""
     # 準備
     comments = [
@@ -452,14 +454,14 @@ def test_list_addressed_comments_when_include_resolved(gh, api):
     gh.rest.issues.list_comments.return_value = _resp(comments)
     gh.graphql.side_effect = [{"node": {"isMinimized": True}}, {"node": {"isMinimized": False}}]
     # 実行
-    res = api.list_addressed_comments(52, is_pr=True, addressee="architect", include_resolved=True)
+    res = api.list_comments(52, is_pr=True, addressee="architect", include_resolved=True)
     # 検証
     assert [c.node_id for c in res] == ["IC_1", "IC_2"]
     assert res[0].is_resolved is True
     # 準備
     gh.graphql.side_effect = [{"node": {"isMinimized": True}}, {"node": {"isMinimized": False}}]
     # 実行
-    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
+    res = api.list_comments(52, is_pr=True, addressee="architect")
     # 検証
     assert [c.node_id for c in res] == ["IC_2"]
 

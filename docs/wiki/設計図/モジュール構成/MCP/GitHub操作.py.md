@@ -44,7 +44,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 共通 | ローカルブランチ存在確認 | `mcp/server.py` | 関数 | [`_branch_exists`](#ローカルブランチ存在確認) | ローカルブランチの有無を返す | 非 0 終了を結果として扱う |
 | 共通 | マージ可否待ち | `mcp/server.py` | 関数 | [`_wait_mergeable`](#マージ可否待ち) | GitHub のマージ可否計算が終わるまで PR を取り直す | base 更新直後の 405 を避ける |
 | 共通 | 質問 DTO | `mcp/models.py` | データモデル | [`Question`](#質問) / [`Choice`](#選択肢) | ask_questions の質問・選択肢 | - |
-| 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`AddressedComment`](#宛先コメント) | `---` 区切りブロックのパース結果 | - |
+| 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`Comment`](#コメント) | `---` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
 | 共通 | 検索結果 DTO | `mcp/models.py` | データモデル | [`SearchResultItem`](#検索結果) | search_issues_and_prs の戻り値要素 | - |
 | 共通 | ラベル作成結果 DTO | `mcp/models.py` | データモデル | [`CreatedLabelResult`](#ラベル作成結果) | create_label の戻り値 | - |
@@ -58,7 +58,7 @@ stdio はクライアントのセッションごとにサーバプロセスを�
 | 質問投稿 | MCP ツール | `mcp/server.py` | 関数 | [`ask_questions`](#質問投稿) | 選択肢 + 推奨付きの質問コメントを投稿 | - |
 | コメント返信 | MCP ツール | `mcp/server.py` | 関数 | [`reply_comment`](#コメント返信) | 既存コメントに `---` 区切りで追記 | - |
 | コメント一括Resolve | MCP ツール | `mcp/server.py` | 関数 | [`resolve_comments`](#コメント一括resolve) | 複数コメントを一括 Resolve | - |
-| 宛先コメント一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_addressed_comments`](#宛先コメント一覧) | 自分宛のコメントをブロック配列付きで返す | 読み取り専用 |
+| コメント一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_comments`](#コメント一覧) | 全コメントをブロック配列 + 自分宛判定付きで返す | 読み取り専用 |
 | Issue・PR検索 | MCP ツール | `mcp/server.py` | 関数 | [`search_issues_and_prs`](#issuepr検索) | キーワードで Issue / PR を横断検索 | 読み取り専用 |
 | インラインコメント投稿 | MCP ツール | `mcp/server.py` | 関数 | [`create_review_comment`](#インラインコメント投稿) | PR の特定ファイル・行に紐づくレビューコメントを投稿 | - |
 | レビュースレッド一覧 | MCP ツール | `mcp/server.py` | 関数 | [`list_review_threads`](#レビュースレッド一覧) | インライン指摘のスレッドを取得 | 読み取り専用 |
@@ -188,16 +188,17 @@ classDiagram
 
 ---
 
-### 宛先コメント
+### コメント
 
 ```mermaid
 classDiagram
   direction LR
-  宛先コメント o-- コメントブロック : ブロック配列
+  コメント o-- コメントブロック : ブロック配列
 
-  class 宛先コメント {
+  class コメント {
     +node_id: str
     +投稿者: str
+    +自分宛: bool
   }
   class コメントブロック {
     +送信者: str
@@ -205,7 +206,7 @@ classDiagram
     +本文: str
   }
 
-  click 宛先コメント href "#宛先コメント"
+  click コメント href "#コメント"
   click コメントブロック href "#コメントブロック"
 ```
 
@@ -401,8 +402,8 @@ classDiagram
 classDiagram
   direction LR
   コメント一括Resolve ..> Resolve実行 : スレッドを畳む
-  宛先コメント一覧 ..> コメント解析 : ブロックの抽出
-  宛先コメント一覧 ..> Resolved状態取得 : 未解決の絞り込み
+  コメント一覧 ..> コメント解析 : ブロックの抽出
+  コメント一覧 ..> Resolved状態取得 : 未解決の絞り込み
   レビュースレッド一括Resolve ..> Resolve実行 : スレッドを畳む
   インラインコメント投稿 ..> 定型ブロック組立 : 本文の組み立て
   レビュースレッド一覧 --> レビュースレッド : 返す
@@ -411,9 +412,9 @@ classDiagram
     <<function>>
     +コメント一括Resolve(node_id一覧) dict
   }
-  class 宛先コメント一覧 {
+  class コメント一覧 {
     <<function>>
-    +宛先コメント一覧(番号, PRか, 宛先, 解決済み含む) list~宛先コメント~
+    +コメント一覧(番号, PRか, 宛先, 解決済み含む) list~コメント~
   }
   class インラインコメント投稿 {
     <<function>>
@@ -443,7 +444,7 @@ classDiagram
   }
 
   click コメント一括Resolve href "#コメント一括resolve"
-  click 宛先コメント一覧 href "#宛先コメント一覧"
+  click コメント一覧 href "#コメント一覧"
   click インラインコメント投稿 href "#インラインコメント投稿"
   click レビュースレッド一覧 href "#レビュースレッド一覧"
   click レビュースレッド一括Resolve href "#レビュースレッド一括resolve"
@@ -710,7 +711,7 @@ worktree 系が[プロジェクト解決](#プロジェクト解決)を通るの
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_registered_tools` | 正常 | 全ツールの登録 | FastMCP サーバー生成 | なし | ツール名一覧がインターフェース定義（バックエンド）の索引と一致 | - |
-| `test_tool_annotations` | 正常 | ヒント宣言 | FastMCP サーバー生成 | なし | `get_issue_or_pr` / `list_addressed_comments` / `list_review_threads` / `search_issues_and_prs` が readOnlyHint・remove 系 / close / merge が destructiveHint | - |
+| `test_tool_annotations` | 正常 | ヒント宣言 | FastMCP サーバー生成 | なし | `get_issue_or_pr` / `list_comments` / `list_review_threads` / `search_issues_and_prs` が readOnlyHint・remove 系 / close / merge が destructiveHint | - |
 
 ---
 
@@ -978,7 +979,7 @@ CommentResult(node_id="IC_kwDO...", url="https://github.com/.../issues/35#issuec
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 返信先 | `comment_node_id` | `str` | ✅ | - | 追記対象コメントの GraphQL node_id | `get_issue_or_pr` / `list_addressed_comments` で取得 |
+| 返信先 | `comment_node_id` | `str` | ✅ | - | 追記対象コメントの GraphQL node_id | `get_issue_or_pr` / `list_comments` で取得 |
 | 送信者 | `sender` | `str` | ✅ | - | 送信者のエージェント名 | `@` は不要 |
 | 宛先 | `receiver` | `str \| None` | - | `None`（to 行なし = 現担当宛） | 宛先名 | - |
 | 本文構成 | `format` | [`CommentFormat`](#本文フォーマット) | ✅ | - | `type` で判別される追記ブロックの構成 | コメント投稿と共通 |
@@ -1090,11 +1091,11 @@ ResolveResult(resolved_count=2)
 
 ---
 
-### 宛先コメント一覧
-> 物理名: `list_addressed_comments`<br>
+### コメント一覧
+> 物理名: `list_comments`<br>
 > 種別: 関数
 
-自分宛のコメントだけをブロック配列付きで返す。
+対象の全コメントをブロック配列 + 自分宛判定付きで返す。
 
 #### 引数
 
@@ -1102,33 +1103,33 @@ ResolveResult(resolved_count=2)
 | --- | --- | --- | --- | --- | --- | --- |
 | 番号 | `number` | `int` | ✅ | - | 対象の Issue / PR 番号 | - |
 | PR フラグ | `is_pr` | `bool` | ✅ | - | PR なら `True` | - |
-| 宛先名 | `addressee` | `str` | ✅ | - | 最後のブロックの to または from がこの名前のコメントだけ返す | `@` は不要 |
+| 宛先名 | `addressee` | `str` | ✅ | - | 自分宛判定に使う名前。最後のブロックの to または from がこの名前なら自分宛 | `@` は不要 |
 | Resolved 込み | `include_resolved` | `bool` | - | `False` | Resolved 済みも含めるか | - |
 
 引数例:
 
 ```python
-list_addressed_comments(52, is_pr=True, addressee="architect")
+list_comments(52, is_pr=True, addressee="architect")
 ```
 
 #### 戻り値
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| [`list[AddressedComment]`](#宛先コメント) | 自分宛コメントの配列 | - |
+| [`list[Comment]`](#コメント) | コメントの配列（投稿順） | 自分宛かは `is_addressed` で判別する |
 
 戻り値例:
 
 ```python
-[AddressedComment(node_id="IC_kwDO...", blocks=[CommentBlock(sender="tester", receiver="architect", body="テスト作成が完了しました。")], author="shuhei1101", url="...", is_resolved=False)]
+[Comment(node_id="IC_kwDO...", blocks=[CommentBlock(sender="tester", receiver="architect", body="テスト作成が完了しました。")], author="shuhei1101", url="...", is_resolved=False, is_addressed=True)]
 ```
 
 #### 処理
 
 1. コメント一覧と各コメントの `isMinimized` を取得する（REST + GraphQL）
 2. 各コメント本文をブロック配列にパースする（[コメント解析](#コメント解析)）
-3. 最後のブロックの to が `addressee` のもの・to なしのユーザー投稿・from が `addressee` のもの（自身の投稿）だけに絞る
-4. `include_resolved` が `False` なら Resolved 済みを除外し、`AddressedComment` の配列で返す
+3. 最後のブロックの to が `addressee` のもの・to なしのユーザー投稿・from が `addressee` のもの（自身の投稿）を自分宛と判定する
+4. `include_resolved` が `False` なら Resolved 済みを除外し、判定結果を `is_addressed` に入れた `Comment` の配列で返す
 
 #### 例外
 
@@ -1141,15 +1142,15 @@ list_addressed_comments(52, is_pr=True, addressee="architect")
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_list_addressed_comments` | 正常 | 最終ブロックの宛先で絞り込み | 宛先違い・宛先なしのコメント混在 | githubkit | 自分宛 + to なしユーザーコメントのみ blocks 付きで返す | - |
-| `test_list_addressed_comments_when_own_comment` | 正常 | 自身投稿の包含 | 最後のブロックの from が `addressee`（to はユーザー）のコメント | githubkit | 自身の投稿が返る | 完了処理の一括 Resolve 対象 |
-| `test_list_addressed_comments_when_include_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` で Resolved 済みが混在 | githubkit | Resolved 済みも `is_resolved=True` で返る | 省略時は除外される |
+| `test_list_comments` | 正常 | 最終ブロックの宛先で自分宛判定 | 宛先違い・宛先なしのコメント混在 | githubkit | 全件が blocks 付きで返り、自分宛 + to なしユーザーコメントだけ `is_addressed=True` になる | 宛先違いは `is_addressed=False` で返る |
+| `test_list_comments_when_own_comment` | 正常 | 自身投稿の自分宛判定 | 最後のブロックの from が `addressee`（to はユーザー）のコメント | githubkit | 自身の投稿が `is_addressed=True` で返る | 完了処理の一括 Resolve 対象 |
+| `test_list_comments_when_include_resolved` | 正常 | Resolved 込みの取得 | `include_resolved=True` で Resolved 済みが混在 | githubkit | Resolved 済みも `is_resolved=True` で返る | 省略時は除外される |
 
 #### 疎通テスト
 
 | テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
 | --- | --- | --- | --- | --- |
-| `test_ext_list_addressed_comments` | GitHub | 宛先付きコメントの抽出 | to / from 行の宛先判定 / `isMinimized` の取得 | 副作用: なし（事前投稿は fixture） |
+| `test_ext_list_comments` | GitHub | コメントの取得と宛先判定 | to / from 行の宛先判定 / `isMinimized` の取得 | 副作用: なし（事前投稿は fixture） |
 
 ---
 
@@ -3722,12 +3723,12 @@ ask_questions の質問 1 件（Pydantic `BaseModel`）。
 
 なし
 
-## 宛先コメント
-> 物理名: `AddressedComment`<br>
+## コメント
+> 物理名: `Comment`<br>
 > 種別: データモデル<br>
 > コンテナ: `mcp/models.py`
 
-list_addressed_comments が返す自分宛コメント 1 件（Pydantic `BaseModel`）。
+list_comments が返すコメント 1 件（Pydantic `BaseModel`）。
 会話の往復は `CommentBlock` の配列で持つ。
 
 ### プロパティ
@@ -3739,6 +3740,7 @@ list_addressed_comments が返す自分宛コメント 1 件（Pydantic `BaseMod
 | 投稿者 | `author` | `str \| None` | 公開 | `None` | 投稿者の GitHub ログイン名 | `"shuhei1101"` | 欠落時 `None` |
 | URL | `url` | `str` | 公開 | - | コメントの html URL | - | - |
 | Resolved 済み | `is_resolved` | `bool` | 公開 | `False` | Resolved 済みか | `false` | `include_resolved=True` のときのみ `true` があり得る |
+| 自分宛 | `is_addressed` | `bool` | 公開 | `False` | `addressee` 宛か | `true` | 応答・一括 Resolve の対象判定に使う |
 
 ### メソッド
 

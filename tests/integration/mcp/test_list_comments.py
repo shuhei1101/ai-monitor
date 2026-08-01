@@ -1,4 +1,4 @@
-"""「宛先コメント一覧」の結合テスト。"""
+"""「コメント一覧」の結合テスト。"""
 from __future__ import annotations
 
 from types import SimpleNamespace as NS
@@ -32,12 +32,14 @@ def test_normal(gh, resp, api):
         {"node": {"isMinimized": False}},
     ]
     # 実行
-    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
+    res = api.list_comments(52, is_pr=True, addressee="architect")
     # 検証
-    assert [c.node_id for c in res] == ["IC_1", "IC_4", "IC_5"]
+    # Resolved 済み（IC_2）だけが落ち、宛先違い（IC_3）も is_addressed=False で返る
+    assert [c.node_id for c in res] == ["IC_1", "IC_3", "IC_4", "IC_5"]
+    assert [c.is_addressed for c in res] == [True, False, True, True]
     assert res[0].blocks[-1].sender == "tester"
-    assert res[1].blocks[-1].sender is None
-    assert res[2].blocks[-1].sender == "architect"
+    assert res[2].blocks[-1].sender is None
+    assert res[3].blocks[-1].sender == "architect"
 
 
 def test_normal_when_user_appended(gh, resp, api):
@@ -54,7 +56,7 @@ def test_normal_when_user_appended(gh, resp, api):
     )
     gh.graphql.side_effect = [{"node": {"isMinimized": False}}, {"node": {"isMinimized": False}}]
     # 実行
-    res = api.list_addressed_comments(52, is_pr=True, addressee="architect")
+    res = api.list_comments(52, is_pr=True, addressee="architect")
     # 検証
     assert [c.node_id for c in res] == ["IC_1", "IC_2"]
     # 末尾の区切り線の有無で件数が変わらず、空のブロックも含まれない
@@ -64,6 +66,7 @@ def test_normal_when_user_appended(gh, resp, api):
         # 最終ブロックは from なし（ユーザー投稿）= 現担当宛と判定される
         assert comment.blocks[-1].sender is None
         assert comment.blocks[-1].receiver is None
+        assert comment.is_addressed is True
 
 
 def test_error_when_api_error(gh, request_failed, api):
@@ -72,4 +75,4 @@ def test_error_when_api_error(gh, request_failed, api):
     gh.rest.issues.list_comments.side_effect = request_failed()
     # 実行・検証
     with pytest.raises(RequestFailed):
-        api.list_addressed_comments(52, is_pr=True, addressee="architect")
+        api.list_comments(52, is_pr=True, addressee="architect")

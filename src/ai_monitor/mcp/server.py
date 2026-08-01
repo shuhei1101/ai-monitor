@@ -24,8 +24,8 @@ from ai_monitor.features.notify.types import SendResult
 from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.integrations.github.labels import remove_label
 from ai_monitor.mcp.models import (
-    AddressedComment,
     AssigneesResult,
+    Comment,
     CommentBlock,
     CommentFormat,
     CommentResult,
@@ -603,7 +603,7 @@ def resolve_comments(node_ids: list[str]) -> ResolveResult:
 
 
 @_log_tool_call
-def list_addressed_comments(
+def list_comments(
     number: int,
     is_pr: bool,
     addressee: str,
@@ -611,36 +611,35 @@ def list_addressed_comments(
     *,
     ctx: Context,
     settings: Settings,
-) -> list[AddressedComment]:
-    """自分宛のコメントだけをブロック配列付きで返す。"""
+) -> list[Comment]:
+    """全コメントをブロック配列 + 自分宛判定付きで返す。"""
     client = _get_client()
     owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
     # コメント一覧と各コメントの isMinimized を取得する
     raw_comments = client.rest.issues.list_comments(owner=owner, repo=repo, issue_number=number).parsed_data
-    results: list[AddressedComment] = []
+    results: list[Comment] = []
     for c in raw_comments:
         minimized = _is_minimized(c.node_id)
+        # include_resolved が False なら Resolved 済みを除外する
+        if not include_resolved and minimized:
+            continue
         # 各コメント本文をブロック配列にパースする
         blocks = _parse_comment_blocks(c.body)
         last = blocks[-1]
-        # 最後のブロックの to が addressee のもの・to なしのユーザー投稿・from が addressee のもの（自身の投稿）だけに絞る
+        # 最後のブロックの to が addressee のもの・to なしのユーザー投稿・from が addressee のもの（自身の投稿）を自分宛と判定する
         is_addressed = (
             last.receiver == addressee
             or (last.receiver is None and last.sender is None)
             or last.sender == addressee
         )
-        if not is_addressed:
-            continue
-        # include_resolved が False なら Resolved 済みを除外する
-        if not include_resolved and minimized:
-            continue
         results.append(
-            AddressedComment(
+            Comment(
                 node_id=c.node_id,
                 blocks=blocks,
                 author=c.user.login if getattr(c, "user", None) else None,
                 url=c.html_url,
                 is_resolved=minimized,
+                is_addressed=is_addressed,
             )
         )
     return results
@@ -1327,7 +1326,7 @@ def build_mcp_app(
         (ask_questions, "質問投稿", None),
         (reply_comment, "コメント返信", None),
         (resolve_comments, "コメント一括Resolve", None),
-        (list_addressed_comments, "宛先コメント一覧", _READ_ONLY),
+        (list_comments, "コメント一覧", _READ_ONLY),
         (search_issues_and_prs, "Issue・PR検索", _READ_ONLY),
         (_log_tool_call(read_wiki_pages), "Wikiページ取得", _READ_ONLY),
         (create_review_comment, "インラインコメント投稿", None),

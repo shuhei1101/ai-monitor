@@ -75,14 +75,16 @@ class CommentBlock(BaseModel):
     body: str
 
 
-class AddressedComment(BaseModel):
-    """list_addressed_comments が返す自分宛コメント 1 件。"""
+class Comment(BaseModel):
+    """list_comments が返すコメント 1 件。"""
 
     node_id: str
     blocks: list[CommentBlock]
     author: str | None = None
     url: str
     is_resolved: bool = False
+    # 最終ブロックの宛先が addressee か（応答・一括 Resolve の対象判定に使う）
+    is_addressed: bool = False
 
 
 class UserRef(BaseModel):

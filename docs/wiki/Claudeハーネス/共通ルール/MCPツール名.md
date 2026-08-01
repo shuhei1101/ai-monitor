@@ -19,7 +19,7 @@ mcp__ai-monitor-tools__{ツール名}
 初回使用前に `ToolSearch` で完全名を渡してスキーマをロードする（複数のツールをカンマ区切りで一括ロード可）:
 
 ```
-ToolSearch(query: "select:mcp__ai-monitor-tools__get_issue_or_pr,mcp__ai-monitor-tools__list_addressed_comments,mcp__ai-monitor-tools__resolve_comments,...")
+ToolSearch(query: "select:mcp__ai-monitor-tools__get_issue_or_pr,mcp__ai-monitor-tools__list_comments,mcp__ai-monitor-tools__resolve_comments,...")
 ```
 
 キーワード検索（`query: "get_issue_or_pr"`）ではヒットしない。

@@ -17,7 +17,7 @@ MCP ツール: `resolve_comments`
 
 | パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `node_ids` | list[str] | ✅ | - | Resolve 対象コメントの node_id 配列 | 1 件以上 | `list_addressed_comments` で取得 |
+| `node_ids` | list[str] | ✅ | - | Resolve 対象コメントの node_id 配列 | 1 件以上 | `list_comments` で取得 |
 
 リクエスト例:
 

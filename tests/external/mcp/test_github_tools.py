@@ -115,20 +115,21 @@ def test_ext_resolve_comments(issue_factory, api):
     assert server._is_minimized(posted.node_id) is True
 
 
-def test_ext_list_addressed_comments(issue_factory, gh_live, repo_ctx, api):
+def test_ext_list_comments(issue_factory, gh_live, repo_ctx, api):
     """to 行の宛先判定と isMinimized の取得を確認する（正常系）。"""
     # 準備
     owner, repo = repo_ctx
     issue = issue_factory()
     addressed = api.comment(issue.number, is_pr=False, sender="tester", receiver="architect", format=PlainFormat(body="報告です。"))
-    api.comment(issue.number, is_pr=False, sender="architect", receiver="tester", format=PlainFormat(body="宛先違い。"))
+    others = api.comment(issue.number, is_pr=False, sender="tester", receiver="implementer", format=PlainFormat(body="宛先違い。"))
     plain = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=issue.number, body="ユーザーの素のコメント。"
     ).parsed_data
     # 実行
-    res = api.list_addressed_comments(issue.number, is_pr=False, addressee="architect")
+    res = api.list_comments(issue.number, is_pr=False, addressee="architect")
     # 検証
-    assert [c.node_id for c in res] == [addressed.node_id, plain.node_id]
+    assert [c.node_id for c in res] == [addressed.node_id, others.node_id, plain.node_id]
+    assert [c.is_addressed for c in res] == [True, False, True]
     assert res[0].blocks[-1].receiver == "architect"
     assert res[0].is_resolved is False
 
