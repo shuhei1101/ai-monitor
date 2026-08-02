@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # URLドキュメント注入
@@ -7,7 +7,6 @@ template_version: 1.0.0
 CLI: `python plugins/ai-monitor/inject/read_urls.py <url>...`
 
 指定 URL の本文を md コードブロックで包んで標準出力に展開する。
-エージェントが実行中に読む経路は MCP ツール（[Wikiページ取得](./Wikiページ取得.py.md)）が担う。
 
 - 対応テストファイル: `tests/integration/inject/test_read_urls.py`
 

@@ -1,5 +1,5 @@
 ---
-template_version: 1.1.0
+template_version: 1.4.0
 ---
 
 # モジュール構成: モニター / tmux連携

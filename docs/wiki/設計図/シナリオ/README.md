@@ -1,14 +1,11 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # シナリオ
 
 単一ユースケース / 複合ユースケース の 2 種類を扱う。
 1 ファイル = 1 テストファイル（pytest による E2E 実行の 1 ケース）に対応する。
-
-**評価方針:** 画面がないため Playwright ではなく **pytest + gh CLI + sandbox リポ** で「GitHub API で観測可能なアーティファクト状態」を assert する。
-テスト対象のシナリオノードは全て「Issue のラベル / assignee / comment」「PR の state / base」「Sub-issue の存在」等の外部観測可能な状態変化として書く。
 
 ## 目次
 

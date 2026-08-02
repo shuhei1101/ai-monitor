@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # Issue再オープン
@@ -7,7 +7,6 @@ template_version: 1.0.0
 MCP ツール: `reopen_issue`
 
 クローズ済みの Issue を再オープンする。
-統合テスト fail 時のバグ差し戻し（conductor が該当 subsystem Issue を reopen + バグ内容コメント + `確認:subsystem-conductor` 付与）はこのツールを使う。
 
 - 対応テストファイル: `tests/integration/mcp/test_reopen_issue.py`
 

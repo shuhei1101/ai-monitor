@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # Issue・PR情報取得
@@ -7,8 +7,6 @@ template_version: 1.0.0
 MCP ツール: `get_issue_or_pr`
 
 Issue / PR の情報を 1 コマンドで取得する。
-各 bool フラグで欲しいフィールドだけに絞れる（デフォルト全 `True`）。
-エージェントの毎ターン再同期（最新の Issue / PR 状態の取得）はこのツールを使う。
 
 - 対応テストファイル: `tests/integration/mcp/test_get_issue_or_pr.py`
 

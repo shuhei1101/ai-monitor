@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # assignee設定
@@ -7,7 +7,6 @@ template_version: 1.0.0
 MCP ツール: `set_assignee`
 
 Issue / PR に現在の認証ユーザーを assignee として設定する（ワークフローの「ボールをユーザーに渡す」操作）。
-待機開始（`議論中` 付与とセット）の `assignee=ユーザー` 設定はこのツールを使う。
 
 - 対応テストファイル: `tests/integration/mcp/test_set_assignee.py`
 

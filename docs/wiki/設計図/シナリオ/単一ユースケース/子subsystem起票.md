@@ -1,12 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # 子subsystem起票
 
 story-conductor（復帰呼び出し）が single-scenario-writer の完了報告を確認し、単一シナリオ確定を受けて次フェーズ（子 subsystem 起票）に進むと判断する単一ユースケース。
-UC の実装に必要な subsystem（FE / BE / 外部連携 等）を洗い出して依存順（例: BE → FE）を決め、**依存のない先頭グループだけを起票する直列運用**。
-後続の subsystem は先行 subsystem のインターフェース確定報告（subsystem-conductor が中継）を受けて逐次起票する（インターフェースの手戻り防止と後続の早期並列化を両立する）。
 
 対応エージェント: `story-conductor`（single-scenario-writer / subsystem-conductor の完了報告コメントで復帰）
 

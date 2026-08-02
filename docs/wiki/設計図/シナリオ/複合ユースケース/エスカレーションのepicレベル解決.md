@@ -1,11 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # エスカレーションのepicレベル解決
 
 subsystem・story のどちらでも解けない論点が epic-conductor まで上がり、epic 要件の変更で解決すると決まって、complex-scenario-writer の修正を経て story → subsystem と決定が降り、設計が再開するまでの複合ユースケース。
-エスカレーションが終端まで上がって折り返し、通常の複合シナリオ設計フローに乗ることを確認する。
 
 E2E テストの位置付け: 指揮系統の全段を往復する最長経路で、要件変更が本文・複合シナリオ・下位の設計へ一貫して反映されることの確認。
 

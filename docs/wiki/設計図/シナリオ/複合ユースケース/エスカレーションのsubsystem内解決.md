@@ -1,11 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # エスカレーションのsubsystem内解決
 
 architect が subsystem レイヤーで解けない論点を上げ、subsystem-conductor が自レイヤーの解決案をユーザー確認のうえ確定し、architect が設計を再開するまでの複合ユースケース。
-エスカレーションが 1 段だけで折り返し、通常の SS設計 フローに戻ることを確認する。
 
 E2E テストの位置付け: エスカレーションが上位に上がりきらずに解決するケースで、確認ラベルの往復が dead lock せず設計工程に復帰することの確認。
 

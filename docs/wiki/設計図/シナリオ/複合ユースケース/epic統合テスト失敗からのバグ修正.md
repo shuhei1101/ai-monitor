@@ -1,13 +1,11 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # epic統合テスト失敗からのバグ修正
 
 epic レベル（複合UC E2E）の統合テスト実行時に fail が発生した場合の複合ユースケース。
 complex-scenario-writer のトリアージを経て epic-conductor が該当 story へ差し戻し、story-conductor が該当 subsystem へ中継してバグ修正フローで修正 → 完了報告が story → epic へ遡上 → 再テストで pass → epic マージまでを確認する。
-指揮系統は 1 段ずつ辿る（epic-conductor は story までしか差し戻さない）。
-修正用 PR の base は統合テストを実行している epic ブランチ（story ブランチはマージ済みで削除されているため）。
 
 - 対応テストファイル: `tests/e2e/複合ユースケース/test_epic統合テスト失敗からのバグ修正.py`
 

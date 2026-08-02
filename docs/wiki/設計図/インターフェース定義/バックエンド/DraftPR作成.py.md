@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # DraftPR作成
@@ -7,10 +7,6 @@ template_version: 1.0.0
 MCP ツール: `create_draft_pr`
 
 Draft PR を作成する（Stacked PR の base 明示に対応）。
-conductor の完了処理での Draft PR 作成（`base=master` / `base=親ブランチ`）はこのツールを使う。
-
-PR 作成 API はラベルを受け取らないため、`labels` を渡した場合は作成後に Issue として付与する。
-レイヤーラベル（`layer:*`）は作成時に渡す運用で、紐づく Issue と同じレイヤーが PR 側にも載る。
 
 - 対応テストファイル: `tests/integration/mcp/test_create_draft_pr.py`
 

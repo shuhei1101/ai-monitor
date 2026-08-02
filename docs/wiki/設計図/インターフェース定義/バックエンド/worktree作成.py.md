@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # worktree作成
@@ -7,10 +7,6 @@ template_version: 1.0.0
 MCP ツール: `worktree_create`
 
 フルブランチ名と分岐元を受け取り、ブランチと worktree（`.claude/worktrees/` 配下）を作成する。
-conductor の完了処理でのブランチ + worktree 作成はこのツールを使う（命名は `規約/ブランチ戦略.md`）。
-
-操作対象のリポジトリは、リクエストヘッダから解決した監視対象プロジェクトの作業ディレクトリ。
-MCP はモニターと同一プロセスに常駐するため、プロセスの作業ディレクトリ（ai-monitor のクローン）とは一致しない。
 
 - 対応テストファイル: `tests/integration/mcp/test_worktree_create.py`
 

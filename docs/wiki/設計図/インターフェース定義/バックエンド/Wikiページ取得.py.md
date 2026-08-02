@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # Wikiページ取得
@@ -7,10 +7,6 @@ template_version: 1.0.0
 MCP ツール: `read_wiki_pages`
 
 エージェントが自ターンの実行中に、事前注入されていない Wiki ページを読むための取得口。
-注入済みの Wiki 索引に載っている場所をそのまま渡す。
-
-場所は raw URL とローカル絶対パスの両方を受け付ける。
-索引は設定の Wiki ベースを起点に作られ、ベースがローカルなら索引の各行もローカルパスになるため、読む側も同じ形を受けられる必要がある。
 
 - 対応テストファイル: `tests/integration/mcp/test_read_wiki_pages.py`
 

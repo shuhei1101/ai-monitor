@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # PRマージ
@@ -7,7 +7,6 @@ template_version: 1.0.0
 MCP ツール: `merge_pr`
 
 PR をマージする（デフォルト squash + ブランチ削除）。
-conductor の昇格マージ（subsystem → story → epic → master）はこのツールを使う（手順は `規約/マージ手順.md`）。
 
 - 対応テストファイル: `tests/integration/mcp/test_merge_pr.py`
 

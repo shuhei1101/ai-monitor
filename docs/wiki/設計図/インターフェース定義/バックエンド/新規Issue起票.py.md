@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # 新規Issue起票
@@ -7,12 +7,6 @@ template_version: 1.0.0
 MCP ツール: `create_intake_issue`
 
 親を持たない intake Issue を作成し、`layer:intake` と `確認:intake-issue-triager` を付けてワークフローの入口へ流す。
-
-応答ループ中にユーザーから「この内容で新規 Issue を立てておいて」と依頼されたときに使う。
-依頼はどのエージェントの会話でも起こりうるため、全エージェントが同じ操作で起票できるようにする。
-
-[子Issue作成](./子Issue作成.py.md)との違いは親の有無。
-フロー上の分解で生まれる子（story / subsystem 等）は親へ Sub-issue リンクするが、会話から派生した要望は既存ツリーのどこにも属さないため、intake として独立に起票して intake-issue-triager にレイヤー判定からやり直させる。
 
 - 対応テストファイル: `tests/integration/mcp/test_create_intake_issue.py`
 

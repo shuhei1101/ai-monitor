@@ -1,5 +1,5 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # story要件確定

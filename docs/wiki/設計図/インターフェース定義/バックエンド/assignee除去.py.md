@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # assignee除去
@@ -7,7 +7,6 @@ template_version: 1.0.0
 MCP ツール: `remove_assignee`
 
 Issue / PR から現在の認証ユーザーの assignee を除去する。
-エージェント起動条件が「assignee にユーザーが未設定」のため、通常はユーザー自身が外すが、リセット等の巻き戻しでエージェントが外す場合はこのツールを使う。
 
 - 対応テストファイル: `tests/integration/mcp/test_remove_assignee.py`
 

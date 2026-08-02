@@ -1,16 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # SS設計
 
 architect が設計 Wiki（インターフェース → ER図 → 画面構成 → インターフェース定義（バックエンド / フロントエンド）（フロー）→ モジュール構成）をタスク一覧の上流順に 1 ページずつ作成し、応答ループでユーザーと確定させる単一ユースケース。
-BE / FE の設計 Wiki とも architect が担当する（画面ありの subsystem は epic の全体UI設計で確定した画面方向性を前提にインターフェース定義（フロントエンド）を書く）。
-インターフェースのページを確定した時点で、親 subsystem Issue に subsystem-conductor 宛のインターフェース確定報告を投稿する（後続 subsystem を起票するかの判断は story-conductor が行う）。
-報告を subsystem PR ではなく親 Issue の面で行うため、subsystem PR の手番は architect が持ったままで、待機せずに残りの設計を続ける。
-ライブラリ選定で必要なら PoC（カテゴリ A〜E）も本 UC 内で実施する。
-全 Wiki 確定後は内部パイプラインの指揮役として tester にタスクを割り当てる。
-配下 worker（tester / implementer）から設計の差し戻しを受けた場合も本 UC で設計 Wiki を修正して差し戻し元に返す。
 
 対応エージェント: `architect`
 

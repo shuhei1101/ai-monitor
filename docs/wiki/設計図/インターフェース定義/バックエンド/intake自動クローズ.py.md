@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # intake自動クローズ
@@ -7,7 +7,6 @@ template_version: 1.0.0
 トリガー: polling 周期（open 対象一覧の取得結果で判定）
 
 intake Issue の全 Sub-issue クローズを検知し、intake Issue を自動クローズする。
-判定は一覧応答に同梱される `sub_issues_summary` のみで行う（本文パース・追加 API なし）。
 
 - 対応テストファイル: `tests/integration/monitor/test_intake自動クローズ.py`
 
@@ -16,6 +15,7 @@ intake Issue の全 Sub-issue クローズを検知し、intake Issue を自動�
 | 項目 | 制約 | 補足 |
 | --- | --- | --- |
 | 対象 | `layer:intake` ラベル付きの open Issue | Sub-issue なし（`total == 0`）は対象外 |
+| 判定材料 | 一覧応答に同梱される `sub_issues_summary` のみ | 本文パース・追加の API 呼び出しはしない |
 
 ## フロー一覧
 

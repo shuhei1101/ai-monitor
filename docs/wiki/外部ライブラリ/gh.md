@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 1.2.0
 ---
 
 # gh（GitHub CLI）

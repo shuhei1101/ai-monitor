@@ -1,12 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # 子epic起票
 
 system-conductor が system Issue の `## エピック一覧` から epic Issue を一括起票する単一ユースケース。
-新規プロジェクトの立ち上げでも既存プロジェクトの移行でも通る。
-着手は直列にするため、確認ラベルは着手順が先頭の epic にだけ付ける。
 
 対応エージェント: `system-conductor`（復帰）
 

@@ -1,12 +1,11 @@
 ---
-template_version: 1.0.0
+template_version: 1.2.0
 ---
 
 # FastAPI
 
 Python の Web API フレームワーク。
-モニター本体のアプリ基盤として、MCP からの localhost HTTP の受信とポーリングループの駆動（lifespan）を担う。
-起動サーバーには uvicorn を使う。
+型注釈からリクエスト検証と OpenAPI を生成し、lifespan でアプリの起動・終了処理を扱う。
 
 ## 現在のバージョン情報
 

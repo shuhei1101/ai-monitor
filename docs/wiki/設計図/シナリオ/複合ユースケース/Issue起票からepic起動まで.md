@@ -1,5 +1,5 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # Issue起票からepic起動まで

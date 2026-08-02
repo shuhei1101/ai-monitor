@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # レビュースレッド一括Resolve
@@ -7,7 +7,6 @@ template_version: 1.0.0
 MCP ツール: `resolve_review_threads`
 
 レビュースレッド（インライン指摘のスレッド）を `resolveReviewThread` mutation で一括解決する。
-会話欄コメントの Resolve（コメント一括Resolve = `minimizeComment`）とは別系統で、指摘対応の修正確定後にレビュー担当（architect / scenario-writer）が呼ぶ。
 
 - 対応テストファイル: `tests/integration/mcp/test_resolve_review_threads.py`
 

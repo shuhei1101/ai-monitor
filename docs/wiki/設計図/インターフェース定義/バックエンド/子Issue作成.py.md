@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # 子Issue作成
@@ -7,7 +7,6 @@ template_version: 1.0.0
 MCP ツール: `create_child_issue`
 
 子 Issue を作成し、GitHub の Sub-issue 機能で親と紐づける。
-intake-issue-triager のサブ Issue 起票・conductor の子 story / subsystem 起票はこのツールを使う（子側から `parent` メタデータで親を辿れる）。
 
 - 対応テストファイル: `tests/integration/mcp/test_create_child_issue.py`
 

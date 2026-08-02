@@ -1,19 +1,12 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # worktree削除
 
 MCP ツール: `worktree_remove`
 
-worktree とローカルブランチを両方削除する（ブランチは強制削除 = `git branch -D` 相当。squash マージ運用では base の履歴に元 commit が残らず通常削除は拒否されるため、恒久記録は closed / merged PR の diff が担う）。
-マージ後・PoC close 後・リセットの後片付けはこのツールを使う。
-
-呼び出し側は「このブランチの痕跡を消す」意図で呼ぶので、残っているものだけを消す。
-worktree を作らずに終わったブランチや、既に片付いたブランチに対しても同じ呼び出しで成立させる。
-
-操作対象のリポジトリは、リクエストヘッダから解決した監視対象プロジェクトの作業ディレクトリ。
-MCP はモニターと同一プロセスに常駐するため、プロセスの作業ディレクトリ（ai-monitor のクローン）とは一致しない。
+worktree とローカルブランチを両方削除する（ブランチは強制削除）。
 
 - 対応テストファイル: `tests/integration/mcp/test_worktree_remove.py`
 

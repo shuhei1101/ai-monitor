@@ -1,11 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # subsystem要件確定
 
 subsystem-conductor が subsystem Issue の本文整形 + 現状調査（関連 Issue/PR・関連ドキュメント）+ システム要件（機能 / 非機能 / スコープ外）確定を行い、完了時に subsystem Draft PR を作成して architect に設計を引き渡す単一ユースケース。
-要件の判断材料は親 story と設計 Wiki に閉じる（実装コードの調査は architect の SS設計 が担う）。
 
 対応エージェント: `subsystem-conductor`
 

@@ -1,11 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # 子story起票
 
 epic-conductor（復帰呼び出し）が complex-scenario-writer の完了報告を確認し、複合シナリオ確定を受けて次フェーズ（子 story 起票）に進むと判断する単一ユースケース。
-確定済みユースケース一覧の各 UC に対応する子 story Issue を起票し、対応 story 列にリンクを埋める。
 
 対応エージェント: `epic-conductor`（complex-scenario-writer の完了報告コメントで復帰）
 

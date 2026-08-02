@@ -1,13 +1,11 @@
 ---
-template_version: 1.0.0
+template_version: 1.2.0
 ---
 
 # OpenTelemetry Python SDK
 
 Python アプリから telemetry（Traces / Metrics / Logs）を計装して OTel Collector に送信する SDK 群。
-
 「言語共通の API 仕様」「実装」「送信 Exporter」「Resource 属性」の 4 パーツを組み合わせて使う。
-本ページでは Python 向けに提供される `opentelemetry-*` パッケージを 1 ページに集約する。
 
 ## 現在のバージョン情報
 

@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # コメント一括Resolve
@@ -7,7 +7,6 @@ template_version: 1.0.0
 MCP ツール: `resolve_comments`
 
 1 件以上のコメントを一括で Resolve（`minimizeComment` mutation、`classifier=RESOLVED`）する。
-完了処理時の「自分宛コメントの一括 Resolve」はこのツールを使う。
 
 - 対応テストファイル: `tests/integration/mcp/test_resolve_comments.py`
 

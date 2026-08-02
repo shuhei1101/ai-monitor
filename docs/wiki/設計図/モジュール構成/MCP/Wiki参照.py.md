@@ -1,19 +1,11 @@
 ---
-template_version: 1.1.0
+template_version: 1.4.0
 ---
 
 # モジュール構成: MCP / Wiki参照
 
 `Wiki参照` ドメイン（MCP 側）に属する構成要素詳細。
 エージェントが自ターンの実行中に Wiki ページを読むためのツールを扱う。
-
-本ドメインのツールも [GitHub操作](./GitHub操作.py.md) と同じ [`_log_tool_call`](./GitHub操作.py.md#ツール呼び出しログ) でラップし、ログ出力を個々のツールに書かない。
-デコレータは [アプリ組み立て](./GitHub操作.py.md#アプリ組み立て) の登録時に適用する（`mcp/wiki.py` から `mcp/server.py` を import しないため）。
-
-場所の正規化・取得・front matter 除去は [URLドキュメント注入](../注入/URLドキュメント.py.md) の関数をそのまま使う。
-取得手段は場所の形から選ぶため、raw URL とローカル絶対パスの両方を受けられる（[ソース読み取り選択](../注入/URLドキュメント.py.md#ソース読み取り選択)）。
-実体をプラグイン配下に置くのは、注入 CLI がプラグインのインストール先から起動されて `src/` を参照できないため。
-モニターは ai-monitor のクローンから動くので、リポジトリルートからの相対パスで `plugins/ai-monitor/inject` を `sys.path` に追加して読み込む（`constants.env` の参照と同じ向き）。
 
 ## 一覧
 

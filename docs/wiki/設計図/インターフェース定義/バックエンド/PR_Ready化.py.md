@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # PR_Ready化
@@ -7,10 +7,6 @@ template_version: 1.0.0
 MCP ツール: `mark_pr_ready`
 
 Draft PR を Ready 化する。
-implementer の実装完了時（Green 化後）の Draft 解除はこのツールを使う。
-
-Ready 済みの PR を渡しても成功する（何もせず返す）。
-マージ直前に呼ぶ側が Draft 状態を知らなくても済むようにするため。
 
 - 対応テストファイル: `tests/integration/mcp/test_mark_pr_ready.py`
 

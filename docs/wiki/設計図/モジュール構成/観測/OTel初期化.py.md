@@ -1,19 +1,11 @@
 ---
-template_version: 1.1.0
+template_version: 1.4.0
 ---
 
 # モジュール構成: 観測 / OTel初期化
 
 `OTel初期化` ドメイン（観測側）に属する構成要素詳細。
-常駐プロセス（[モニター](../モニター/エージェント管理.py.md#エージェント組み立て)）の composition root から起動時に 1 回だけ呼ばれ、[OpenTelemetry Python SDK](../../../外部ライブラリ/opentelemetry.md) の Log / Trace / Metric 各 Provider を OTel Collector（OTLP gRPC 4317）向けに配線する。
-[MCP サーバー](../MCP/GitHub操作.py.md)はモニターと同一プロセスに同居するため、この 1 回の配線が両方をまかなう。
-
-Python 標準 `logging` に [`LoggingHandler`](../../../外部ライブラリ/opentelemetry.md#logginghandler) を addHandler するので、既存の `logger.info(...)` などがそのまま Collector 経由で Loki に流れる。
-Trace / Metric は SDK 側 pipeline のみ用意し、Collector 側の debug exporter で破棄する（Compose 構成は observability リポジトリが持つ）。
-将来 Tempo / Prometheus を追加する際は Collector の exporter を差し替えるだけで済み、本モジュール（および呼び出し側の `tracer.start_as_current_span(...)` / `meter.create_counter(...)`）は変更不要にする。
-
-短命な inject / hook スクリプト（`plugins/ai-monitor/inject/*.py` / `plugins/ai-monitor/hooks/**/*.py`）は本モジュールを呼ばない。
-`BatchLogRecordProcessor` の起動コスト・フラッシュ待ちが起動 1 回あたりの実行時間に見合わないため、標準出力に流したまま親プロセス（Claude Code / モニター）側の telemetry として拾う。
+常駐プロセスの composition root から起動時に 1 回だけ呼ばれ、[OpenTelemetry Python SDK](../../../外部ライブラリ/opentelemetry.md) の Log / Trace / Metric 各 Provider を OTel Collector（OTLP gRPC 4317）向けに配線する。
 
 ## 一覧
 

@@ -1,11 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # PoC結果確認
 
 epic-conductor（復帰呼び出し）が epic-poc-runner の検証結果を確認し、問題なければ epic Draft PR を作成して次フェーズに引き継ぐ単一ユースケース。
-PoC を指示した本人が結果を確認してから次へ進める（epic-poc-runner が勝手に次フェーズへ飛ばさない）。
 
 対応エージェント: `epic-conductor`（epic-poc-runner の完了報告コメントで復帰）
 

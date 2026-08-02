@@ -1,11 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # エスカレーションのstoryレベル解決
 
 subsystem レイヤーで解けない論点が story-conductor まで上がり、単一 UC シナリオの見直しで解決すると決まって、single-scenario-writer の修正を経て subsystem 側の設計が再開するまでの複合ユースケース。
-エスカレーションが 2 段上がって折り返し、通常の単一シナリオ設計フローに乗ることを確認する。
 
 E2E テストの位置付け: 決定が設計成果物の修正を伴う場合に、scenario-writer のシナリオ修正を経てから下位へ降りることの確認。
 

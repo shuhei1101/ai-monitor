@@ -1,13 +1,10 @@
 ---
-template_version: 2.0.0
+template_version: 2.1.0
 ---
 
 # ライブラリPoC検証
 
-library-poc-runner が担当候補 1 つの PoC を検証する単一ユースケース。
-発注元の architect が作成した PoC PR 上で、最小 PoC コードの実装 → 検証実行 → 結果記録を行い、発注元へ完了報告する。
-監視・会話面は担当の PoC PR のみで、発注元からの検証指示にのみ応答する（ユーザーの質問・追加検証依頼は発注元の architect が subsystem PR 側で受ける）。
-完了報告の宛先は発注元 = 検証指示コメントの送信者。
+library-poc-runner が担当候補 1 つの PoC を、発注元の architect が作成した PoC PR 上で検証する単一ユースケース。
 
 対応エージェント: `library-poc-runner`
 

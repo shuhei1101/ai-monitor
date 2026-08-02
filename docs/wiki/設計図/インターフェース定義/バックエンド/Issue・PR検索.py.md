@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 2.1.0
 ---
 
 # Issue・PR検索
@@ -7,7 +7,6 @@ template_version: 1.0.0
 MCP ツール: `search_issues_and_prs`
 
 キーワードでリポジトリ内の Issue / PR を横断検索し、関連度順の一覧を返す。
-エージェントの関連 Issue / PR 調査（依存・重複候補の洗い出し）はこのツールを使う。
 
 - 対応テストファイル: `tests/integration/mcp/test_search_issues_and_prs.py`
 
