@@ -7,6 +7,7 @@ from pathlib import Path
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
+from tests.e2e.エスカレーション import unresolved_review_threads
 
 INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集できる機能を追加する。"
@@ -795,6 +796,12 @@ def test_normal_when_thumbs_up(
     # 検証: 該当スレッドに確定内容の返信が投稿されている
     assert any((r.body or "").lstrip().startswith("> from: @architect") for r in replies), (
         "スレッドに architect の返信が投稿されていない"
+    )
+
+    # 検証: 👍 で決着したスレッドはそのターンで Resolve されている（議論中が続いていても畳む）
+    unresolved = unresolved_review_threads(gh_live, owner, repo, pr_number)
+    assert not any((target.body or "")[:60] in body for body in unresolved), (
+        f"👍 で決着したインライン確認事項が未解決のまま残っている: {unresolved}"
     )
 
     # 検証: 回答内容を問い直す確認事項が増えていない（👍 だけで判断できている）

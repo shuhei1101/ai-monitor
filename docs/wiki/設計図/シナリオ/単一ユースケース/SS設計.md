@@ -62,6 +62,7 @@ sequenceDiagram
     alt ライブラリ選定論点あり
       Note over MON: ライブラリ選定を実施<br>（採用決定後にループへ合流）
     end
+    MON->>GH: 決着したインライン確認事項スレッドに<br>確定内容を返信して Resolve<br>（未回答が残るものは畳まない）
     MON->>GH: subsystem PR の<br>assignee=ユーザー 再設定
     deactivate MON
   end
@@ -88,6 +89,8 @@ sequenceDiagram
 - テスト作成の割り当てコメントに、確定した設計 Wiki のページ名と各ページの commit 範囲が記載されている
 - subsystem PR に `確認:tester` が付与され、`確認:architect` が除去されている
 - 自分宛コメントが全て Resolve 済み
+- 応答ループの各ターンで、決着したインライン確認事項スレッドが確定内容の返信付きで Resolve されている
+- 完了処理に入った時点で未解決のインライン確認事項が残っていない（残る場合は `議論中` を戻して聞き直す）
 
 ## 正常シナリオ（インターフェース確定報告）
 
@@ -350,7 +353,8 @@ sequenceDiagram
       ORC->>MON: 既存セッションへ送信
       activate MON
       MON->>REPO: Wiki 修正 commit push
-      MON->>GH: subsystem PR の<br>assignee=ユーザー 再設定
+      MON->>GH: 決着したインライン確認事項スレッドに<br>確定内容を返信して Resolve<br>（未回答が残るものは畳まない）
+    MON->>GH: subsystem PR の<br>assignee=ユーザー 再設定
       deactivate MON
     end
 
@@ -378,6 +382,8 @@ sequenceDiagram
 - `## タスク一覧` の設計タスクがチェック済み
 - subsystem PR に `確認:tester` が付与され、`確認:architect` が除去されている
 - 自分宛コメントが全て Resolve 済み
+- 応答ループの各ターンで、決着したインライン確認事項スレッドが確定内容の返信付きで Resolve されている
+- 完了処理に入った時点で未解決のインライン確認事項が残っていない（残る場合は `議論中` を戻して聞き直す）
 
 ## 異常シナリオ
 

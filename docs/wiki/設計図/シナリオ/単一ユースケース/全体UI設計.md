@@ -70,6 +70,7 @@ sequenceDiagram
     ORC->>MON: 既存セッションへ送信
     activate MON
     MON->>REPO: モック修正 commit push
+    MON->>GH: 決着したインライン確認事項スレッドに<br>確定内容を返信して Resolve<br>（未回答が残るものは畳まない）
     MON->>GH: 修正内容を該当コメントに返信追記 +<br>assignee=ユーザー 再設定
     deactivate MON
   end
@@ -155,6 +156,7 @@ sequenceDiagram
     ORC->>MON: 既存セッションへ送信
     activate MON
     MON->>REPO: モック修正 commit push
+    MON->>GH: 決着したインライン確認事項スレッドに<br>確定内容を返信して Resolve<br>（未回答が残るものは畳まない）
     MON->>GH: 修正内容を該当コメントに返信追記 +<br>assignee=ユーザー 再設定
     deactivate MON
   end
@@ -181,6 +183,8 @@ sequenceDiagram
 - `## タスク一覧` のモック作成の行がチェック済み（シナリオ・E2E テストの行は未チェック）
 - `確認:mock-designer` が除去され、親 epic Issue に `確認:epic-conductor` + 完了報告コメントが付与・投稿されている
 - epic PR の自分宛コメントが全て Resolve 済み
+- 応答ループの各ターンで、決着したインライン確認事項スレッドが確定内容の返信付きで Resolve されている
+- 完了処理に入った時点で未解決のインライン確認事項が残っていない（残る場合は `議論中` を戻して聞き直す）
 
 ## 異常シナリオ
 
