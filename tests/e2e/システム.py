@@ -135,6 +135,7 @@ SYSTEM_PR_BODY = """## 紐づく Issue
 - [ ] `設計図/非機能要件.md` を作成
 - [ ] `README.md` を作成
 - [ ] `.gitignore` を作成
+- [ ] `.claude/settings.json` にルール索引を宣言
 - [ ] GitHub ラベルを一括作成
 """
 

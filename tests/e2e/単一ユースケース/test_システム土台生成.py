@@ -14,6 +14,7 @@ from tests.e2e.実装対象 import add_worktree
 EXPECTED_PAGES = [
     "README.md",
     ".gitignore",
+    ".claude/settings.json",
     "docs/rules.yaml",
     "docs/wiki/README.md",
     "docs/wiki/設計図/アーキテクチャ図.md",
@@ -73,6 +74,13 @@ def test_normal(
     # 検証: docs/rules.yaml が空の索引で作られている
     rules = _file_text(gh_live, owner, repo, "docs/rules.yaml", branch) or ""
     assert "rules:" in rules, f"rules.yaml が索引の形になっていない: {rules[:120]}"
+
+    # 検証: ルール索引が 3 つとも宣言されている（ユーザーが手で設定しなくても規約が注入される）
+    settings = _file_text(gh_live, owner, repo, ".claude/settings.json", branch) or ""
+    for index in ("my-plugins", "ai-monitor", repo):
+        assert f"{index}/master/docs/rules.yaml" in settings, (
+            f"INJECT_RULES_INDEXES に {index} のルール索引がない: {settings[:300]}"
+        )
 
     # 検証: .gitignore に worktree と環境変数ファイルの除外が入っている
     ignored = _file_text(gh_live, owner, repo, ".gitignore", branch) or ""
