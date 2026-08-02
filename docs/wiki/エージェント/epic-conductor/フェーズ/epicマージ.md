@@ -50,9 +50,26 @@ MCP `close` を呼ぶ:
 
 最終マージではモニターがこの close を検知して配下のセッションを一括解放するため、通常マージ / 最終マージのどちらでも実行する。
 
-### 監視面の除去と上位への完了報告
+### 親 Issue への完了報告
 
-判定に応じて共通ルール『最終マージの判定』の「判定後にやること」を実行する。
+「最終マージかの判定」で最終マージと判定した場合は本手順を実行しない（報告先の conductor が居ないため）。
+
+通常マージの場合、親 Issue を放置すると上位レイヤーの進行が止まるので必ず報告する。
+
+MCP `comment` を呼ぶ:
+- `number`: 親 Issue 番号
+- `is_pr`: false
+- `sender`: `epic-conductor`
+- `receiver`: 親 Issue の `layer:` に対応する conductor（`layer:system` なら `system-conductor`）
+- `format`:
+  - `type`: `plain`
+  - `body`: epic のマージ完了報告（対象 epic Issue 番号 + マージした内容の要約）
+
+続けて MCP `add_labels` を呼ぶ:
+- `number`: 親 Issue 番号
+- `is_pr`: false
+- `labels`:
+  - 報告先 conductor の確認ラベルの値（`layer:system` なら `$AI_MONITOR_LABEL_CONFIRM_SYSTEM_CONDUCTOR`）
 
 ### ラベル除去
 
@@ -68,3 +85,9 @@ MCP `transition_phase` を呼ぶ:
 MCP `report_completion` を呼ぶ:
 - `agent_name`: `epic-conductor`
 - `number`: $issue_number
+
+### 監視面の除去
+
+判定に応じて共通ルール『最終マージの判定』の「監視面の除去」を実行する（最終マージなら全番号、通常マージならマージした PR の番号だけ）。
+
+作業完了報告より後に置くのは、先に除去すると報告時にセッションを解決できず失敗するため（共通ルール『最終マージの判定』）。

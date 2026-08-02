@@ -39,7 +39,7 @@ sequenceDiagram
   activate MON
   MON->>MON: 注入済み Wiki 索引から<br>対象ページを特定
   MON-->>WIKI: 対象ページを直接取得
-  MON->>GH: 該当コメントに返信追記<br>（本文を反映した修正案）
+  MON->>GH: ユーザーが指摘したコメントに<br>返信追記<br>（本文を反映した修正案）
   MON->>GH: assignee=ユーザー 再設定
   deactivate MON
 ```
