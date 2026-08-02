@@ -11,6 +11,7 @@ from functools import partial
 from ai_monitor.features.notify.service import build_notifier, build_settings_reader
 from ai_monitor.features.watchdog.heartbeat import touch_heartbeat
 from ai_monitor.features.watchdog.service import check_liveness, supervise
+from ai_monitor.features.watchdog.types import Suspension
 from ai_monitor.integrations.process.ops import can_connect, is_pid_alive, start_detached, terminate
 from ai_monitor.observability import configure
 from ai_monitor.shared.settings import Settings
@@ -38,6 +39,8 @@ def main(*, cycles: int | None = None, sleep_fn=time.sleep) -> int:
         can_connect=can_connect,
     )
     logger.info("監視役を起動しました: target=%s interval_sec=%s", target.name, settings.watchdog.interval_sec)
+    # 打ち切りの状態はプロセスが生きている間だけ持つ（周期の外で 1 つ作って使い回す）
+    suspensions: dict[str, Suspension] = {}
     # 周期でモニターを監視する
     remaining = cycles
     while remaining is None or remaining > 0:
@@ -53,6 +56,7 @@ def main(*, cycles: int | None = None, sleep_fn=time.sleep) -> int:
                 start=start_detached,
                 stop=terminate,
                 notify=notify,
+                suspensions=suspensions,
             )
         except Exception:
             # 周期を止めない（監視役が落ちると誰も気づけなくなる）

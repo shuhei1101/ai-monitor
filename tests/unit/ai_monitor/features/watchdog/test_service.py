@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from ai_monitor.features.watchdog.service import check_liveness, supervise
-from ai_monitor.features.watchdog.types import Liveness, WatchTarget
+from ai_monitor.features.watchdog.types import Liveness, Suspension, WatchTarget
 from ai_monitor.shared.settings import WatchdogSettings
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
@@ -30,6 +30,7 @@ def target_factory(tmp_path):
             port=port,
             start_command=["true"],
             down_event="monitor_down",
+            recovered_event="monitor_recovered",
         )
 
     return _create
@@ -157,7 +158,7 @@ def test_supervise(target_factory, spies, wd_settings):
     # 実行
     supervise(
         target, now=NOW, settings=wd_settings, check=lambda t: Liveness(alive=False, missing="pid 停止"),
-        start=spies.start, stop=spies.stop, notify=spies.notify,
+        start=spies.start, stop=spies.stop, notify=spies.notify, suspensions={},
     )
     # 検証
     assert spies.started == ["monitor"]
@@ -178,7 +179,7 @@ def test_supervise_when_alive(target_factory, spies, wd_settings):
     # 実行
     supervise(
         target, now=NOW, settings=wd_settings, check=lambda t: Liveness(alive=True),
-        start=spies.start, stop=spies.stop, notify=spies.notify,
+        start=spies.start, stop=spies.stop, notify=spies.notify, suspensions={},
     )
     # 検証
     assert (spies.started, spies.stopped, spies.notified) == ([], [], [])
@@ -192,7 +193,7 @@ def test_supervise_when_stale(target_factory, spies, wd_settings):
     supervise(
         target, now=NOW, settings=wd_settings,
         check=lambda t: Liveness(alive=False, missing="周回停止", stale=True),
-        start=spies.start, stop=spies.stop, notify=spies.notify,
+        start=spies.start, stop=spies.stop, notify=spies.notify, suspensions={},
     )
     # 検証
     assert spies.order == ["stop", "start"], "pid が残ったまま二重起動している"
@@ -209,10 +210,11 @@ def test_supervise_when_limit_exceeded(target_factory, spies, wd_settings):
     for _ in range(wd_settings.restart_max):
         record_restart(path, "monitor", now=NOW, window_min=wd_settings.restart_window_min)
     target = target_factory()
+    suspensions: dict[str, Suspension] = {}
     # 実行
     supervise(
         target, now=NOW, settings=wd_settings, check=lambda t: Liveness(alive=False, missing="pid 停止"),
-        start=spies.start, stop=spies.stop, notify=spies.notify,
+        start=spies.start, stop=spies.stop, notify=spies.notify, suspensions=suspensions,
     )
     # 検証
     assert spies.started == []
@@ -220,6 +222,7 @@ def test_supervise_when_limit_exceeded(target_factory, spies, wd_settings):
     import yaml
 
     assert len(yaml.safe_load(path.read_text(encoding="utf-8"))) == wd_settings.restart_max
+    assert suspensions["monitor"].notified_at == NOW, "打ち切りの状態が台帳に入っていない"
 
 
 def test_supervise_when_start_failed(target_factory, spies, wd_settings):
@@ -236,7 +239,7 @@ def test_supervise_when_start_failed(target_factory, spies, wd_settings):
     # 実行
     supervise(
         target, now=NOW, settings=wd_settings, check=lambda t: Liveness(alive=False, missing="pid 停止"),
-        start=_start, stop=spies.stop, notify=spies.notify,
+        start=_start, stop=spies.stop, notify=spies.notify, suspensions={},
     )
     # 検証
     assert [e for e, _, _ in spies.notified] == ["monitor_down"]
@@ -260,8 +263,81 @@ def test_supervise_when_notify_failed(target_factory, spies, wd_settings):
     # 実行
     supervise(
         target, now=NOW, settings=wd_settings, check=lambda t: Liveness(alive=False, missing="pid 停止"),
-        start=spies.start, stop=spies.stop, notify=_notify,
+        start=spies.start, stop=spies.stop, notify=_notify, suspensions={},
     )
     # 検証
     assert spies.started == ["monitor"]
     assert calls == ["monitor_down"]
+
+
+def _suspended(wd_settings, *, minutes_ago: int) -> dict[str, Suspension]:
+    """指定した分だけ前に通知した打ち切り状態の台帳を作る。"""
+    return {"monitor": Suspension(notified_at=NOW - timedelta(minutes=minutes_ago))}
+
+
+def _fill_restarts(wd_settings) -> None:
+    """再起動の記録を上限回数ぶん置く。"""
+    import pathlib
+
+    from ai_monitor.features.watchdog.restarts import record_restart
+
+    path = pathlib.Path(wd_settings.restarts_path)
+    for _ in range(wd_settings.restart_max):
+        record_restart(path, "monitor", now=NOW, window_min=wd_settings.restart_window_min)
+
+
+def test_supervise_when_suspended_within_interval(target_factory, spies, wd_settings):
+    """打ち切り中で通知間隔が空いていないときに何も送らないことを確認する（正常系）。"""
+    # 準備
+    _fill_restarts(wd_settings)
+    suspensions = _suspended(wd_settings, minutes_ago=wd_settings.suspended_notify_interval_min - 1)
+    before = suspensions["monitor"].notified_at
+    checked: list[str] = []
+    target = target_factory()
+
+    def _check(t):
+        checked.append(t.name)
+        return Liveness(alive=False, missing="pid 停止")
+
+    # 実行
+    supervise(
+        target, now=NOW, settings=wd_settings, check=_check,
+        start=spies.start, stop=spies.stop, notify=spies.notify, suspensions=suspensions,
+    )
+    # 検証
+    assert (spies.started, spies.notified) == ([], [])
+    assert checked == ["monitor"], "打ち切り中に生存の確認が止まっている"
+    assert suspensions["monitor"].notified_at == before, "通知していないのに時刻が動いている"
+
+
+def test_supervise_when_suspended_interval_passed(target_factory, spies, wd_settings):
+    """打ち切り中で通知間隔を過ぎたときの再通知を確認する（正常系）。"""
+    # 準備
+    _fill_restarts(wd_settings)
+    suspensions = _suspended(wd_settings, minutes_ago=wd_settings.suspended_notify_interval_min + 1)
+    target = target_factory()
+    # 実行
+    supervise(
+        target, now=NOW, settings=wd_settings, check=lambda t: Liveness(alive=False, missing="pid 停止"),
+        start=spies.start, stop=spies.stop, notify=spies.notify, suspensions=suspensions,
+    )
+    # 検証
+    assert spies.started == []
+    assert [e for e, _, _ in spies.notified] == ["monitor_down"]
+    assert suspensions["monitor"].notified_at == NOW, "通知時刻が更新されていない"
+
+
+def test_supervise_when_recovered(target_factory, spies, wd_settings):
+    """打ち切り中の相手が復帰したときの通知と状態の破棄を確認する（正常系）。"""
+    # 準備
+    suspensions = _suspended(wd_settings, minutes_ago=5)
+    target = target_factory()
+    # 実行
+    supervise(
+        target, now=NOW, settings=wd_settings, check=lambda t: Liveness(alive=True),
+        start=spies.start, stop=spies.stop, notify=spies.notify, suspensions=suspensions,
+    )
+    # 検証
+    assert [e for e, _, _ in spies.notified] == ["monitor_recovered"]
+    assert suspensions == {}, "打ち切りの状態が捨てられていない"
+    assert (spies.started, spies.stopped) == ([], [])

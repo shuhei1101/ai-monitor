@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from ai_monitor.features.notify.types import NotifyEvent
@@ -18,6 +19,8 @@ class WatchTarget:
     start_command: list[str]
     # 停止を知らせる契機（対象で変わる）
     down_event: NotifyEvent
+    # 打ち切り中の相手が戻ったことを知らせる契機（対象で変わる）
+    recovered_event: NotifyEvent
     # 応答確認に使うポート。None なら接続確認をしない（監視役が対象のとき）
     port: int | None = None
     # 標準出力と標準エラーの追記先（落ちた理由を残すため上書きしない）
@@ -33,6 +36,13 @@ class Liveness:
     missing: str = ""
     # 鮮度だけが欠けたか（起動前に停止が要るかの判断に使う）
     stale: bool = False
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Suspension:
+    """再起動を打ち切った相手について、最後に通知した時刻を持つ。"""
+
+    notified_at: datetime
 
 
 # pid の生存を返す関数

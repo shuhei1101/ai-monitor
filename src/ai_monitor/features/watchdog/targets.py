@@ -28,6 +28,7 @@ def build_monitor_target(settings: Settings) -> WatchTarget:
         port=settings.port,
         start_command=[sys.executable, "-m", "ai_monitor"],
         down_event="monitor_down",
+        recovered_event="monitor_recovered",
         log_path=base / f"{MONITOR_NAME}.log",
     )
 
@@ -43,5 +44,6 @@ def build_watchdog_target(settings: Settings) -> WatchTarget:
         port=None,
         start_command=[sys.executable, "-m", "ai_monitor.watchdog"],
         down_event="watchdog_down",
+        recovered_event="watchdog_recovered",
         log_path=base / f"{WATCHDOG_NAME}.log",
     )

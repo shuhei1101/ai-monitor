@@ -17,6 +17,8 @@ type NotifyEvent = Literal[
     "defect_report",
     "monitor_down",
     "watchdog_down",
+    "monitor_recovered",
+    "watchdog_recovered",
 ]
 
 # 送信先サービス（ペイロードのキーが変わる）

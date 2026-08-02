@@ -10,7 +10,7 @@ import yaml
 
 from ai_monitor.features.watchdog.restarts import record_restart
 from ai_monitor.features.watchdog.service import check_liveness, supervise
-from ai_monitor.features.watchdog.types import WatchTarget
+from ai_monitor.features.watchdog.types import Suspension, WatchTarget
 from ai_monitor.shared.settings import WatchdogSettings
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
@@ -32,6 +32,7 @@ def target(tmp_path) -> WatchTarget:
         port=8765,
         start_command=["true"],
         down_event="monitor_down",
+        recovered_event="monitor_recovered",
     )
 
 
@@ -76,8 +77,14 @@ def _seed(target: WatchTarget, *, pid: int = 1234, beat_min_ago: int = 0) -> Non
     )
 
 
-def _run(target: WatchTarget, wd_settings: WatchdogSettings, io_mocks) -> None:
-    """生存判定から通知までを 1 周期分つなげて実行する。"""
+def _run(
+    target: WatchTarget,
+    wd_settings: WatchdogSettings,
+    io_mocks,
+    suspensions: dict[str, Suspension] | None = None,
+) -> dict[str, Suspension]:
+    """生存判定から通知までを 1 周期分つなげて実行し、打ち切り状態の台帳を返す。"""
+    ledger = {} if suspensions is None else suspensions
     supervise(
         target,
         now=NOW,
@@ -92,7 +99,9 @@ def _run(target: WatchTarget, wd_settings: WatchdogSettings, io_mocks) -> None:
         start=io_mocks.start,
         stop=io_mocks.stop,
         notify=io_mocks.notify,
+        suspensions=ledger,
     )
+    return ledger
 
 
 def test_normal(target, wd_settings, io_mocks):
@@ -142,12 +151,64 @@ def test_normal_when_limit_exceeded(target, wd_settings, io_mocks):
     for _ in range(wd_settings.restart_max):
         record_restart(path, "monitor", now=NOW, window_min=wd_settings.restart_window_min)
     # 実行
-    _run(target, wd_settings, io_mocks)
+    ledger = _run(target, wd_settings, io_mocks)
     # 検証
     assert io_mocks.started == []
     assert [e for e, _, _ in io_mocks.notified] == ["monitor_down"]
     assert len(yaml.safe_load(path.read_text(encoding="utf-8"))) == wd_settings.restart_max
     assert str(wd_settings.restart_max) in io_mocks.notified[0][2]
+    assert ledger["monitor"].notified_at == NOW, "打ち切りの状態が台帳に入っていない"
+
+
+def _fill_restarts(wd_settings: WatchdogSettings) -> None:
+    """再起動の記録を上限回数ぶん置く。"""
+    path = Path(wd_settings.restarts_path)
+    for _ in range(wd_settings.restart_max):
+        record_restart(path, "monitor", now=NOW, window_min=wd_settings.restart_window_min)
+
+
+def test_normal_when_suspended_within_interval(target, wd_settings, io_mocks):
+    """打ち切り中で通知間隔が空いていないときに何も送らないことを確認する（正常系）。"""
+    # 準備
+    _seed(target)
+    io_mocks.alive = False
+    _fill_restarts(wd_settings)
+    notified_at = NOW - timedelta(minutes=wd_settings.suspended_notify_interval_min - 1)
+    # 実行
+    ledger = _run(target, wd_settings, io_mocks, {"monitor": Suspension(notified_at=notified_at)})
+    # 検証
+    assert (io_mocks.started, io_mocks.notified) == ([], [])
+    assert ledger["monitor"].notified_at == notified_at, "通知していないのに時刻が動いている"
+
+
+def test_normal_when_suspended_interval_passed(target, wd_settings, io_mocks):
+    """打ち切り中で通知間隔を過ぎたときの再通知を確認する（正常系）。"""
+    # 準備
+    _seed(target)
+    io_mocks.alive = False
+    _fill_restarts(wd_settings)
+    notified_at = NOW - timedelta(minutes=wd_settings.suspended_notify_interval_min + 1)
+    # 実行
+    ledger = _run(target, wd_settings, io_mocks, {"monitor": Suspension(notified_at=notified_at)})
+    # 検証
+    assert io_mocks.started == []
+    assert [e for e, _, _ in io_mocks.notified] == ["monitor_down"]
+    assert str(wd_settings.restart_max) in io_mocks.notified[0][2]
+    assert ledger["monitor"].notified_at == NOW, "通知時刻が更新されていない"
+
+
+def test_normal_when_recovered(target, wd_settings, io_mocks):
+    """打ち切り中の相手が復帰したときの通知と状態の破棄を確認する（正常系）。"""
+    # 準備
+    _seed(target)
+    io_mocks.alive = True
+    suspensions = {"monitor": Suspension(notified_at=NOW - timedelta(minutes=5))}
+    # 実行
+    ledger = _run(target, wd_settings, io_mocks, suspensions)
+    # 検証
+    assert [e for e, _, _ in io_mocks.notified] == ["monitor_recovered"]
+    assert ledger == {}, "打ち切りの状態が捨てられていない"
+    assert (io_mocks.started, io_mocks.stopped) == ([], [])
 
 
 def test_error_when_notify_failed(target, wd_settings, io_mocks):

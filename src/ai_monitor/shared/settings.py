@@ -66,6 +66,8 @@ class WatchdogSettings(BaseModel):
     liveness_timeout_sec: int = 120
     restart_window_min: int = 60
     restart_max: int = 3
+    # 打ち切り中に同じ内容を再通知する間隔（分）。打ち切りに入った最初は即時に送る
+    suspended_notify_interval_min: int = 60
     restarts_path: str = "data/restarts.yaml"
 
 

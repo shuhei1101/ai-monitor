@@ -155,6 +155,7 @@ def watchdog_target(tmp_path):
         port=None,
         start_command=["true"],
         down_event="watchdog_down",
+        recovered_event="watchdog_recovered",
     )
 
 

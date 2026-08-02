@@ -24,6 +24,7 @@ def target_factory(tmp_path):
             port=None,
             start_command=command or [sys.executable, "-c", "pass"],
             down_event="watchdog_down",
+            recovered_event="watchdog_recovered",
             log_path=tmp_path / "dummy.log",
         )
 

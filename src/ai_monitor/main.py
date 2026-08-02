@@ -27,7 +27,7 @@ from ai_monitor.features.notify.service import build_notifier, build_settings_re
 from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.features.watchdog.service import check_liveness, supervise
 from ai_monitor.features.watchdog.targets import build_monitor_target, build_watchdog_target
-from ai_monitor.features.watchdog.types import Liveness, StartProcessFn, WatchTarget
+from ai_monitor.features.watchdog.types import Liveness, StartProcessFn, Suspension, WatchTarget
 from ai_monitor.integrations.process.ops import can_connect, is_pid_alive, start_detached, terminate
 from ai_monitor.integrations.github.client import check_github, get_client
 from ai_monitor.integrations.webhook.client import check_webhook
@@ -194,6 +194,9 @@ def main() -> int:
             start=start_detached,
         )
 
+    # 打ち切りの状態はプロセスが生きている間だけ持つ（周期をまたいで同じものを渡す）
+    watchdog_suspensions: dict[str, Suspension] = {}
+
     def _supervise_watchdog(now: datetime) -> None:
         """監視役の生存を 1 周期分見る。"""
         supervise(
@@ -204,6 +207,7 @@ def main() -> int:
             start=start_detached,
             stop=terminate,
             notify=notify,
+            suspensions=watchdog_suspensions,
         )
 
     app = create_app(

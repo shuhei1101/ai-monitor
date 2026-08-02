@@ -17,7 +17,7 @@ import yaml
 
 from ai_monitor.features.watchdog.restarts import record_restart
 from ai_monitor.features.watchdog.service import check_liveness, supervise
-from ai_monitor.features.watchdog.types import WatchTarget
+from ai_monitor.features.watchdog.types import Suspension, WatchTarget
 from ai_monitor.integrations.process.ops import is_pid_alive, start_detached, terminate
 from ai_monitor.shared.settings import WatchdogSettings
 
@@ -59,7 +59,7 @@ def target_factory(tmp_path):
     """代役プロセスを起動する監視対象を作る factory を返す（テスト後に停止する）。"""
     created: list[WatchTarget] = []
 
-    def _create(name: str, event: str) -> WatchTarget:
+    def _create(name: str, event: str, recovered_event: str = "monitor_recovered") -> WatchTarget:
         beat_path = tmp_path / f"{name}.heartbeat"
         target = WatchTarget(
             name=name,
@@ -69,6 +69,7 @@ def target_factory(tmp_path):
             port=None,
             start_command=[sys.executable, "-c", STAND_IN, str(beat_path)],
             down_event=event,
+            recovered_event=recovered_event,
             log_path=tmp_path / f"{name}.log",
         )
         created.append(target)
@@ -97,7 +98,12 @@ def notify_spy():
     return state
 
 
-def _run(target: WatchTarget, wd_settings: WatchdogSettings, notify_spy) -> None:
+def _run(
+    target: WatchTarget,
+    wd_settings: WatchdogSettings,
+    notify_spy,
+    suspensions: dict[str, Suspension] | None = None,
+) -> None:
     """実プロセスの操作で 1 周期分の監視を実行する。"""
     now = datetime.now(timezone.utc)
     supervise(
@@ -114,6 +120,7 @@ def _run(target: WatchTarget, wd_settings: WatchdogSettings, notify_spy) -> None
         start=start_detached,
         stop=terminate,
         notify=notify_spy.notify,
+        suspensions={} if suspensions is None else suspensions,
     )
 
 
@@ -157,10 +164,29 @@ def test_normal_when_limit_exceeded(target_factory, wd_settings, notify_spy):
     assert str(wd_settings.restart_max) in notify_spy.calls[0][2]
 
 
+def test_normal_when_recovered(target_factory, wd_settings, notify_spy):
+    """打ち切り中の相手が生き返ったら復旧を通知して状態を捨てることを確認する（正常系）。"""
+    # 準備: 代役を動かしたまま、前の周期で打ち切って通知済みの状態を作る
+    target = target_factory("monitor", "monitor_down")
+    start_detached(target)
+    assert _wait_until(target.heartbeat_path.exists), "代役が周回時刻を書いていない"
+    path = Path(wd_settings.restarts_path)
+    now = datetime.now(timezone.utc)
+    for _ in range(wd_settings.restart_max):
+        record_restart(path, "monitor", now=now, window_min=wd_settings.restart_window_min)
+    suspensions = {"monitor": Suspension(notified_at=now)}
+    # 実行
+    _run(target, wd_settings, notify_spy, suspensions)
+    # 検証: 復旧の契機で通知され、人が記録を消さなくても打ち切りが解ける
+    assert [e for e, _, _ in notify_spy.calls] == ["monitor_recovered"]
+    assert suspensions == {}, "打ち切りの状態が捨てられていない"
+    assert len(yaml.safe_load(path.read_text(encoding="utf-8"))) == wd_settings.restart_max
+
+
 def test_normal_when_watchdog_down(target_factory, wd_settings, notify_spy):
     """落ちた監視役が実際に再起動されることを確認する（正常系）。"""
     # 準備
-    target = target_factory("watchdog", "watchdog_down")
+    target = target_factory("watchdog", "watchdog_down", "watchdog_recovered")
     start_detached(target)
     first_pid = _pid_of(target)
     subprocess.run(["kill", "-9", str(first_pid)], check=True)
@@ -175,7 +201,7 @@ def test_normal_when_watchdog_down(target_factory, wd_settings, notify_spy):
 def test_normal_when_watchdog_limit_exceeded(target_factory, wd_settings, notify_spy):
     """監視役側も上限に達していたら再起動しないことを確認する（正常系）。"""
     # 準備
-    target = target_factory("watchdog", "watchdog_down")
+    target = target_factory("watchdog", "watchdog_down", "watchdog_recovered")
     start_detached(target)
     first_pid = _pid_of(target)
     subprocess.run(["kill", "-9", str(first_pid)], check=True)

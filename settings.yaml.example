@@ -31,6 +31,7 @@ watchdog:
   liveness_timeout_sec: 120     # 最終周回時刻がこの秒数より古ければ停止とみなす
   restart_window_min: 60        # 再起動の回数を数える期間（分）
   restart_max: 3                # 期間内に許す再起動の回数（超えたら通知のみ・相手ごとに別勘定）
+  suspended_notify_interval_min: 60  # 打ち切り中に同じ内容を再通知する間隔（分）
   restarts_path: data/restarts.yaml
 
 # 通知の送信先（複数指定可・丸ごと省略すると通知しない）
@@ -49,8 +50,8 @@ notifies:
       defect_report: false
       monitor_down: false
       watchdog_down: false
-      monitor_down: false
-      watchdog_down: false
+      monitor_recovered: false
+      watchdog_recovered: false
 
   - type: webhook
     enabled: true
@@ -60,6 +61,8 @@ notifies:
     events:
       monitor_down: true
       watchdog_down: true
+      monitor_recovered: true
+      watchdog_recovered: true
       user_gate: false
       rate_limit: false
       timeout_kill: false
