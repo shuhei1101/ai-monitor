@@ -1,5 +1,5 @@
 ---
-template_version: 1.0.0
+template_version: 1.1.0
 ---
 
 # GitHub API
@@ -84,6 +84,72 @@ API バージョン: `2022-11-28`
 | DELETE | [`/repos/{owner}/{repo}/git/refs/heads/{branch}`](#delete-reposownerrepogitrefsheadsbranch) | リモートブランチの削除 | - |
 | GET | [`/search/issues`](#get-searchissues) | Issue / PR のキーワード横断検索 | 検索レートリミットは別枠 |
 | POST | [`/graphql`](#post-graphql) | GraphQL クエリ / mutation の実行 | minimize / Ready 化 等 |
+
+## 不具合一覧
+
+| タイトル | 概要 | 発生日 |
+| --- | --- | --- |
+| [レビューコメントが Files changed に出ない](#レビューコメントが-files-changed-に出ない) | API も HTML も正常なのに、新しい Files changed 体験が有効なアカウントでだけ表示されない | 2026/08/02 |
+| [対象行が後続 commit で変わるとレビューコメントが Files changed から外れる](#対象行が後続-commit-で変わるとレビューコメントが-files-changed-から外れる) | GitHub が outdated と判定し、Conversation にしか残らなくなる | 2026/08/02 |
+
+### レビューコメントが Files changed に出ない
+
+> 発生日: 2026/08/02
+
+**概要:**
+
+`POST /repos/{owner}/{repo}/pulls/{pull_number}/comments` で投稿したレビューコメントが、Files changed タブに 1 件も表示されない。
+Conversation タブには表示される。
+
+API 上は正常で、`commit_id` が PR の head と一致し、`line` / `position` とも非 null、GraphQL の `isResolved` / `isOutdated` / `isCollapsed` はすべて false になる。
+
+サーバーが返す HTML も正しい。
+`https://github.com/{owner}/{repo}/pull/{n}/files` を取得すると、diff の各行の直後に `js-inline-comments-container` としてコメントが正しい行番号で埋め込まれている（`blob-code` の行も全て揃い、遅延ロードの省略もない）。
+つまり API・HTML とも問題はなく、ブラウザ側の描画だけが欠ける。
+
+同じ PR を未ログイン（シークレットウィンドウ）で開くと表示される。
+ログイン済みアカウントでは、別タブ・スーパーリロード・時間経過（3 時間以上）のいずれでも表示されない。
+
+**条件:**
+
+- ログイン済みのアカウントで、新しい Files changed 体験が有効になっている（2026/01/22 から段階的にロールアウト中）
+- 未ログイン（シークレットウィンドウ）では再現しない
+
+アカウント単位の機能フラグで UI が切り替わるため、ブラウザのキャッシュ削除やスーパーリロードでは変わらない。
+ブラウザ拡張機能の干渉ではない（拡張を入れていない環境でも再現する）。
+
+**対処法:**
+
+| 方法 | 結果 | 推奨 |
+| --- | --- | --- |
+| Files changed 上部の Preview メニューから従来の UI に戻す | 表示される。アカウント単位で切り替わるため以降も継続する | ○ |
+| シークレットウィンドウで開く | 表示される。ログインが要る操作（返信・Resolve）ができない | - |
+| Conversation タブで読む | 指摘は読めるが、コードと並べて見られない | - |
+
+### 対象行が後続 commit で変わるとレビューコメントが Files changed から外れる
+
+> 発生日: 2026/08/02
+
+**概要:**
+
+コメントを付けた行が後続の commit で変更されると、GitHub がそのコメントを outdated と判定し、Files changed タブから外す。
+レスポンスの `line` が `null` になり（`original_line` は残る）、GraphQL の `isOutdated` が true になる。
+Conversation タブには「Outdated」付きで残る。
+
+変更されていない行に付けたコメントは push 後も残るため、消えるのは自分が指摘した行を自分で書き換えた場合にあたる。
+
+**条件:**
+
+- コメントを投稿した後、その行を含む変更を push した
+- `subject_type` が `file` のファイルレベルコメントは、ファイルが変更されていなくても push だけで outdated になる
+
+**対処法:**
+
+| 方法 | 結果 | 推奨 |
+| --- | --- | --- |
+| 指摘が残っているうちに対応し、解決したらスレッドを Resolve する | 未解決のまま消える状態を避けられる。既に消えたものは戻らない | ○ |
+| 最新の行に同じ指摘を投稿し直す | Files changed で読めるようになるが、元スレッドの往復履歴が分断される | - |
+| `subject_type: "file"` に切り替える | 行に紐づかなくなるが、push のたびに全件 outdated になるため悪化する | - |
 
 ## GET `/repos/{owner}/{repo}`
 
