@@ -49,7 +49,7 @@ MCP `comment` を呼ぶ:
 - `receiver`: `story-conductor`
 - `format`:
   - `type`: `plain`
-  - `body`: 完了報告（対象 subsystem Issue 番号 + 実装内容の要約）。バグ差し戻し由来の修正用 PR の場合は、修正完了報告であることと修正内容を書く
+  - `body`: 完了報告（対象 subsystem Issue 番号 + マージした subsystem PR へのリンク + 実装内容の要約）。バグ差し戻し由来の修正用 PR の場合は、修正完了報告であることと修正内容を書く
 
 続けて MCP `add_labels` を呼ぶ:
 - `number`: 親 story Issue 番号

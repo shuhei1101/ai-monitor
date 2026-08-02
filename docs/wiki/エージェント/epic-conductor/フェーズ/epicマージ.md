@@ -63,7 +63,7 @@ MCP `comment` を呼ぶ:
 - `receiver`: 親 Issue の `layer:` に対応する conductor（`layer:system` なら `system-conductor`）
 - `format`:
   - `type`: `plain`
-  - `body`: epic のマージ完了報告（対象 epic Issue 番号 + マージした内容の要約）
+  - `body`: epic のマージ完了報告（対象 epic Issue 番号 + マージした epic PR へのリンク + マージした内容の要約）
 
 続けて MCP `add_labels` を呼ぶ:
 - `number`: 親 Issue 番号

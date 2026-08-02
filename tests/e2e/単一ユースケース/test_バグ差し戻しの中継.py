@@ -16,6 +16,7 @@ BUG_HANDOVER = """> from: @epic-conductor
 | `test_error_when_タイトルが空` | タイトルを空にしても `ValidationError` にならず保存される |
 
 修正方針: `update_task` のタイトル検証を「1 文字以上 100 文字以内」に戻す。
+fail した面: #{epic_number}
 該当する subsystem へ差し戻してください。
 
 ------
@@ -59,7 +60,8 @@ def test_normal_when_handover(
     )
     # 準備: epic-conductor のバグ差し戻しコメント → 確認ラベル付与（起動トリガー）
     handover = gh_live.rest.issues.create_comment(
-        owner=owner, repo=repo, issue_number=story.number, body=BUG_HANDOVER
+        owner=owner, repo=repo, issue_number=story.number,
+        body=BUG_HANDOVER.format(epic_number=epic.number),
     ).parsed_data
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=story.number, labels=["確認:story-conductor"]
@@ -82,6 +84,9 @@ def test_normal_when_handover(
 
     # 検証: バグ内容コメントが @subsystem-conductor 宛で未解決のまま残っている
     assert "> to: @subsystem-conductor" in (relayed.body or ""), "バグ内容コメントの宛先が違う"
+    assert f"#{epic.number}" in (relayed.body or ""), (
+        f"中継コメントに fail した面 #{epic.number} へのリンクがない: {(relayed.body or '')[:200]}"
+    )
     assert not server._is_minimized(relayed.node_id), (
         "バグ内容コメントが Resolve されている（受領は subsystem-conductor）"
     )

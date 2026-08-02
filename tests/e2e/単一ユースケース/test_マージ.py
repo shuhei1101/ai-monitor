@@ -211,6 +211,11 @@ def test_normal_when_subsystem(
     # 検証: 完了報告が @story-conductor 宛で未解決、確認ラベルは除去済み
     assert "> to: @story-conductor" in (report.body or ""), "完了報告の宛先が story-conductor でない"
     assert not server._is_minimized(report.node_id), "完了報告が Resolve されている（受領は story-conductor）"
+
+    # 検証: 完了報告にマージした PR へのリンクが載っている（受け取った側が経緯を追える）
+    assert f"#{pr_number}" in (report.body or ""), (
+        f"完了報告にマージした subsystem PR #{pr_number} のリンクがない: {(report.body or '')[:200]}"
+    )
     pr_now = issue(gh_live, owner, repo, pr_number)
     assert "確認:subsystem-conductor" not in label_names(pr_now), "確認:subsystem-conductor が残っている"
     assert server._is_minimized(request.node_id), "最終確認の依頼コメントが未 Resolve"
@@ -268,6 +273,11 @@ def test_normal_when_story(
     assert "> to: @epic-conductor" in (epic_report.body or ""), "完了報告の宛先が epic-conductor でない"
     assert not server._is_minimized(epic_report.node_id), "完了報告が Resolve されている"
     assert server._is_minimized(report.node_id), "writer の全 pass 報告が未 Resolve"
+
+    # 検証: 完了報告にマージした PR へのリンクが載っている（受け取った側が経緯を追える）
+    assert f"#{ctx['pr'].number}" in (epic_report.body or ""), (
+        f"完了報告にマージした story PR #{ctx['pr'].number} のリンクがない: {(epic_report.body or '')[:200]}"
+    )
 
 
 def test_normal_when_epic(
@@ -404,6 +414,11 @@ def test_normal_when_epic_with_parent(
 
     # 検証: 完了報告は未解決（受領は system-conductor）で、writer の報告は Resolve 済み
     assert not server._is_minimized(system_report.node_id), "完了報告が Resolve されている"
+
+    # 検証: 完了報告にマージした PR へのリンクが載っている（受け取った側が経緯を追える）
+    assert f"#{ctx['pr'].number}" in (system_report.body or ""), (
+        f"完了報告にマージした epic PR #{ctx['pr'].number} のリンクがない: {(system_report.body or '')[:200]}"
+    )
     assert server._is_minimized(report.node_id), "writer の全 pass 報告が未 Resolve"
     epic_now = issue(gh_live, owner, repo, ctx["epic"].number)
     assert "確認:epic-conductor" not in label_names(epic_now), "確認:epic-conductor が残っている"

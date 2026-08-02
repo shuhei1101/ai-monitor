@@ -55,7 +55,7 @@ MCP `comment` を呼ぶ:
 - `receiver`: `epic-conductor`
 - `format`:
   - `type`: `plain`
-  - `body`: story のマージ完了報告（対象 story Issue 番号 + マージ済み subsystem のサマリ）
+  - `body`: story のマージ完了報告（対象 story Issue 番号 + マージした story PR へのリンク + マージ済み subsystem のサマリ）
 
 続けて MCP `add_labels` を呼ぶ:
 - `number`: 親 epic Issue 番号
