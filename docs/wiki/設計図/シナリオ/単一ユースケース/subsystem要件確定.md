@@ -100,7 +100,7 @@ sequenceDiagram
 | Mock | なし（実環境で実行） | - |
 | subsystem Issue | `layer:subsystem` + `確認:subsystem-conductor` 付きで存在 | 親 story と Sub-issue リンク済み・本文は空 |
 | 親 story Issue | ユースケース要件 + 単一 UC シナリオ確定済み | `## 背景` の `変更種別` が `新規`。現状調査なしの分岐を決定的に誘発 |
-| 既存実装 | 担当範囲に対応する実装・設計 Wiki が存在しない | `新規` の記入と実態が一致している状態 |
+| 既存の設計書 | 担当範囲に対応するインターフェース定義 / モジュール構成が base に存在しない | `新規` の記入と設計書の状態が一致している |
 | assignee | 未設定 | エージェント起動条件 |
 
 ### フロー
@@ -114,7 +114,7 @@ sequenceDiagram
   Note over MON: 起動〜親 story のシナリオ調査までは<br>正常シナリオと同一
   activate MON
   MON-->>GH: 親 story の 背景 から<br>担当範囲の 変更種別 が 新規 と判断
-  MON->>GH: 概要 / 背景 + 現状 セクションを<br>subsystem Issue 本文に反映<br>（既存実装が無いので現状調査は行わず<br>関連 Issue / PR は なし と記録）
+  MON->>GH: 概要 / 背景 + 現状 セクションを<br>subsystem Issue 本文に反映<br>（調べる対象の設計書が無いので現状調査は行わず<br>関連 Issue / PR は なし と記録）
   MON->>GH: 機能・非機能要件の観点を親 story の<br>ユースケース要件から洗い出し<br>→システム要件 SA セクションを<br>subsystem Issue 本文に反映
   Note over MON: Draft PR 作成〜完了処理は<br>正常シナリオと同一
   deactivate MON
@@ -122,8 +122,9 @@ sequenceDiagram
 
 ### 期待値
 
-- `## 現状` の `### 関連 Issue / PR` と `### 関連ドキュメント` が `なし` で記録されている（`変更種別` が `新規` なので既存を調べる対象がない）
+- `## 現状` の `### 関連 Issue / PR` と `### 関連ドキュメント` が `なし` で記録されている（`変更種別` が `新規` なので調べる対象の設計書が無い）
 - 関連 Issue / PR の収集をサブエージェントで走らせた記録がない（`変更種別` を読んで調査自体を省いている）
+- subsystem-conductor が実装コードを読み出した記録がない（`新規` の判断も親 story の `## 背景` から行っており、実装の有無を見に行っていない）
 - `## システム要件（SA）` が親 story のユースケース要件だけから書かれている
 - `## タスク一覧` の Wiki 修正が既存ページの更新ではなく新規作成として並んでいる
 - subsystem PR に `確認:architect` が付与され、`確認:subsystem-conductor` が除去されている
