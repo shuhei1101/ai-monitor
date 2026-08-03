@@ -37,7 +37,7 @@ sequenceDiagram
   activate MON
   MON-->>GH: system Issue の エピック一覧 から<br>epic 名・所属 UC・着手順を読む
   MON-->>GH: エピックのイシュー本文テンプレートを取得
-  MON->>GH: 子 Issue を epic 件数分作成<br>（layer:epic + type:* + 親の リバースエンジニアリング ラベル付与・<br>ユースケース一覧を記入）
+  MON->>GH: 子 Issue を epic 件数分作成<br>（layer:epic + type:* + 親の リバースエンジニアリング ラベル付与・<br>確認ラベルなし・ユースケース一覧を記入）
   MON->>GH: 着手順が 2 番目以降の epic に<br>先行 epic への依存（blocked by）を設定
   MON->>GH: system Issue の エピック一覧 の<br>対応 Issue 列に起票した番号を反映
   MON->>GH: 着手順が先頭の epic に<br>確認:epic-conductor 付与
@@ -52,6 +52,7 @@ sequenceDiagram
 - エピック一覧と同数の epic Issue が system Issue に紐づいて存在する
 - 各 epic 本文の `## ユースケース一覧` がエピック一覧の所属ユースケースで埋まり、対応 story 列が全行 `未起票`
 - 着手順が 2 番目以降の epic に、先行 epic への依存（blocked by）が設定されている
+- 依存（blocked by）が未解決の epic に着手の痕跡が無い（`議論中` 未付与・assignee 未設定・epic-conductor の投稿コメントなし）
 - 全 epic に `layer:epic` と、経路に応じた `type:*`（新規は `type:feat` / 移行は `type:docs`）が付与されている
 - 親 system Issue に `リバースエンジニアリング` ラベルが付いていた場合、全 epic に引き継がれている（付いていなければ子にも付かない）
 - `確認:epic-conductor` が着手順の先頭 epic にだけ付いている

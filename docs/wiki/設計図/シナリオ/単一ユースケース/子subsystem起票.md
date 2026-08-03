@@ -37,8 +37,10 @@ sequenceDiagram
   MON->>GH: story Issue の完了報告を確認<br>（単一シナリオ確定 →<br>子 subsystem 起票に進むと判断）
   MON->>GH: シナリオから subsystem を洗い出して<br>依存順を決定（例: BE → FE）
   MON->>GH: 洗い出した scope のラベル定義を用意<br>（未作成のものだけ作られる）
-  MON->>GH: 依存のない先頭グループのみ<br>子 Issue を作成（layer:subsystem + scope:* +<br>確認:subsystem-conductor +<br>親の リバースエンジニアリング ラベル付与）
+  MON->>GH: 依存のない先頭グループのみ<br>子 Issue を作成（layer:subsystem + scope:* +<br>親の リバースエンジニアリング ラベル付与・<br>確認ラベルなし）
+  MON->>GH: 先頭グループは依存を張る対象が無いため<br>依存（blocked by）の設定を飛ばす
   MON->>GH: story Issue 本文の サブシステム一覧 に<br>洗い出し結果を記入<br>（起票済みは Issue 番号・残りは 未起票）
+  MON->>GH: 起票した subsystem に<br>確認:subsystem-conductor 付与
   MON->>GH: story Issue の完了報告コメントを Resolve
   MON->>GH: story Issue に起票結果の報告コメント投稿<br>（ユーザー宛・待機なし）
   MON->>GH: story Issue の 確認:story-conductor 除去<br>（ユーザー承認なしの自動完了）
@@ -49,6 +51,7 @@ sequenceDiagram
 ### 期待値
 
 - 依存のない先頭グループの subsystem Issue だけが story の Sub-issue として存在する（`layer:subsystem` + `scope:*` + `確認:subsystem-conductor` 付き）
+- 起票した subsystem Issue に blocked by が設定されていない（先頭グループのため依存を張る対象が無い）
 - 付与された `scope:*` が `constants.env` の scope 体裁（色・説明）で定義されている（ランダム色の自動作成になっていない）
 - 親 story Issue に `リバースエンジニアリング` ラベルが付いていた場合、起票した subsystem に引き継がれている（付いていなければ子にも付かない）
 - story Issue 本文に `## サブシステム一覧` が追加され、洗い出した全 subsystem の行が並んでいる（起票済みの行は `対応 subsystem` が `#番号`、未起票の行は `未起票`）
@@ -81,8 +84,10 @@ sequenceDiagram
   MON-->>GH: サブシステム一覧 の 未起票 行から<br>依存が満たされた次の subsystem を特定
   MON->>GH: subsystem-conductor の<br>インターフェース確定報告コメントを Resolve
   MON->>GH: 起票する scope のラベル定義を用意<br>（未作成のものだけ作られる）
-  MON->>GH: 次の subsystem の子 Issue を作成<br>（layer:subsystem + scope:* +<br>確認:subsystem-conductor +<br>親の リバースエンジニアリング ラベル付与）
+  MON->>GH: 次の subsystem の子 Issue を作成<br>（layer:subsystem + scope:* +<br>親の リバースエンジニアリング ラベル付与・<br>確認ラベルなし）
+  MON->>GH: 先行 subsystem のインターフェースが<br>確定済みのため依存（blocked by）の<br>設定を飛ばす
   MON->>GH: story Issue 本文の サブシステム一覧 の<br>該当行を Issue 番号に更新
+  MON->>GH: 次の subsystem に<br>確認:subsystem-conductor 付与
   MON->>GH: story Issue の 確認:story-conductor 除去<br>（ユーザー承認なしの自動完了）
   deactivate MON
 ```
@@ -90,6 +95,7 @@ sequenceDiagram
 ### 期待値
 
 - 次の subsystem Issue が story の Sub-issue として存在する（`layer:subsystem` + `scope:*` + `確認:subsystem-conductor` 付き）
+- 起票した subsystem Issue に blocked by が設定されていない（先行 subsystem のインターフェースが確定しているため待たせない）
 - 付与された `scope:*` が `constants.env` の scope 体裁（色・説明）で定義されている
 - 親 story Issue に `リバースエンジニアリング` ラベルが付いていた場合、起票した subsystem に引き継がれている（付いていなければ子にも付かない）
 - `## サブシステム一覧` の該当行の `対応 subsystem` が `未起票` から `#番号` に更新されている

@@ -54,8 +54,9 @@ sequenceDiagram
   ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
-  MON->>GH: 子 Issue を件数分作成<br>（layer:epic + 確認:epic-conductor 付与）
+  MON->>GH: 子 Issue を件数分作成<br>（layer:epic 付与・確認ラベルなし）
   MON->>GH: 着手順の依存がある epic に<br>先行 epic への依存（blocked by）を設定
+  MON->>GH: 全 epic に 確認:epic-conductor 付与
   MON->>GH: intake Issue の自分宛コメント一括 Resolve
   MON->>GH: intake Issue の 確認:intake-issue-triager 除去
   deactivate MON
@@ -66,6 +67,7 @@ sequenceDiagram
 
 - 承認された案と同数の Sub-issue が親 Issue に紐づいて存在する（`layer:epic` + `確認:epic-conductor` が付与）
 - 着手順の依存がある epic に blocked by が設定され、配下の story / subsystem には設定されていない
+- 依存（blocked by）が未解決の epic に着手の痕跡が無い（`議論中` 未付与・assignee 未設定・epic-conductor の投稿コメントなし）
 - intake Issue の本文がユーザー起票時のまま書き換わっていない
 - intake Issue に `layer:intake` + `type:*` が残り、`確認:*` は除去済み
 - 自分宛コメントが全て Resolve 済み

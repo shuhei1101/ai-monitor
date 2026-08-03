@@ -35,8 +35,10 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信
   activate MON
   MON->>GH: epic Issue の完了報告を確認<br>（複合シナリオ確定 →<br>子 story 起票に進むと判断）
-  MON->>GH: 子 Issue を UC 数だけ作成<br>（layer:story + 確認:story-conductor +<br>親の リバースエンジニアリング ラベル付与）
+  MON->>GH: 子 Issue を UC 数だけ作成<br>（layer:story + 親の リバースエンジニアリング<br>ラベル付与・確認ラベルなし）
+  MON->>GH: 着手順の依存がある story に<br>先行 story への依存（blocked by）を設定<br>（対象が無ければ飛ばす）
   MON->>GH: epic Issue 本文の 対応 story 列に<br>#35;番号 反映
+  MON->>GH: 全 story に 確認:story-conductor 付与
   MON->>GH: epic Issue の完了報告コメントを Resolve
   MON->>GH: epic Issue に起票結果の報告コメント投稿<br>（ユーザー宛・待機なし）
   MON->>GH: epic Issue の 確認:epic-conductor 除去<br>（役割終了・ユーザー承認なしの自動完了）
@@ -48,6 +50,7 @@ sequenceDiagram
 
 - ユースケース一覧の行数と同数の story Issue が epic の Sub-issue として存在する
 - 各 story Issue に `layer:story` + `確認:story-conductor` が付与されている
+- ユースケース一覧に着手順の依存が無い場合、どの story Issue にも blocked by が設定されていない
 - 親 epic Issue に `リバースエンジニアリング` ラベルが付いていた場合、全 story に引き継がれている（付いていなければ子にも付かない）
 - `対応 story` 列の `未起票` が全て `#番号` に置き換わっている
 - epic Issue のラベルが `layer:epic` 系のみになっている（`確認:*` は除去、`議論中` 付与なし・assignee 設定なし）
