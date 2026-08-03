@@ -18,7 +18,7 @@ subsystem-conductor が subsystem Issue の本文整形 + 現状調査（関連 
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
 | subsystem Issue | `layer:subsystem` + `確認:subsystem-conductor` 付きで存在 | 親 story と Sub-issue リンク済み・本文は空 |
-| 親 story Issue | ユースケース要件 + 単一 UC シナリオ確定済み | 担当範囲の元ネタ |
+| 親 story Issue | ユースケース要件 + 単一 UC シナリオ確定済み | 担当範囲の元ネタ。`## 背景` の `変更種別` は `変更` |
 | assignee | 未設定 | エージェント起動条件 |
 
 ### フロー
@@ -83,11 +83,49 @@ sequenceDiagram
 ### 期待値
 
 - 本文に `## 現状`（関連 Issue/PR / 関連ドキュメント）と `## システム要件（SA）`（機能要件 / 非機能要件 / スコープ外）が揃っている
+- 親 story の `変更種別` が `変更` のため現状調査を行い、`## 現状` に関連 Issue / PR と関連ドキュメントが記録されている
 - バグ Issue の場合は `### 再現手順` も記録されている
 - 実装コード・テストコードを読み出した記録がない（要件の判断材料は親 story と設計 Wiki に閉じる）
 - subsystem Draft PR（base=親 story ブランチ）が作成され、本文に `## 紐づく Issue` と `## タスク一覧`（Wiki 修正・実装・テスト実行の To Do）が記入されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - SA とタスク一覧をまとめた確認コメントが 1 件だけ投稿されている（SA とタスク一覧で 2 回待機していない）
+- subsystem PR に `確認:architect` が付与され、`確認:subsystem-conductor` が除去されている
+
+## 正常シナリオ（変更種別が新規・現状調査なし）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| subsystem Issue | `layer:subsystem` + `確認:subsystem-conductor` 付きで存在 | 親 story と Sub-issue リンク済み・本文は空 |
+| 親 story Issue | ユースケース要件 + 単一 UC シナリオ確定済み | `## 背景` の `変更種別` が `新規`。現状調査なしの分岐を決定的に誘発 |
+| 既存実装 | 担当範囲に対応する実装・設計 Wiki が存在しない | `新規` の記入と実態が一致している状態 |
+| assignee | 未設定 | エージェント起動条件 |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  participant GH as GitHub
+  participant MON as subsystem-conductor
+  participant REPO as リポジトリ
+
+  Note over MON: 起動〜親 story のシナリオ調査までは<br>正常シナリオと同一
+  activate MON
+  MON-->>GH: 親 story の 背景 から<br>担当範囲の 変更種別 が 新規 と判断
+  MON->>GH: 概要 / 背景 + 現状 セクションを<br>subsystem Issue 本文に反映<br>（既存実装が無いので現状調査は行わず<br>関連 Issue / PR は なし と記録）
+  MON->>GH: 機能・非機能要件の観点を親 story の<br>ユースケース要件から洗い出し<br>→システム要件 SA セクションを<br>subsystem Issue 本文に反映
+  Note over MON: Draft PR 作成〜完了処理は<br>正常シナリオと同一
+  deactivate MON
+```
+
+### 期待値
+
+- `## 現状` の `### 関連 Issue / PR` と `### 関連ドキュメント` が `なし` で記録されている（`変更種別` が `新規` なので既存を調べる対象がない）
+- 関連 Issue / PR の収集をサブエージェントで走らせた記録がない（`変更種別` を読んで調査自体を省いている）
+- `## システム要件（SA）` が親 story のユースケース要件だけから書かれている
+- `## タスク一覧` の Wiki 修正が既存ページの更新ではなく新規作成として並んでいる
 - subsystem PR に `確認:architect` が付与され、`確認:subsystem-conductor` が除去されている
 
 ## 正常シナリオ（リバースエンジニアリング）
