@@ -25,7 +25,6 @@ def _issue_ns(number, **overrides):
         assignees=[NS(login="shuhei1101")],
         body="本文",
         pull_request=UNSET,
-        sub_issues_summary=UNSET,
     )
     base.update(overrides)
     return NS(**base)
@@ -59,16 +58,19 @@ def test_list_open_targets_when_pr_mixed(gh_mon, mon_project):
     assert targets[1].labels == ["確認:tester"]
 
 
-def test_list_open_targets_when_sub_issues_summary(gh_mon, mon_project):
-    """Sub-issue 件数の変換を確認する（正常系）。"""
-    # 準備
-    issue = _issue_ns(30, sub_issues_summary=NS(total=2, completed=1))
-    gh_mon.rest.issues.list_for_repo.side_effect = [_resp([issue])]
-    # 実行
+def test_list_open_targets_when_pr(gh_mon, mon_project):
+    """PR の変換で base / head が入ることを確認する（正常系）。"""
+    pr = _issue_ns(30, pull_request=NS(url="..."), draft=True, body="## 紐づく Issue\n\n- #10")
+    gh_mon.rest.issues.list_for_repo.return_value = _resp([pr])
+    gh_mon.rest.pulls.list.return_value = _resp(
+        [NS(number=30, base=NS(ref="master"), head=NS(ref="feat/epic/x"))]
+    )
+
     targets = search_mod.list_open_targets(mon_project)
-    # 検証
-    assert targets[0].sub_issues_total == 2
-    assert targets[0].sub_issues_completed == 1
+
+    assert targets[0].base_ref == "master"
+    assert targets[0].head_ref == "feat/epic/x"
+    assert targets[0].linked_issue_numbers == [10]
 
 
 def test_parse_linked_issue_numbers():

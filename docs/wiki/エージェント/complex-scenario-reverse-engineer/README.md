@@ -19,7 +19,7 @@ template_version: 2.0.0
 | 自分の確認ラベル | `$AI_MONITOR_LABEL_CONFIRM_COMPLEX_SCENARIO_REVERSE_ENGINEER` |
 | 発注元の確認ラベル | `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` |
 | RE ブランチの base | `master` |
-| 読み取り範囲 | 親 system Issue の `## エピック一覧` の所属ユースケース |
+| 読み取り範囲 | 親 system PR の `## エピック一覧` の所属ユースケース |
 
 ## 目次
 

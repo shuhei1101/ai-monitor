@@ -23,37 +23,32 @@ Ready 済みの PR に呼んでも何も起きない。
 
 - コンフリクトが発生した場合、subsystem PR に競合ファイルとどちらを残すかの相談コメントを投稿し、`議論中` 付与 + `assignee=ユーザー` で待機する（解消の往復は「応答ループ」で回し、全競合解消後に本手順へ合流する）
 
-MCP `merge_pr` を呼ぶ:
+MCP `unlink_stack` を呼ぶ:
+- `pr_number`: subsystem PR の番号
+
+スタックに属したままマージすると下位の PR まで一緒にマージされるため、先に外す（外したスタックの残りはツール側で組み直される）。
+
+続けて MCP `merge_pr` を呼ぶ:
 - `pr_number`: subsystem PR の番号
 - `strategy`: `squash`
 
 続けて MCP `worktree_remove` を呼ぶ:
 - `branch`: subsystem ブランチ
 
-### subsystem Issue の close
-
-MCP `close` を呼ぶ:
-- `number`: 対象 subsystem Issue 番号（subsystem PR 本文の `## 紐づく Issue`）
-- `is_pr`: false
-- `reason`: `completed`
-
-完了報告より前に閉じる。
-story-conductor は全子 subsystem が closed かどうかで統合テストの委任と状況確認を分けるため、open のまま報告すると委任側の分岐に入れない。
-
-### 親 story Issue への完了報告
+### 親 story PR への完了報告
 
 MCP `comment` を呼ぶ:
-- `number`: 親 story Issue 番号
-- `is_pr`: false
+- `number`: 親 story PR 番号
+- `is_pr`: true
 - `sender`: `subsystem-conductor`
 - `receiver`: `story-conductor`
 - `format`:
   - `type`: `plain`
-  - `body`: 完了報告（対象 subsystem Issue 番号 + マージした subsystem PR へのリンク + 実装内容の要約）。バグ差し戻し由来の修正用 PR の場合は、修正完了報告であることと修正内容を書く
+  - `body`: 完了報告（対象 subsystem PR 番号 + マージした subsystem PR へのリンク + 実装内容の要約）。バグ差し戻し由来の修正用 PR の場合は、修正完了報告であることと修正内容を書く
 
 続けて MCP `add_labels` を呼ぶ:
-- `number`: 親 story Issue 番号
-- `is_pr`: false
+- `number`: 親 story PR 番号
+- `is_pr`: true
 - `labels`:
   - `$AI_MONITOR_LABEL_CONFIRM_STORY_CONDUCTOR` の値
 

@@ -38,7 +38,7 @@ MCP `merge_pr` を呼ぶ:
 
 MCP `remove_watch_targets` を呼ぶ:
 - `agent_name`: `{自分}`
-- `number`: $issue_number
+- `number`: $number
 - `watch_numbers`: RE PR の番号
 
 ### 手番の引き戻し
@@ -46,8 +46,8 @@ MCP `remove_watch_targets` を呼ぶ:
 RE PR での用が済んだので、手番を自 Issue へ戻して要件確定に続ける（規約『フェーズ索引の網羅』の 1 面 1 確認ラベル）。
 
 MCP `transition_phase` を呼ぶ:
-- `number`: $issue_number
-- `is_pr`: false
+- `number`: $number
+- `is_pr`: true
 - `remove_labels_`: なし
 - `add_labels_`:
   - `{自分}` の確認ラベル（担当範囲表の環境変数名）の値

@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING
 from ai_monitor.features.agents.docs import build_agent_docs, load_phase_config
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
-from ai_monitor.integrations.github.issues import has_open_blocker
+from ai_monitor.integrations.github.stacks import get_stack
 from ai_monitor.integrations.github.labels import add_label
 from ai_monitor.integrations.tmux.ops import create_session, kill_session, send_keys
 from ai_monitor.shared.settings import MonitoredProject, TelemetrySettings
-from ai_monitor.shared.types import Issue, MonitorTarget, PullRequest
+from ai_monitor.shared.types import MonitorTarget, PullRequest
 
 if TYPE_CHECKING:
     from ai_monitor.features.rate_limit.gate import RateLimitGate
@@ -67,16 +67,19 @@ def poll(
     # 優先度順にソートして 1 件ずつ処理する
     ranks = {priority_urgent: 0, priority_low: 2}
     for target in sorted(matched, key=lambda t: _sort_key(t, ranks)):
-        # 着手をブロックしている依存が残っている対象は送らない
+        # スタック上で自分より下に open な PR が残っている対象は送らない
         # （起動しても待機して終わるだけで、Claude の利用枠を消費するため）
-        if isinstance(target, Issue) and has_open_blocker(project, target.number):
-            logger.info(
-                "依存先が open のため起動を見送りました: project=%s agent_name=%s number=%s",
-                project.name,
-                agent.name,
-                target.number,
-            )
-            continue
+        if isinstance(target, PullRequest):
+            stack = get_stack(project, target.number)
+            if stack is not None and stack.below_open:
+                logger.info(
+                    "スタック下位が open のため起動を見送りました: project=%s agent_name=%s number=%s below=%s",
+                    project.name,
+                    agent.name,
+                    target.number,
+                    stack.below_open,
+                )
+                continue
         _process_one(
             project,
             agent,
@@ -311,21 +314,33 @@ def _sort_key(target: MonitorTarget, ranks: dict[str, int]) -> tuple[int, int]:
 
 
 def build_context_snapshot(target: MonitorTarget, open_targets: list[MonitorTarget]) -> str:
-    """対象と紐づく open PR を state / ラベル / assignee 付きのツリー文字列に整形する。"""
-    # 基準の Issue を確定する（PR の場合は紐づく Issue を open 一覧から探す）
+    """対象と配下の open PR を state / ラベル / assignee 付きのツリー文字列に整形する。"""
+    prs = [t for t in open_targets if isinstance(t, PullRequest)]
+    # 基準を確定する（PR の場合は base を辿れなくなるところまで遡る）
     base: MonitorTarget = target
     if isinstance(target, PullRequest):
-        linked = [
-            t for t in open_targets if isinstance(t, Issue) and t.number in target.linked_issue_numbers
-        ]
-        base = linked[0] if linked else target
+        current = target
+        while True:
+            parent = next((t for t in prs if t.head_ref and t.head_ref == current.base_ref), None)
+            if parent is None:
+                break
+            current = parent
+        base = current
     lines = [_node_line(base)]
-    # 基準 Issue の番号を紐づく Issue に含む PR をぶら下げる
-    if isinstance(base, Issue):
-        for candidate in open_targets:
-            if isinstance(candidate, PullRequest) and base.number in candidate.linked_issue_numbers:
-                lines.append("  └ " + _node_line(candidate))
+    # base の連鎖で配下を再帰的にぶら下げる（成果物 PR・PoC PR もここで拾われる）
+    if isinstance(base, PullRequest):
+        _append_children(base, prs, lines, depth=1)
     return "\n".join(lines)
+
+
+def _append_children(
+    parent: PullRequest, prs: list[PullRequest], lines: list[str], *, depth: int
+) -> None:
+    """base に親の head を持つ PR を深さ順に行へ足す。"""
+    for candidate in prs:
+        if candidate.base_ref and candidate.base_ref == parent.head_ref:
+            lines.append("  " * depth + "└ " + _node_line(candidate))
+            _append_children(candidate, prs, lines, depth=depth + 1)
 
 
 def _node_line(target: MonitorTarget) -> str:

@@ -7,14 +7,14 @@ PoC を指示した本人が結果を確認してから次へ進める（epic-po
 
 ### 結果の照合
 
-epic Issue 本文の `## PoC 結果` と epic-poc-runner の完了報告コメントを突き合わせる。
+epic PR 本文の `## PoC 結果` と epic-poc-runner の完了報告コメントを突き合わせる。
 
 - 実測値が成功条件を満たしているか
 - 本文の結論と報告の結論が一致しているか
 
 ### 疑問ありの場合
 
-epic Issue に質問コメント（矛盾点・確認したい点）を投稿し、`議論中` 付与 + `assignee=ユーザー` で待機する（以降の手順は実行しない）。
+epic PR に質問コメント（矛盾点・確認したい点）を投稿し、`議論中` 付与 + `assignee=ユーザー` で待機する（以降の手順は実行しない）。
 ユーザーの回答後の再開ターンで分岐する:
 
 - 続行指示 → 「疑問なしの場合」に合流する
@@ -35,7 +35,7 @@ MCP `resolve_comments` で自分宛コメント（完了報告含む）を一括
 
 ### epic Draft PR の作成
 
-MCP `worktree_create`（`branch`: `{type}/epic/{ドメイン}`・`base_ref`: `origin/master`）→ MCP `create_draft_pr`（`base_branch`: `master`・`body`: `## 紐づく Issue` と `## タスク一覧`・`labels`: `$AI_MONITOR_LABEL_LAYER_EPIC` の値）→ MCP `add_watch_targets`（作成した PR の番号）の順に呼ぶ。
+MCP `worktree_create`（`branch`: `{type}/epic/{ドメイン}`・`base_ref`: `origin/{自分の epic ブランチ}`）→ MCP `create_draft_pr`（`base_branch`: 自分の epic ブランチ・`body`: `## 紐づく Issue` と `## タスク一覧`・`labels`: `$AI_MONITOR_LABEL_LAYER_EPIC` の値）→ MCP `add_watch_targets`（作成した PR の番号）の順に呼ぶ。
 
 `## タスク一覧` の作り方は「要件確定（完了処理）」と同じ（モック作成・複合 UC シナリオ・シナリオ索引・複合 UC E2E テストの作成 / 実行を全行未チェックで列挙する）。
 
@@ -47,8 +47,8 @@ MCP `worktree_create`（`branch`: `{type}/epic/{ドメイン}`・`base_ref`: `or
 ### ラベル除去
 
 MCP `transition_phase` を呼ぶ:
-- `number`: $issue_number
-- `is_pr`: false
+- `number`: $number
+- `is_pr`: true
 - `remove_labels_`:
   - `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` の値
 - `add_labels_`: なし
@@ -57,4 +57,4 @@ MCP `transition_phase` を呼ぶ:
 
 MCP `report_completion` を呼ぶ:
 - `agent_name`: `epic-conductor`
-- `number`: $issue_number
+- `number`: $number

@@ -31,11 +31,11 @@ flowchart TD
 
   subgraph FOCUS["検証対象: 2 段のエスカレーション → story レベルの決定 → シナリオ修正 → 設計再開"]
     UC1([エスカレーション対応:正常シナリオ<br>（方針確認）]) -->|選択肢提示 + 議論中 →<br>ユーザーが上位中継を選択| UC2([エスカレーション対応:正常シナリオ<br>（上位への中継）])
-    UC2 -->|親 story Issue に<br>確認:story-conductor +<br>中継コメント| UC3([エスカレーション対応:正常シナリオ<br>（方針確認）])
+    UC2 -->|親 story PR に<br>確認:story-conductor +<br>中継コメント| UC3([エスカレーション対応:正常シナリオ<br>（方針確認）])
     UC3 -->|選択肢提示 + 議論中 →<br>ユーザーがシナリオ変更を伴う<br>解決案を選択| UC4([エスカレーション対応:正常シナリオ<br>（シナリオ修正を伴う解決）])
     UC4 -->|story PR に<br>確認:single-scenario-writer +<br>修正指示コメント| UC5([単一シナリオ設計:正常シナリオ<br>（エスカレーション由来のシナリオ修正）])
     UC5 -->|シナリオ修正 commit +<br>確認:story-conductor + 完了報告| UC6([エスカレーション対応:正常シナリオ<br>（シナリオ修正完了後の決定通知）])
-    UC6 -->|subsystem Issue に<br>確認:subsystem-conductor +<br>決定通知コメント| UC7([エスカレーション対応:正常シナリオ<br>（上位の決定の受領）])
+    UC6 -->|subsystem PR に<br>確認:subsystem-conductor +<br>決定通知コメント| UC7([エスカレーション対応:正常シナリオ<br>（上位の決定の受領）])
     UC7 -->|subsystem PR に 確認:architect +<br>再開指示コメント| UC8([SS設計:正常シナリオ])
   end
 
@@ -54,11 +54,11 @@ flowchart TD
 ### 期待値
 
 - 修正後の単一 UC シナリオの commit が story ブランチに積まれている
-- story Issue 本文の `## ユースケース要件` が決定内容で更新されている
+- story PR 本文の `## ユースケース要件` が決定内容で更新されている
 - 決定した方針に沿った設計 Wiki の commit が subsystem ブランチに積まれている
-- epic Issue へのラベル付与・コメント投稿が一切発生していない（2 段で折り返している）
+- epic PR へのラベル付与・コメント投稿が一切発生していない（2 段で折り返している）
 - 各段のエスカレーション関連コメントが全て Resolve 済み
-- subsystem PR に `確認:tester` が付与され、エスカレーションで使った `確認:*`（story PR の `確認:single-scenario-writer` / subsystem Issue の `確認:subsystem-conductor`）がどこにも残っていない（設計再開後の通常フローが付ける確認ラベルは対象外）
+- subsystem PR に `確認:tester` が付与され、エスカレーションで使った `確認:*`（story PR の `確認:single-scenario-writer` / subsystem PR の `確認:subsystem-conductor`）がどこにも残っていない（設計再開後の通常フローが付ける確認ラベルは対象外）
 
 ## 異常シナリオ
 

@@ -17,8 +17,8 @@ epic-conductor（復帰呼び出し）が epic-poc-runner の検証結果を確�
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| PoC 完了 | PoC 結果が epic Issue 本文に記録済み・PoC PR は open | - |
-| epic Issue | `確認:epic-conductor` 付与済み + epic-poc-runner の完了報告コメント（自分宛・未解決）あり | - |
+| PoC 完了 | PoC 結果が epic PR 本文に記録済み・PoC PR は open | - |
+| epic PR | `確認:epic-conductor` 付与済み + epic-poc-runner の完了報告コメント（自分宛・未解決）あり | - |
 | ユーザー回答 | 要件確定で画面変更なしと回答済み | 分岐を決定的に誘発 |
 | assignee | 未設定 | エージェント起動条件 |
 
@@ -31,32 +31,32 @@ sequenceDiagram
   participant MON as epic-conductor
 
   Note over MON: 既存セッションを継続利用
-  Note over GH: epic Issue に 確認:epic-conductor 付与済み・<br>未解決の完了報告コメントあり
+  Note over GH: epic PR に 確認:epic-conductor 付与済み・<br>未解決の完了報告コメントあり
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
   ORC->>MON: 既存セッションへ送信
   participant REPO as リポジトリ
   activate MON
-  MON->>GH: epic Issue の PoC 結果（本文）+<br>完了報告コメントを確認
+  MON->>GH: epic PR の PoC 結果（本文）+<br>完了報告コメントを確認
 
   alt 結果に疑問なし
-    MON->>GH: epic Issue の自分宛コメント一括 Resolve<br>（epic-poc-runner の完了報告コメント含む）
+    MON->>GH: epic PR の自分宛コメント一括 Resolve<br>（epic-poc-runner の完了報告コメント含む）
     MON->>GH: PoC PR close（マージなし・恒久記録）
     MON->>REPO: PoC ブランチ / worktree 削除
     MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}）+ 空 commit push
     MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
     MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
     MON->>GH: epic PR に 確認:complex-scenario-writer 付与
-    MON->>GH: epic Issue の 確認:epic-conductor 除去
+    MON->>GH: epic PR の 確認:epic-conductor 除去
   else 結果に疑問あり
     Note over MON: 異常シナリオ（PoC 結果に疑問あり・<br>続行指示 / 再検証指示）参照
   end
   deactivate MON
-  Note over MON: セッションは epic Issue close まで常駐
+  Note over MON: セッションは epic PR マージまで常駐
 ```
 
 ### 期待値
 
-- epic Issue の自分宛コメント（epic-poc-runner の完了報告コメント含む）が全て Resolve 済み
+- epic PR の自分宛コメント（epic-poc-runner の完了報告コメント含む）が全て Resolve 済み
 - PoC PR（複数あれば全て）が closed（マージなし）、PoC のリモートブランチと worktree が削除済み
 - epic Draft PR（base=master・本文は `## 紐づく Issue` のみ）が作成され、`確認:complex-scenario-writer` が付与されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
@@ -86,8 +86,8 @@ sequenceDiagram
   MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
   MON->>GH: epic PR に 指示コメント投稿（@mock-designer 宛・<br>画面方針の要点） +<br>確認:mock-designer 付与
-  MON->>GH: epic Issue の 確認:epic-conductor 除去
-  Note over MON: セッションは epic Issue close まで常駐
+  MON->>GH: epic PR の 確認:epic-conductor 除去
+  Note over MON: セッションは epic PR マージまで常駐
 ```
 
 ### 期待値
@@ -102,9 +102,9 @@ sequenceDiagram
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| PoC 完了 | PoC 結果が epic Issue 本文に記録済み・PoC PR は open | - |
+| PoC 完了 | PoC 結果が epic PR 本文に記録済み・PoC PR は open | - |
 | 完了報告コメント | 本文の `## PoC 結果` と矛盾する内容を仕込む | 例: 実測値が成功条件未達なのに「成立」と結論 |
-| epic Issue | `確認:epic-conductor` 付与済み | - |
+| epic PR | `確認:epic-conductor` 付与済み | - |
 | assignee | 未設定 | エージェント起動条件 |
 
 ### フロー
@@ -116,9 +116,9 @@ sequenceDiagram
   participant ORC as モニター
   participant MON as epic-conductor
 
-  MON->>GH: epic Issue の PoC 結果（本文）+<br>完了報告コメントを確認<br>（矛盾を検知）
-  MON->>GH: epic Issue に質問コメント + 議論中 付与 +<br>assignee=ユーザー 設定
-  U->>GH: epic Issue に回答コメント +<br>議論中 除去 + assignee 外し
+  MON->>GH: epic PR の PoC 結果（本文）+<br>完了報告コメントを確認<br>（矛盾を検知）
+  MON->>GH: epic PR に質問コメント + 議論中 付与 +<br>assignee=ユーザー 設定
+  U->>GH: epic PR に回答コメント +<br>議論中 除去 + assignee 外し
   ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
   ORC->>MON: 既存セッションへ送信
   Note over MON: 正常シナリオの完了処理に合流
@@ -126,7 +126,7 @@ sequenceDiagram
 
 ### 期待値
 
-- 質問コメントとユーザーの回答が epic Issue に記録され、自分宛コメントが Resolve 済み
+- 質問コメントとユーザーの回答が epic PR に記録され、自分宛コメントが Resolve 済み
 - epic Draft PR（base=master・本文は `## 紐づく Issue` のみ）が作成され、`確認:complex-scenario-writer` が付与されている
 - 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
 - `確認:epic-conductor` が除去されている
@@ -138,9 +138,9 @@ sequenceDiagram
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| PoC 完了 | PoC 結果が epic Issue 本文に記録済み・PoC PR は open | - |
+| PoC 完了 | PoC 結果が epic PR 本文に記録済み・PoC PR は open | - |
 | 完了報告コメント | 本文の `## PoC 結果` と矛盾する内容を仕込む | 例: 実測値が成功条件未達なのに「成立」と結論 |
-| epic Issue | `確認:epic-conductor` 付与済み | - |
+| epic PR | `確認:epic-conductor` 付与済み | - |
 | assignee | 未設定 | エージェント起動条件 |
 
 ### フロー
@@ -152,19 +152,19 @@ sequenceDiagram
   participant ORC as モニター
   participant MON as epic-conductor
 
-  MON->>GH: epic Issue の PoC 結果（本文）+<br>完了報告コメントを確認<br>（矛盾を検知）
-  MON->>GH: epic Issue に質問コメント + 議論中 付与 +<br>assignee=ユーザー 設定
-  U->>GH: epic Issue に再検証指示コメント +<br>議論中 除去 + assignee 外し
+  MON->>GH: epic PR の PoC 結果（本文）+<br>完了報告コメントを確認<br>（矛盾を検知）
+  MON->>GH: epic PR に質問コメント + 議論中 付与 +<br>assignee=ユーザー 設定
+  U->>GH: epic PR に再検証指示コメント +<br>議論中 除去 + assignee 外し
   ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
   ORC->>MON: 既存セッションへ送信
-  MON->>GH: epic Issue の未解決の<br>再検証指示コメントを確認
+  MON->>GH: epic PR の未解決の<br>再検証指示コメントを確認
   MON->>GH: PoC PR に再検証指示コメント投稿<br>（@epic-poc-runner 宛・ユーザー指示の要約）
   MON->>GH: 同一 PoC PR に 確認:epic-poc-runner 再付与<br>（PR・ブランチは保持したまま差し戻し）
 ```
 
 ### 期待値
 
-- 質問コメントとユーザーの再検証指示が epic Issue に記録されている
+- 質問コメントとユーザーの再検証指示が epic PR に記録されている
 - **同一 PoC PR** に `確認:epic-poc-runner` が再付与され、再検証指示コメント（@epic-poc-runner 宛・未解決）が投稿されている（PoC PR は 1 件のまま増えていない）
 - PoC PR・ブランチが open / 存在したまま
 - epic Draft PR が作成されていない

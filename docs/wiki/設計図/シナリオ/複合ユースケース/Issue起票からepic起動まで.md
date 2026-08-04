@@ -34,23 +34,23 @@ flowchart TD
   U0([ユーザー]) -->|Issue 起票「期限通知メール機能の追加」+<br>確認:intake ラベル付与| UC1
 
   subgraph FOCUS["検証対象: epic 判定 → epic-conductor の起動"]
-    UC1([Issue分解と子起票:正常シナリオ]) -->|epic Issue + 確認:epic-conductor| UC2([epic要件確定:正常シナリオ<br>（PoC 不要・画面変更なし）])
+    UC1([Issue分解と子PR作成:正常シナリオ]) -->|epic PR + 確認:epic-conductor| UC2([epic要件確定:正常シナリオ<br>（PoC 不要・画面変更なし）])
   end
 
   UC2 -->|epic Draft PR +<br>確認:complex-scenario-writer 付与| DONE([epic Draft PR が<br>複合シナリオ設計へ引き継がれた状態])
 
-  click UC1 "../単一ユースケース/Issue分解と子起票.md#正常シナリオ"
+  click UC1 "../単一ユースケース/Issue分解と子PR作成.md#正常シナリオ"
   click UC2 "../単一ユースケース/epic要件確定.md#正常シナリオpoc-不要画面変更なし"
 ```
 
 ### 期待値
 
-- intake Issue に epic Issue が Sub-issue として紐づき、`layer:epic` + `type:*` が付与されている
+- intake Issue に紐づく epic PR が作成され、`layer:epic` + `type:*` が付与されている
 - intake Issue の本文がユーザー起票時のまま書き換わっていない
-- epic Issue 本文に `## 概要` / `## 背景` / `## ユースケース一覧` / `## 横断要件` が揃い、ユースケース一覧の `対応 story` 列が全行 `未起票`
+- epic PR 本文に `## 概要` / `## 背景` / `## ユースケース一覧` / `## 横断要件` が揃い、ユースケース一覧の `対応 story` 列が全行 `未起票`
 - epic Draft PR（base=master・本文は `## 紐づく Issue` のみ）が作成され、`確認:complex-scenario-writer` が付与されている
 - epic PR の番号が epic-conductor セッションの監視面（モニターの台帳）に登録されている
-- intake Issue と epic Issue がともに open のまま（`確認:*` はどちらにも残っていない）
+- intake Issue と epic PR がともに open のまま（`確認:*` はどちらにも残っていない）
 - 両 Issue の自分宛コメントが全て Resolve 済み
 
 ## 異常シナリオ

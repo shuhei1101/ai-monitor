@@ -23,6 +23,7 @@ template_version: 1.4.0
 | 共通 | assignee 再取得 | `mcp/server.py` | 関数 | [`_get_assignees`](#assignee-再取得) | 操作後の現在 assignee 一覧を返す | - |
 | 共通 | Resolve 実行 | `mcp/server.py` | 関数 | [`_minimize_comment`](#resolve-実行) | GraphQL `minimizeComment` を実行 | `classifier=RESOLVED` |
 | 共通 | Resolved 状態取得 | `mcp/server.py` | 関数 | [`_is_minimized`](#resolved-状態取得) | コメントの `isMinimized` を GraphQL で取得 | - |
+| 共通 | 親PR取得 | `mcp/server.py` | 関数 | [`_fetch_parent_pr`](#親pr取得) | base ブランチを head に持つ PR を親として返す | 見つからなければ `None` |
 | 共通 | コメント投稿実体 | `mcp/server.py` | 関数 | [`_create_issue_comment`](#コメント投稿実体) | REST でコメントを投稿 | PR も同エンドポイント |
 | 共通 | コメント解析 | `mcp/server.py` | 関数 | [`_parse_comment_blocks`](#コメント解析) | `------` 区切りブロックの from / to と本文をパース | - |
 | 共通 | 定型ブロック組立 | `mcp/server.py` | 関数 | [`_format_block`](#定型ブロック組立) | from / to ヘッダー + 本文（会話欄は末尾に区切り線）を組み立てる | 書式は `規約/コメント.md` |
@@ -35,6 +36,7 @@ template_version: 1.4.0
 | 共通 | ローカルブランチ存在確認 | `mcp/server.py` | 関数 | [`_branch_exists`](#ローカルブランチ存在確認) | ローカルブランチの有無を返す | 非 0 終了を結果として扱う |
 | 共通 | マージ可否待ち | `mcp/server.py` | 関数 | [`_wait_mergeable`](#マージ可否待ち) | GitHub のマージ可否計算が終わるまで PR を取り直す | base 更新直後の 405 を避ける |
 | 共通 | 質問 DTO | `mcp/models.py` | データモデル | [`Question`](#質問) / [`Choice`](#選択肢) | ask_questions の質問・選択肢 | - |
+| 共通 | スタック DTO | `mcp/models.py` | データモデル | [`StackLinkResult`](#スタック接続結果) / [`StackUnlinkResult`](#スタック解除結果) | スタック接続 / 解除の結果 | - |
 | 共通 | 定数 | `mcp/server.py` | 定数 | `CHOICE_LETTERS` | 選択肢に振る記号（A / B / C ...） | 採番はコメントごとに先頭から振る |
 | 共通 | コメント解析 DTO | `mcp/models.py` | データモデル | [`CommentBlock`](#コメントブロック) / [`Comment`](#コメント) | `------` 区切りブロックのパース結果 | - |
 | 共通 | レビュースレッド DTO | `mcp/models.py` | データモデル | [`ReviewThread`](#レビュースレッド) | list_review_threads の戻り値 | - |
@@ -44,7 +46,7 @@ template_version: 1.4.0
 | 共通 | worktree 結果 DTO | `mcp/models.py` | データモデル | [`WorktreeCreateResult`](#worktree-作成結果) / [`WorktreeRemoveResult`](#worktree-削除結果) | worktree 操作の戻り値 | - |
 | 共通 | 本文フォーマット型 | `mcp/models.py` | 型 | [`CommentFormat`](#本文フォーマット) | `type` を判別子とする Annotated Union | `Field(discriminator="type")` |
 | 共通 | 本文フォーマット DTO | `mcp/models.py` | データモデル | [`PlainFormat`](#プレーン形式) / [`CommitsFormat`](#commit-表形式) / [`PagesFormat`](#ページ範囲表形式) / [`CommitEntry`](#コミットエントリ) / [`PageRangeEntry`](#ページ範囲エントリ) | 本文構成の入力 | Union の各分岐と行の型 |
-| 共通 | スナップショット DTO | `mcp/models.py` | データモデル | [`IssueSnapshot`](#イシュースナップショット) / [`Label`](#ラベル) / [`UserRef`](#ユーザー参照) / [`IssueRef`](#イシュー参照) / [`IssueCommentEntry`](#コメントエントリ) / [`SubIssuesSummary`](#サブイシュー集計) | get_issue_or_pr の戻り値ツリー | - |
+| 共通 | スナップショット DTO | `mcp/models.py` | データモデル | [`IssueSnapshot`](#イシュースナップショット) / [`Label`](#ラベル) / [`UserRef`](#ユーザー参照) / [`IssueRef`](#イシュー参照) / [`IssueCommentEntry`](#コメントエントリ) / [`SubIssuesSummary`](#サブイシュー集計) / [`StackInfo`](#スタック情報) | get_issue_or_pr の戻り値ツリー | - |
 | Issue・PR情報取得 | MCP ツール | `mcp/server.py` | 関数 | [`get_issue_or_pr`](#issuepr情報取得) | Issue / PR の情報を 1 コマンドで取得 | 読み取り専用 |
 | コメント投稿 | MCP ツール | `mcp/server.py` | 関数 | [`comment`](#コメント投稿) | 定型ブロックでコメントを投稿 | - |
 | 質問投稿 | MCP ツール | `mcp/server.py` | 関数 | [`ask_questions`](#質問投稿) | 選択肢 + 推奨付きの質問を 1 質問 1 コメントで投稿 | - |
@@ -73,6 +75,8 @@ template_version: 1.4.0
 | Draft PR 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_draft_pr`](#draftpr作成) | base 明示で Draft PR を作成 | Stacked PR 対応。`layer:*` は作成時に付与する |
 | PR Ready 化 | MCP ツール | `mcp/server.py` | 関数 | [`mark_pr_ready`](#pr_ready化) | Draft を解除 | Ready 済みなら何もしない（冪等） |
 | PR マージ | MCP ツール | `mcp/server.py` | 関数 | [`merge_pr`](#prマージ) | 既定 squash + ブランチ削除でマージ | - |
+| スタック接続 | MCP ツール | `mcp/server.py` | 関数 | [`link_stack`](#スタック接続) | 複数の PR を Stacked Pull Requests として繋ぐ | 繋げない場合も例外にせず結果で返す |
+| スタック解除 | MCP ツール | `mcp/server.py` | 関数 | [`unlink_stack`](#スタック解除) | マージ前に PR をスタックから外し残りを組み直す | マージ手順から無条件に呼べる |
 | worktree 作成 | MCP ツール | `mcp/server.py` | 関数 | [`worktree_create`](#worktree作成) | ブランチと worktree を作成 | 命名は `規約/ブランチ戦略.md` |
 | worktree 削除 | MCP ツール | `mcp/server.py` | 関数 | [`worktree_remove`](#worktree削除) | worktree とブランチを削除 | - |
 
@@ -794,9 +798,10 @@ Issue / PR の情報を取得し[イシュースナップショット](#イシ�
 | 起票者取得 | `author` | `bool` | - | `True` | 起票者を取得するか | - |
 | headブランチ取得 | `head_ref` | `bool` | - | `True` | head ブランチ名を取得するか | PR のみ有効 |
 | baseブランチ取得 | `base_ref` | `bool` | - | `True` | base ブランチ名を取得するか | PR のみ有効 |
-| 親 Issue取得 | `parent` | `bool` | - | `True` | 親 Issueを取得するか | - |
-| 子 Issue取得 | `sub_issues` | `bool` | - | `True` | 子 Issueを取得するか | - |
-| 子集計取得 | `sub_issues_summary` | `bool` | - | `True` | 子集計を取得するか | - |
+| 親取得 | `parent` | `bool` | - | `True` | 親を取得するか | Issue は Sub-issue リンクの親、PR は base ブランチを head に持つ PR |
+| 子 Issue取得 | `sub_issues` | `bool` | - | `True` | 子 Issueを取得するか | Issue のみ有効 |
+| 子集計取得 | `sub_issues_summary` | `bool` | - | `True` | 子集計を取得するか | Issue のみ有効 |
+| スタック取得 | `stack` | `bool` | - | `True` | スタック所属を取得するか | PR のみ有効 |
 
 引数例:
 
@@ -819,11 +824,15 @@ IssueSnapshot(number=35, title="プロフィール編集機能", state="OPEN", l
 #### 処理
 
 1. REST で Issue / PR の基本情報を取得する（PR は `is_pr` でエンドポイントを切り替え）
-2. 取得フラグが `True` のフィールド（コメント / 親子 Issue / 子集計 等）を追加取得する（コメントの `isMinimized` は GraphQL）
-3. head / base ブランチ名を確定する
+2. 取得フラグが `True` のフィールド（コメント / 子 Issue / 子集計 等）を追加取得する（コメントの `isMinimized` は GraphQL）
+3. 親を確定する
+   - `is_pr` が `True` の場合、base ブランチを head に持つ PR を head 検索で引く（[親PR取得](#親pr取得)）
+   - `is_pr` が `False` の場合、Sub-issue リンクの親を取得する（親なしの 404 は `None`）
+4. `is_pr` が `True` の場合、スタック所属を取得する（[スタック所属取得](./../モニター/GitHub連携.py.md#スタック所属取得)。未所属は `None`）
+5. head / base ブランチ名を確定する
    - `is_pr` が `True` の場合、手順 1 の応答から取り出す（追加の API 呼び出しはしない）
    - `is_pr` が `False` の場合、`None` にする（Issue はブランチを持たない）
-4. 結果を[イシュースナップショット](#イシュースナップショット)に変換して返す（取得しなかったフィールドは `None`）
+6. 結果を[イシュースナップショット](#イシュースナップショット)に変換して返す（取得しなかったフィールドは `None`）
 
 #### 例外
 
@@ -838,7 +847,10 @@ IssueSnapshot(number=35, title="プロフィール編集機能", state="OPEN", l
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_get_issue_or_pr` | 正常 | スナップショット組み立て | REST 応答をモック | githubkit | `IssueSnapshot` の各フィールドが対応・`head_ref` / `base_ref` が `None` | Issue はブランチを持たない |
 | `test_get_issue_or_pr_when_pr` | 正常 | PR のブランチ名の取り込み | `is_pr=True` で PR 応答をモック | githubkit | `head_ref` / `base_ref` に PR のブランチ名が入る | 追加の API 呼び出しなし |
-| `test_get_issue_or_pr_when_flags_false` | 正常 | 取得フラグ `False` の除外 | `comments=False` / `base_ref=False` で呼び出し | githubkit | `comments` と `base_ref` が `None` で返る | - |
+| `test_get_issue_or_pr_when_pr_parent` | 正常 | PR の親の解決 | `is_pr=True` で head 検索が親 PR を返す | githubkit | `parent` に親 PR が入り、Sub-issue の親取得を呼ばない | base ブランチを head に持つ PR |
+| `test_get_issue_or_pr_when_pr_parent_missing` | 正常 | 最上位 PR の親なし | head 検索が空を返す | githubkit | `parent` が `None` | base が `master` の PR |
+| `test_get_issue_or_pr_when_stack` | 正常 | スタック所属の取り込み | `is_pr=True` でスタックの上端に属する | githubkit | `stack` に番号・位置・下位の open PR が入る | - |
+| `test_get_issue_or_pr_when_flags_false` | 正常 | 取得フラグ `False` の除外 | `comments=False` / `base_ref=False` / `stack=False` で呼び出し | githubkit | `comments` / `base_ref` / `stack` が `None` で返る | - |
 | `test_get_issue_or_pr_when_api_error` | 異常 | API エラーの伝播 | REST が 404 を返す | githubkit | `RequestFailed` がそのまま伝播 | 代表 1 ツールで共通経路を確認 |
 
 #### 疎通テスト
@@ -2509,6 +2521,132 @@ EmptyResult()
 
 ---
 
+### スタック接続
+> 物理名: `link_stack`<br>
+> 種別: 関数
+
+複数の PR を Stacked Pull Requests として繋ぐ。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| PR 番号一覧 | `pull_requests` | `list[int]` | ✅ | - | 下から上の順に並べた PR 番号 | 2 件以上 |
+
+引数例:
+
+```python
+link_stack([120, 121, 122])
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`StackLinkResult`](#スタック接続結果) | 接続の可否とスタック番号 | 繋げなくても例外にしない |
+
+戻り値例:
+
+```python
+StackLinkResult(linked=True, stack_number=123, reason=None)
+```
+
+#### 処理
+
+1. 各 PR のスタック所属を GraphQL で取得する（[スタック所属取得](./../モニター/GitHub連携.py.md#スタック所属取得)）
+2. 別々のスタックに属する PR が混ざる場合、`linked=False` と理由を返して終える
+3. いずれも未所属なら `POST /repos/{owner}/{repo}/stacks` でスタックを作る
+4. 先頭が既存スタックに属する場合、`POST /repos/{owner}/{repo}/stacks/{stack_number}/add` で上端へ積む
+5. 接続後のスタック番号を返す
+
+`gh stack link` は底の PR の base をデフォルトブランチへ書き換えるため使わない（外部ライブラリ『gh』）。
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx（base ref の連鎖が繋がっていない 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_link_stack` | 正常 | 新規スタックの作成 | 全 PR が未所属 | stacks.py の 4 関数 | [スタック作成](./../モニター/GitHub連携.py.md#スタック作成)が渡した並びで呼ばれ、`linked=True` とスタック番号が返る | - |
+| `test_link_stack_when_existing` | 正常 | 既存スタックへの追加 | 先頭が既存スタックに属する | stacks.py の 4 関数 | [スタック追加](./../モニター/GitHub連携.py.md#スタック追加)が未所属分だけで呼ばれ、既存のスタック番号が返る | - |
+| `test_link_stack_when_other_stack` | 正常 | 別スタック所属で見送り | 1 件が別スタックに属する | stacks.py の 4 関数 | 作成も追加も呼ばれず `linked=False` と理由が返る | 例外にしない |
+| `test_link_stack_when_base_broken` | 異常 | base 連鎖の不整合 | [スタック作成](./../モニター/GitHub連携.py.md#スタック作成)が `RequestFailed` を送出 | stacks.py の 4 関数 | `RequestFailed` がそのまま伝播する | - |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_link_stack` | GitHub | スタック作成 | 作成後に各 PR の base ref が変わっていない | 副作用: sandbox にスタック |
+
+---
+
+### スタック解除
+> 物理名: `unlink_stack`<br>
+> 種別: 関数
+
+マージ前の PR をスタックから外し、残りを元の並びで組み直す。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| PR 番号 | `pr_number` | `int` | ✅ | - | スタックから外す PR 番号 | 未所属でもエラーにしない |
+
+引数例:
+
+```python
+unlink_stack(122)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`StackUnlinkResult`](#スタック解除結果) | 解除の可否と組み直し後の構成 | - |
+
+戻り値例:
+
+```python
+StackUnlinkResult(unlinked=True, restacked=[120, 121], stack_number=124)
+```
+
+#### 処理
+
+1. 対象 PR のスタック所属と構成を GraphQL で取得する（[スタック所属取得](./../モニター/GitHub連携.py.md#スタック所属取得)）
+2. 未所属なら何もせず `unlinked=False` を返す
+3. `POST /repos/{owner}/{repo}/stacks/{stack_number}/unstack` でスタックを解除する
+4. 対象を除いた残りが 2 件以上なら、元の並びで `POST /repos/{owner}/{repo}/stacks` を呼んで組み直す
+5. 組み直し後の構成とスタック番号を返す
+
+GitHub の unstack は 1 件指定でもスタック全体が解散するため、組み直しをこの関数の中で完結させる（外部API『GitHub』）。
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx（解散済みのスタック番号 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_unlink_stack` | 正常 | 解除と組み直し | 3 件のスタックの上端を指定 | stacks.py の 4 関数 | 解除後に残り 2 件でスタックが作られる | - |
+| `test_unlink_stack_when_one_left` | 正常 | 組み直しなし | 2 件のスタックの上端を指定 | stacks.py の 4 関数 | 解除だけ行い、作成は呼ばれず `restacked=[]` | スタックは 2 件以上必要 |
+| `test_unlink_stack_when_not_stacked` | 正常 | 未所属の読み飛ばし | どのスタックにも属さない | stacks.py の 4 関数 | 解除も作成も呼ばれず `unlinked=False` | 例外にしない |
+| `test_unlink_stack_when_dissolved` | 異常 | 解散済みスタック | [スタック解散](./../モニター/GitHub連携.py.md#スタック解散)が `RequestFailed` を送出 | stacks.py の 4 関数 | `RequestFailed` がそのまま伝播し、組み直しは呼ばれない | - |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_unlink_stack` | GitHub | 解除と組み直し | 解除後も各 PR の base ref が変わっていない | 副作用: sandbox のスタック再構成 |
+
+---
+
 ### worktree作成
 > 物理名: `worktree_create`<br>
 > 種別: 関数
@@ -3133,6 +3271,56 @@ False
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_is_minimized` | 正常 | isMinimized の取得 | GraphQL が `isMinimized: true` を返す | githubkit | `True` を返す | - |
+
+---
+
+### 親PR取得
+> 物理名: `_fetch_parent_pr`<br>
+> 種別: 関数
+
+base ブランチを head に持つ PR を親として返す。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| base ブランチ | `base_ref` | `str` | ✅ | - | 子 PR の base ブランチ名 | - |
+| オーナー | `owner` | `str` | ✅ | - | リポジトリオーナー | キーワード引数 |
+| リポジトリ | `repo` | `str` | ✅ | - | リポジトリ名 | キーワード引数 |
+
+引数例:
+
+```python
+_fetch_parent_pr("feat/story/profile/edit", owner="shuhei1101", repo="ai-monitor")
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`IssueRef \| None`](#イシュー参照) | 親 PR の参照 | 見つからなければ `None`（最上位 PR） |
+
+戻り値例:
+
+```python
+IssueRef(number=50, title="プロフィール編集", url="http://p/50", state="OPEN")
+```
+
+#### 処理
+
+1. `head` に `{owner}:{base_ref}` を指定して PR を検索する（マージ済みの親も引けるよう `state=all`）
+2. 見つかった先頭の PR を[イシュー参照](#イシュー参照)にして返す（`merged_at` があれば state は `MERGED`）
+3. 見つからなければ `None` を返す（base が `master` の最上位 PR）
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx | HTTP ステータスと本文 | githubkit から伝播 |
+
+#### 単体テスト
+
+なし（同一ファイルの[Issue・PR情報取得](#issue-pr情報取得)の単体テストで実物のまま検証する）
 
 ---
 
@@ -4037,6 +4225,52 @@ assignee 設定・除去の結果（Pydantic `BaseModel`）。
 
 なし
 
+## スタック接続結果
+> 物理名: `StackLinkResult`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+[スタック接続](#スタック接続)の結果（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 接続可否 | `linked` | `bool` | 公開 | - | スタックに繋がったか | `True` | 制約で繋げなかった場合は `False` |
+| スタック番号 | `stack_number` | `int \| None` | 公開 | `None` | 接続後のスタック番号 | `123` | 繋がらなかった場合は `None` |
+| 理由 | `reason` | `str \| None` | 公開 | `None` | 繋げなかった理由 | `"別のスタックに属する PR が含まれる"` | 繋がった場合は `None` |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## スタック解除結果
+> 物理名: `StackUnlinkResult`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+[スタック解除](#スタック解除)の結果（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 解除可否 | `unlinked` | `bool` | 公開 | - | スタックから外したか | `True` | 未所属だった場合は `False` |
+| 組み直し後の構成 | `restacked` | `list[int]` | 公開 | `[]` | 組み直したスタックの PR 番号 | `[120, 121]` | 残りが 1 件以下なら空 |
+| スタック番号 | `stack_number` | `int \| None` | 公開 | `None` | 組み直し後のスタック番号 | `124` | 組み直さなかった場合は `None` |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
 ## Issue 作成結果
 > 物理名: `CreatedIssueResult`<br>
 > 種別: データモデル<br>
@@ -4281,9 +4515,10 @@ get_issue_or_pr が返す Issue / PR のスナップショット（Pydantic `Bas
 | 起票者 | `author` | `UserRef \| None` | 公開 | `None` | 起票者 | - | - |
 | head ブランチ | `head_ref` | `str \| None` | 公開 | `None` | PR の head ブランチ名 | `"feat/backend/profile/edit/edit-api"` | Issue では `None` |
 | base ブランチ | `base_ref` | `str \| None` | 公開 | `None` | PR の base ブランチ名 | `"feat/story/profile/edit"` | Issue では `None` |
-| 親 Issue | `parent` | `IssueRef \| None` | 公開 | `None` | Sub-issue リンクの親 | - | 親なしは `None` |
-| 子 Issue | `sub_issues` | [`list[IssueRef]`](#イシュー参照) | 公開 | `[]` | Sub-issue リンクの子 | - | - |
-| 子集計 | `sub_issues_summary` | `SubIssuesSummary \| None` | 公開 | `None` | 子 Issue の集計 | - | - |
+| 親 | `parent` | `IssueRef \| None` | 公開 | `None` | Issue は Sub-issue リンクの親、PR は base ブランチを head に持つ PR | - | 親なしは `None` |
+| 子 Issue | `sub_issues` | [`list[IssueRef]`](#イシュー参照) | 公開 | `[]` | Sub-issue リンクの子 | - | Issue のみ |
+| 子集計 | `sub_issues_summary` | `SubIssuesSummary \| None` | 公開 | `None` | 子 Issue の集計 | - | Issue のみ |
+| スタック | `stack` | [`StackInfo \| None`](#スタック情報) | 公開 | `None` | 所属している PR スタック | - | PR のみ。未所属は `None` |
 
 ### メソッド
 
@@ -4404,6 +4639,29 @@ get_issue_or_pr が返す Issue / PR のスナップショット（Pydantic `Bas
 | 総数 | `total` | `int` | 公開 | - | 子 Issue の総数 | `2` | - |
 | 完了数 | `completed` | `int` | 公開 | - | クローズ済みの子 Issue 数 | `1` | - |
 | 完了率 | `percent_completed` | `float` | 公開 | - | 完了率 | `50.0` | - |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## スタック情報
+> 物理名: `StackInfo`<br>
+> 種別: データモデル<br>
+> コンテナ: `mcp/models.py`
+
+PR が属するスタックの情報（Pydantic `BaseModel`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| スタック番号 | `number` | `int` | 公開 | - | スタック番号 | `123` | - |
+| 位置 | `position` | `int` | 公開 | - | スタック内の自分の位置 | `3` | 1 が最も base に近い |
+| 下位の open PR | `below_open` | `list[int]` | 公開 | `[]` | 自分より下でまだ open な PR 番号 | `[120]` | 空でない間は着手できない |
 
 ### メソッド
 

@@ -6,7 +6,7 @@ template_version: 2.1.0
 
 トリガー: polling 周期（open 対象一覧の取得結果で判定）
 
-intake Issue の全 Sub-issue クローズを検知し、intake Issue を自動クローズする。
+intake Issue に紐づく PR が全てマージされたことを検知し、intake Issue を自動クローズする。
 
 - 対応テストファイル: `tests/integration/monitor/test_intake自動クローズ.py`
 
@@ -14,15 +14,15 @@ intake Issue の全 Sub-issue クローズを検知し、intake Issue を自動�
 
 | 項目 | 制約 | 補足 |
 | --- | --- | --- |
-| 対象 | `layer:intake` ラベル付きの open Issue | Sub-issue なし（`total == 0`）は対象外 |
-| 判定材料 | 一覧応答に同梱される `sub_issues_summary` のみ | 本文パース・追加の API 呼び出しはしない |
+| 対象 | `layer:intake` ラベル付きの open Issue | 紐づく PR が 1 件も無いものは対象外 |
+| 判定材料 | open 対象一覧に含まれる PR の本文の `## 紐づく Issue` | 追加の API 呼び出しはしない。open な PR が 1 件も残っていなければ全てマージ済みとみなす |
 
 ## フロー一覧
 
 | 分類 | フロー名 | 概要 | 補足 |
 | --- | --- | --- | --- |
-| 正常 | 正常系 | 全 Sub-issue closed を検知して intake をクローズ | - |
-| 正常 | 正常系（未完了の子あり） | `completed < total` は何もしない | - |
+| 正常 | 正常系 | 紐づく PR が全て open 一覧から消えたのを検知して intake をクローズ | - |
+| 正常 | 正常系（未マージの PR あり） | open な PR が残っていれば何もしない | - |
 | 異常 | 異常系（GitHub API エラー） | クローズ失敗で周期を見送る | - |
 
 ## 正常系
@@ -32,7 +32,7 @@ intake Issue の全 Sub-issue クローズを検知し、intake Issue を自動�
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | GitHub API を差し替え | - |
-| 対象 | `layer:intake` の open Issue（`sub_issues_summary` が `total=2, completed=2`）を open 一覧に含める | - |
+| 対象 | `layer:intake` の open Issue を open 一覧に含める | この Issue を `## 紐づく Issue` に持つ PR は open 一覧に 1 件も無い（前周期には 2 件あった） |
 
 ### フロー
 
@@ -42,7 +42,7 @@ sequenceDiagram
   participant GH as GitHub
 
   MON-->>GH: open 対象一覧を取得（周期）
-  MON->>MON: layer:intake かつ<br>completed == total（total > 0）を検知
+  MON->>MON: layer:intake かつ<br>紐づく open な PR が 0 件（前周期はあり）を検知
   MON->>GH: intake Issue をクローズ<br>（reason: completed）
 ```
 
@@ -50,14 +50,14 @@ sequenceDiagram
 
 - intake Issue がクローズされている（`reason: completed`）
 
-## 正常系（未完了の子あり）
+## 正常系（未マージの PR あり）
 
 ### セットアップ
 
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | GitHub API を差し替え | - |
-| 対象 | `layer:intake` の open Issue（`sub_issues_summary` が `total=2, completed=1`）を open 一覧に含める | 見送りを誘発 |
+| 対象 | `layer:intake` の open Issue を open 一覧に含める | この Issue を `## 紐づく Issue` に持つ PR が 1 件 open で残っている。見送りを誘発 |
 
 ### フロー
 
@@ -67,7 +67,7 @@ sequenceDiagram
   participant GH as GitHub
 
   MON-->>GH: open 対象一覧を取得（周期）
-  MON->>MON: completed < total のため対象外
+  MON->>MON: 紐づく open な PR が残るため対象外
 ```
 
 ### 期待値
@@ -81,7 +81,7 @@ sequenceDiagram
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | GitHub API を差し替え（クローズで 4xx / 5xx を返す） | 異常を決定的に誘発 |
-| 対象 | 全 Sub-issue closed の intake Issue を open 一覧に含める | - |
+| 対象 | 紐づく open な PR が 0 件になった intake Issue を open 一覧に含める | - |
 
 ### フロー
 

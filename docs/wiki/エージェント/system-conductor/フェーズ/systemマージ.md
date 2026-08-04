@@ -30,7 +30,12 @@ Ready 済みの PR に呼んでも何も起きない。
 
 - コンフリクトが発生した場合、system PR に競合ファイルとどちらを残すかの相談コメントを投稿し、`議論中` 付与 + `assignee=ユーザー` で待機する（解消の往復は「応答ループ」で回し、全競合解消後に本手順へ合流する）
 
-MCP `merge_pr` を呼ぶ:
+MCP `unlink_stack` を呼ぶ:
+- `pr_number`: system PR の番号
+
+スタックに属したままマージすると下位の PR まで一緒にマージされるため、先に外す（外したスタックの残りはツール側で組み直される）。
+
+続けて MCP `merge_pr` を呼ぶ:
 - `pr_number`: system PR の番号
 - `strategy`: `squash`
 
@@ -41,14 +46,14 @@ MCP `merge_pr` を呼ぶ:
 
 MCP `remove_watch_targets` を呼ぶ:
 - `agent_name`: `system-conductor`
-- `number`: $issue_number
+- `number`: $number
 - `watch_numbers`: system PR の番号
 
 ### 子epic起票への引き継ぎ
 
 MCP `add_labels` を呼ぶ:
-- `number`: $issue_number
-- `is_pr`: false
+- `number`: $number
+- `is_pr`: true
 - `labels`:
   - `$AI_MONITOR_LABEL_CONFIRM_SYSTEM_CONDUCTOR` の値
 

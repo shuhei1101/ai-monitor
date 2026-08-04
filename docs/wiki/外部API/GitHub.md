@@ -84,6 +84,11 @@ API バージョン: `2022-11-28`
 | DELETE | [`/repos/{owner}/{repo}/git/refs/heads/{branch}`](#delete-reposownerrepogitrefsheadsbranch) | リモートブランチの削除 | - |
 | GET | [`/search/issues`](#get-searchissues) | Issue / PR のキーワード横断検索 | 検索レートリミットは別枠 |
 | POST | [`/graphql`](#post-graphql) | GraphQL クエリ / mutation の実行 | minimize / Ready 化 等 |
+| POST | [`/repos/{owner}/{repo}/stacks`](#post-reposownerrepostacks) | PR スタックの作成 | public preview（2026-07-30 開始） |
+| GET | [`/repos/{owner}/{repo}/stacks/{stack_number}`](#get-reposownerrepostacksstack_number) | PR スタックの取得 | 解散済みは 404 |
+| POST | [`/repos/{owner}/{repo}/stacks/{stack_number}/add`](#post-reposownerrepostacksstack_numberadd) | スタック上端への PR 追加 | - |
+| POST | [`/repos/{owner}/{repo}/stacks/{stack_number}/unstack`](#post-reposownerrepostacksstack_numberunstack) | スタックの解除 | 1 件指定でもスタック全体が解散する |
+| PUT | [`/repos/{owner}/{repo}/pulls/{pull_number}/merge-async`](#put-reposownerrepopullspull_numbermerge-async) | 非同期マージ | スタック内の PR はこちらでしかマージできない |
 
 ## 不具合一覧
 
@@ -962,3 +967,195 @@ query($owner: String!, $repo: String!, $number: Int!) {
 | --- | --- | --- |
 | `200` | 正常（クエリエラー時も `200` + `errors`） | GraphQL はエラーでも HTTP 200 |
 | `401` | トークン不正 | - |
+
+## POST `/repos/{owner}/{repo}/stacks`
+
+複数の PR を Stacked Pull Requests として繋ぐ。
+
+public preview の機能（2026-07-30 提供開始）。
+`pull_requests` は下（base ブランチに近い側）から上への順で渡し、各 PR の base ref が直前の PR の head ref と一致している必要がある。
+
+スタックの底は必ずしもデフォルトブランチを base にしなくてよい（`base: {"ref": "任意のブランチ"}` のスタックが作れる）。
+ただし `gh stack link` 経由で作ると CLI が底の base をデフォルトブランチへ書き換えるため、base を保ちたい場合は本 API を直接呼ぶ。
+
+1 つの PR が同時に属せるスタックは 1 つだけで、既にスタックに属している PR を別のスタックへ入れようとすると `Pull request #N is already part of a stack` で失敗する。
+そのため 1 つの親から複数の子が枝分かれする木構造は、分岐点の PR を含む形では表現できない。
+
+### リクエスト
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pull_requests` | `number[]` | ✅ | - | スタックを構成する PR 番号を下から上の順に並べたもの | 2 件以上・同一リポジトリ内 | cross-fork は非対応 |
+
+リクエスト例:
+
+```json
+{ "pull_requests": [1470, 1472] }
+```
+
+### レスポンス
+
+| フィールド | 型 | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- |
+| `number` | `number` | スタック番号 | - | PR / Issue と同じ採番空間を共有する |
+| `base.ref` | `string` | スタック全体の base ブランチ | - | 底の PR の base |
+| `open` | `boolean` | スタックが有効か | - | - |
+| `pull_requests[].number` | `number` | 構成する PR の番号 | - | 下から上の順 |
+
+レスポンス例:
+
+```json
+{ "number": 1473, "base": { "ref": "st-e" }, "open": true, "pull_requests": [{ "number": 1470 }, { "number": 1472 }] }
+```
+
+### ステータスコード
+
+| ステータスコード | 発生条件 | 補足 |
+| --- | --- | --- |
+| `201` | 正常 | - |
+| `422` | base ref の連鎖が繋がっていない / 既に別スタックに属する PR を含む / 要素が 1 件 | メッセージに理由が入る |
+
+## GET `/repos/{owner}/{repo}/stacks/{stack_number}`
+
+スタックの構成を取得する。
+
+解散済み（`unstack` 済み）のスタック番号は 404 になる。
+PR 側から所属を引く場合は GraphQL の `PullRequest.stack`（`number` / `size` / `baseRefName`）と `PullRequest.stackEntry`（`position`）を使う。
+
+### リクエスト
+
+パスパラメータのみ。
+
+```
+GET /repos/{owner}/{repo}/stacks/{stack_number}
+```
+
+### レスポンス
+
+`POST /repos/{owner}/{repo}/stacks` のレスポンスと同形。
+
+### ステータスコード
+
+| ステータスコード | 発生条件 | 補足 |
+| --- | --- | --- |
+| `200` | 正常 | - |
+| `404` | スタックが存在しない / 解散済み | - |
+
+## POST `/repos/{owner}/{repo}/stacks/{stack_number}/add`
+
+既存スタックの上端へ PR を積む。
+
+### リクエスト
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pull_requests` | `number[]` | ✅ | - | 現在の上端から上へ積む PR 番号を順に並べたもの | 既存スタックの上端と base ref が繋がっていること | - |
+
+リクエスト例:
+
+```json
+{ "pull_requests": [1479] }
+```
+
+### レスポンス
+
+`POST /repos/{owner}/{repo}/stacks` のレスポンスと同形。
+
+### ステータスコード
+
+| ステータスコード | 発生条件 | 補足 |
+| --- | --- | --- |
+| `200` | 正常 | - |
+| `422` | base ref が繋がっていない / 既に別スタックに属する PR を含む | - |
+
+## POST `/repos/{owner}/{repo}/stacks/{stack_number}/unstack`
+
+スタックを解除する。
+
+`pull_requests` に 1 件だけ指定しても、残りが 2 件以上あってもスタック自体が解散し、以降そのスタック番号は 404 になる（構成する全 PR の `stack` が `null` になる）。
+「一部の PR だけをスタックから外して残りを維持する」ことはできない。
+
+解除しても各 PR の base ref は書き換わらないため、解除 → マージ → 残りを `POST /repos/{owner}/{repo}/stacks` で組み直す、という運用は成立する。
+
+### リクエスト
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pull_requests` | `number[]` | ✅ | - | 解除の対象として渡す PR 番号 | - | 何を渡してもスタック全体が解散する |
+
+リクエスト例:
+
+```json
+{ "pull_requests": [1479] }
+```
+
+### レスポンス
+
+本文なし。
+
+### ステータスコード
+
+| ステータスコード | 発生条件 | 補足 |
+| --- | --- | --- |
+| `204` | 正常 | - |
+| `404` | スタックが存在しない / 解散済み | - |
+
+## PUT `/repos/{owner}/{repo}/pulls/{pull_number}/merge-async`
+
+PR をバックグラウンドでマージする。
+
+スタックに属している PR は通常の `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` では失敗し（`This pull request is part of a stack and must be merged using the asynchronous merge REST API`）、こちらを使う必要がある。
+
+指定した PR より下の未マージ PR は必ず一緒にマージされる。
+公式ドキュメント（[Merging stacked pull requests](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/merging-stacked-pull-requests) の `Merging from the bottom up`）に次のとおり明記されている。
+
+- `You cannot merge a mid-stack pull request in isolation, the pull requests below it will always merge with it.`
+- `You can merge any number of pull requests at once, as long as they form a contiguous group starting from the lowest unmerged pull request.`
+- `The selected pull request and all unmerged pull requests below it land on the base branch together as a single operation.`
+
+`merge_action` は直接マージするかマージキューに載せるかの選択で、下位を巻き込むかどうかは変えられない。
+上の PR だけを自分の base ブランチへマージしたい場合は、先に `unstack` でスタックを解除する必要がある。
+
+スタックに属していない PR にも使えるが、その場合は通常の `merge` で足りる。
+
+auto-merge はスタックされた PR では非対応。
+
+### リクエスト
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `merge_method` | `"merge" or "squash" or "rebase"` | - | `merge` | マージ方式 | - | `merge`=マージコミット / `squash`=1 コミットに畳む / `rebase`=リベース |
+| `merge_action` | `"default" or "direct_merge" or "merge_queue"` | - | `default` | マージの実行方法 | - | `default`=直接マージかキュー投入を自動選択 / `direct_merge`=直接マージ / `merge_queue`=キュー投入 |
+| `commit_title` | `string` | - | 自動生成 | マージコミットのタイトル | - | - |
+| `commit_message` | `string` | - | 自動生成 | マージコミットの本文 | - | - |
+| `sha` | `string` | - | - | head がこの SHA と一致する場合だけマージする | - | 競合検知に使う |
+
+リクエスト例:
+
+```json
+{ "merge_method": "squash" }
+```
+
+### レスポンス
+
+| フィールド | 型 | 説明 | 制限 | 補足 |
+| --- | --- | --- | --- | --- |
+| `status` | `"pending" or "merged" or "enqueued" or "failed"` | 受付結果 | - | `pending`=処理中 / `merged`=完了 / `enqueued`=マージキュー投入 / `failed`=失敗 |
+| `details.uuid` | `string` | 結果取得用の ID | - | `GET /repos/{owner}/{repo}/pulls/{pull_number}/merge-async/{uuid}` で状態を引く |
+| `details.message` | `string` | 状態の説明 | - | 失敗理由もここに入る |
+| `details.expected_head_sha` | `string` | マージ対象の head SHA | - | - |
+
+レスポンス例:
+
+```json
+{ "status": "pending", "details": { "message": "Merge request enqueued.", "uuid": "ad676109-4d57-4466-a866-d881100eb9a1", "merge_method": "squash", "merge_action": "default" } }
+```
+
+### ステータスコード
+
+| ステータスコード | 発生条件 | 補足 |
+| --- | --- | --- |
+| `200` | 既にマージ済み / キュー投入済み | - |
+| `202` | 受付（バックグラウンドで処理） | `uuid` でポーリングする |
+| `400` | マージできる状態にない | Draft のまま・下位 PR が Draft 等 |
+| `409` | 既に別のマージ要求が走っている | - |

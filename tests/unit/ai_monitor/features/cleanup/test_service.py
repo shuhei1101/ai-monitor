@@ -10,17 +10,22 @@ import ai_monitor.features.cleanup.service as cleanup
 import ai_monitor.features.sessions.registry as registry_mod
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
-from ai_monitor.shared.types import Issue
+from ai_monitor.shared.types import Issue, PullRequest
 
 
-def _issue(number, labels=None, state="open", total=0, completed=0):
-    return Issue(
+def _issue(number, labels=None, state="open"):
+    return Issue(number=number, state=state, labels=labels or [], assignees=[])
+
+
+def _pr(number, base="master", head="", linked=None, labels=None, state="open"):
+    return PullRequest(
         number=number,
         state=state,
         labels=labels or [],
         assignees=[],
-        sub_issues_total=total,
-        sub_issues_completed=completed,
+        linked_issue_numbers=linked or [],
+        base_ref=base,
+        head_ref=head or f"branch-{number}",
     )
 
 
@@ -40,8 +45,6 @@ def io_mocks(monkeypatch):
     mocks = MagicMock()
     monkeypatch.setattr(cleanup, "close_issue", mocks.close_issue)
     monkeypatch.setattr(cleanup, "get_issue", mocks.get_issue)
-    monkeypatch.setattr(cleanup, "get_parent_number", mocks.get_parent_number)
-    monkeypatch.setattr(cleanup, "list_sub_issue_numbers", mocks.list_sub_issue_numbers)
     monkeypatch.setattr(cleanup, "remove_label", mocks.remove_label)
     monkeypatch.setattr(cleanup, "has_session", mocks.has_session)
     monkeypatch.setattr(cleanup, "kill_session", mocks.kill_session)
@@ -55,36 +58,36 @@ def registry(tmp_state_path, monkeypatch):
     return registry_mod.SessionRegistry(tmp_state_path)
 
 
-def test_close_completed_intakes(io_mocks, mon_project, intake_label="layer:intake"):
-    """全子 closed のクローズを確認する（正常系）。"""
-    # 準備
-    targets = [
-        _issue(30, labels=["layer:intake"], total=2, completed=2),
-        _issue(31, labels=["layer:epic"], total=2, completed=2),
-    ]
+def test_close_completed_intakes(io_mocks, mon_project):
+    """紐づく PR が全てマージされた intake のクローズを確認する（正常系）。"""
+    # 準備（前周期には紐づく PR が 2 件、今周期は 0 件）
+    prev = [_issue(30, labels=["layer:intake"]), _pr(40, linked=[30]), _pr(41, linked=[30])]
+    targets = [_issue(30, labels=["layer:intake"]), _issue(31, labels=["layer:epic"])]
     # 実行
-    cleanup.close_completed_intakes(mon_project, targets, intake_label="layer:intake")
+    cleanup.close_completed_intakes(mon_project, targets, prev, intake_label="layer:intake")
     # 検証
     io_mocks.close_issue.assert_called_once()
     assert io_mocks.close_issue.call_args.args[1] == 30
 
 
-def test_close_completed_intakes_when_incomplete(io_mocks, mon_project):
-    """未完了の見送りを確認する（正常系）。"""
+def test_close_completed_intakes_when_pr_open(io_mocks, mon_project):
+    """未マージの PR が残る場合の見送りを確認する（正常系）。"""
     # 準備
-    targets = [_issue(30, labels=["layer:intake"], total=2, completed=1)]
+    prev = [_issue(30, labels=["layer:intake"]), _pr(40, linked=[30]), _pr(41, linked=[30])]
+    targets = [_issue(30, labels=["layer:intake"]), _pr(41, linked=[30])]
     # 実行
-    cleanup.close_completed_intakes(mon_project, targets, intake_label="layer:intake")
+    cleanup.close_completed_intakes(mon_project, targets, prev, intake_label="layer:intake")
     # 検証
     io_mocks.close_issue.assert_not_called()
 
 
-def test_close_completed_intakes_when_no_children(io_mocks, mon_project):
-    """Sub-issue なしの対象外を確認する（正常系）。"""
-    # 準備
-    targets = [_issue(30, labels=["layer:intake"], total=0, completed=0)]
+def test_close_completed_intakes_when_no_pr(io_mocks, mon_project):
+    """PR 未作成の intake が対象外であることを確認する（正常系）。"""
+    # 準備（前周期にも今周期にも紐づく PR が無い）
+    prev = [_issue(30, labels=["layer:intake"])]
+    targets = [_issue(30, labels=["layer:intake"])]
     # 実行
-    cleanup.close_completed_intakes(mon_project, targets, intake_label="layer:intake")
+    cleanup.close_completed_intakes(mon_project, targets, prev, intake_label="layer:intake")
     # 検証
     io_mocks.close_issue.assert_not_called()
 
@@ -92,18 +95,13 @@ def test_close_completed_intakes_when_no_children(io_mocks, mon_project):
 def test_release_closed_roots(io_mocks, registry, mon_project, notify):
     """配下の一括解放を確認する（正常系）。"""
     # 準備
-    prev_targets = [_issue(35, labels=["layer:epic"])]
+    prev_targets = [_pr(35, base="master", head="feat/epic/x", linked=[30]), _pr(40, base="feat/epic/x")]
     targets = []
-    io_mocks.get_issue.side_effect = lambda project, number: {
-        35: _issue(35, labels=["layer:epic"], state="closed"),
-        30: _issue(30, labels=["layer:intake"]),
-    }[number]
-    io_mocks.list_sub_issue_numbers.side_effect = lambda project, number: {35: [40], 40: []}[number]
-    io_mocks.get_parent_number.return_value = 30
+    io_mocks.get_issue.return_value = _issue(35, labels=["layer:epic"], state="closed")
     for number, agent in [(30, "intake-issue-triager"), (35, "epic-conductor"), (40, "story-conductor")]:
         registry.register(_session(agent=agent, number=number))
     # 実行
-    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
+    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, confirm_prefix="確認:", notify=notify)
     # 検証
     assert registry.sessions == []
     assert io_mocks.kill_session.call_count == 3
@@ -112,35 +110,32 @@ def test_release_closed_roots(io_mocks, registry, mon_project, notify):
 def test_release_closed_roots_when_confirm_remains(io_mocks, registry, mon_project, notify):
     """確認ラベル残存の見送りを確認する（正常系）。"""
     # 準備
-    prev_targets = [_issue(35, labels=["layer:epic"])]
-    targets = [_issue(40, labels=["layer:subsystem", "確認:subsystem-conductor"])]
-    io_mocks.get_issue.side_effect = lambda project, number: _issue(35, labels=["layer:epic"], state="closed")
-    io_mocks.list_sub_issue_numbers.side_effect = lambda project, number: {35: [40], 40: []}[number]
-    io_mocks.get_parent_number.return_value = None
+    prev_targets = [
+        _pr(35, base="master", head="feat/epic/x"),
+        _pr(40, base="feat/epic/x", labels=["確認:subsystem-conductor"]),
+    ]
+    targets = [_pr(40, base="feat/epic/x", labels=["確認:subsystem-conductor"])]
+    io_mocks.get_issue.return_value = _issue(35, labels=["layer:epic"], state="closed")
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
+    cleanup.release_closed_roots(mon_project, targets, prev_targets, registry=registry, confirm_prefix="確認:", notify=notify)
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
 
 
 def test_release_closed_roots_when_parent_remains(io_mocks, registry, mon_project, notify):
-    """上位レイヤーが残る Issue の見送りを確認する（正常系）。"""
-    # 準備: 親が layer:system（報告先の conductor を持つ）
-    prev_targets = [_issue(35, labels=["layer:epic"])]
-    io_mocks.get_issue.side_effect = lambda project, number: {
-        35: _issue(35, labels=["layer:epic"], state="closed"),
-        10: _issue(10, labels=["layer:system"]),
-    }[number]
-    io_mocks.get_parent_number.return_value = 10
+    """base が親レイヤーの面の見送りを確認する（正常系）。"""
+    # 準備: base が system ブランチ（最上位ではない）
+    prev_targets = [_pr(35, base="docs/system/x", head="feat/epic/x")]
+    io_mocks.get_issue.return_value = _issue(35, labels=["layer:epic"], state="closed")
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
+    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, confirm_prefix="確認:", notify=notify)
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
-    io_mocks.list_sub_issue_numbers.assert_not_called()
+    assert notify.calls == []
 
 
 def test_release_closed_roots_when_still_open(io_mocks, registry, mon_project, notify):
@@ -150,7 +145,7 @@ def test_release_closed_roots_when_still_open(io_mocks, registry, mon_project, n
     io_mocks.get_issue.side_effect = lambda project, number: _issue(35, labels=["layer:epic"], state="open")
     registry.register(_session(number=35))
     # 実行
-    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
+    cleanup.release_closed_roots(mon_project, [], prev_targets, registry=registry, confirm_prefix="確認:", notify=notify)
     # 検証
     assert len(registry.sessions) == 1
     io_mocks.kill_session.assert_not_called()
@@ -161,60 +156,54 @@ def test_release_closed_roots_when_no_diff(io_mocks, registry, mon_project, noti
     # 準備
     epic = _issue(35, labels=["layer:epic"])
     # 実行
-    cleanup.release_closed_roots(mon_project, [epic], [epic], registry=registry, intake_label="layer:intake", confirm_prefix="確認:", notify=notify)
+    cleanup.release_closed_roots(mon_project, [epic], [epic], registry=registry, confirm_prefix="確認:", notify=notify)
     # 検証
     io_mocks.get_issue.assert_not_called()
 
 
-def test_is_root(io_mocks, mon_project):
-    """親なしの最上位判定を確認する（正常系）。"""
-    # 準備
-    io_mocks.get_parent_number.return_value = None
+def test_is_root(mon_project):
+    """base が master の PR を最上位と判定することを確認する（正常系）。"""
+    targets = [_pr(35, base="master", head="feat/epic/x")]
+    assert cleanup._is_root(targets[0], targets) is True
+
+
+def test_is_root_when_upper_layer(mon_project):
+    """base が親レイヤーの PR を最上位でないと判定することを確認する（正常系）。"""
+    targets = [_pr(35, base="docs/system/x", head="feat/epic/x")]
+    assert cleanup._is_root(targets[0], targets) is False
+
+
+def test_collect_family_numbers():
+    """base の連鎖で配下と起点 Issue を集めることを確認する（正常系）。"""
+    # 準備（epic → story → subsystem の 3 段 + 起点 Issue）
+    targets = [
+        _pr(35, base="master", head="feat/epic/x", linked=[30]),
+        _pr(40, base="feat/epic/x", head="feat/story/x/y"),
+        _pr(50, base="feat/story/x/y", head="feat/be/x/y"),
+    ]
     # 実行
-    result = cleanup._is_root(mon_project, 35, intake_label="layer:intake")
-    # 検証
-    assert result is True
-    io_mocks.get_issue.assert_not_called()
-
-
-def test_is_root_when_parent_is_intake(io_mocks, mon_project):
-    """親が intake のときの最上位判定を確認する（正常系）。"""
-    # 準備
-    io_mocks.get_parent_number.return_value = 30
-    io_mocks.get_issue.return_value = _issue(30, labels=["layer:intake"])
-    # 実行・検証
-    assert cleanup._is_root(mon_project, 35, intake_label="layer:intake") is True
-
-
-def test_is_root_when_parent_is_upper_layer(io_mocks, mon_project):
-    """親が上位レイヤーのときの判定を確認する（正常系）。"""
-    # 準備
-    io_mocks.get_parent_number.return_value = 10
-    io_mocks.get_issue.return_value = _issue(10, labels=["layer:system"])
-    # 実行・検証
-    assert cleanup._is_root(mon_project, 35, intake_label="layer:intake") is False
-
-
-def test_collect_family_numbers(io_mocks, mon_project):
-    """2 段の再帰と親の合算を確認する（正常系）。"""
-    # 準備
-    io_mocks.list_sub_issue_numbers.side_effect = lambda project, number: {35: [40], 40: [50], 50: []}[number]
-    io_mocks.get_parent_number.return_value = 30
-    # 実行
-    numbers = cleanup._collect_family_numbers(mon_project, 35)
+    numbers = cleanup._collect_family_numbers(35, targets)
     # 検証
     assert sorted(numbers) == [30, 35, 40, 50]
 
 
-def test_collect_family_numbers_when_no_parent(io_mocks, mon_project):
-    """親なし epic を確認する（正常系）。"""
-    # 準備
-    io_mocks.list_sub_issue_numbers.side_effect = lambda project, number: {35: []}[number]
-    io_mocks.get_parent_number.return_value = None
-    # 実行
-    numbers = cleanup._collect_family_numbers(mon_project, 35)
-    # 検証
-    assert numbers == [35]
+def test_collect_family_numbers_when_no_linked_issue():
+    """起点 Issue が無い場合に自身と子孫だけを返すことを確認する（正常系）。"""
+    targets = [
+        _pr(35, base="master", head="feat/epic/x"),
+        _pr(40, base="feat/epic/x", head="feat/story/x/y"),
+    ]
+    assert sorted(cleanup._collect_family_numbers(35, targets)) == [35, 40]
+
+
+def test_collect_family_numbers_when_artifact_pr():
+    """成果物 PR も配下として集めることを確認する（正常系）。"""
+    targets = [
+        _pr(35, base="master", head="feat/epic/x"),
+        _pr(36, base="feat/epic/x", head="docs/epic/x/mock"),
+        _pr(40, base="feat/epic/x", head="feat/story/x/y"),
+    ]
+    assert sorted(cleanup._collect_family_numbers(35, targets)) == [35, 36, 40]
 
 
 def _agent(name: str) -> Agent:

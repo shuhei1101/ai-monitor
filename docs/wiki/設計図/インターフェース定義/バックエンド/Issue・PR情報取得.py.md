@@ -32,10 +32,10 @@ Issue / PR の情報を 1 コマンドで取得する。
 | `author` | bool | - | `True` | author を取得するか | - | - |
 | `head_ref` | bool | - | `True` | head ブランチ名を取得するか | - | PR のみ有効 |
 | `base_ref` | bool | - | `True` | base ブランチ名を取得するか | - | PR のみ有効 |
-| `parent` | bool | - | `True` | parent を取得するか | - | Sub-issue リンクの親 |
+| `parent` | bool | - | `True` | 親を取得するか | - | Issue は Sub-issue リンクの親、PR は base ブランチを head に持つ PR |
 | `sub_issues` | bool | - | `True` | subIssues を取得するか | - | Sub-issue リンクの子一覧 |
 | `sub_issues_summary` | bool | - | `True` | subIssuesSummary を取得するか | - | 子の完了集計 |
-| `blocked_by` | bool | - | `True` | blockedBy を取得するか | - | 着手をブロックしている Issue 一覧 |
+| `stack` | bool | - | `True` | スタック情報を取得するか | - | PR のみ。着手をブロックしている下位 PR の判定に使う |
 
 リクエスト例:
 
@@ -74,13 +74,14 @@ Issue / PR の情報を 1 コマンドで取得する。
 | `author.login` | str | 起票者のログイン名 | - | - |
 | `head_ref` | str | head ブランチ名 | - | PR のみ。Issue では `null` |
 | `base_ref` | str | base ブランチ名 | - | PR のみ。Issue では `null`。子ブランチの分岐元・Stacked PR の親の特定に使う |
-| `parent.number` | int | 親 Issue 番号 | - | `title` / `url` / `state` も返る |
+| `parent.number` | int | 親の番号（Issue または PR） | - | `title` / `url` / `state` も返る |
 | `sub_issues[].number` | int | 子 Issue 番号 | - | `title` / `url` / `state` も返る |
 | `sub_issues_summary.total` | int | 子 Issue の総数 | - | - |
 | `sub_issues_summary.completed` | int | クローズ済みの子 Issue 数 | - | - |
 | `sub_issues_summary.percent_completed` | float | 完了率 | - | - |
-| `blocked_by[].number` | int | 依存先の Issue 番号 | 先頭 50 件 | `title` / `url` / `state` も返る |
-| `blocked_by[].state` | str | 依存先の状態 | - | `OPEN` が残っている間は着手できない |
+| `stack.number` | int | スタック番号 | - | 未所属は `stack` ごと `null` |
+| `stack.position` | int | スタック内の自分の位置 | - | 1 が最も base に近い |
+| `stack.below_open` | int[] | 自分より下で open な PR 番号 | - | 空でない間は着手できない |
 
 レスポンス例:
 
@@ -161,6 +162,8 @@ sequenceDiagram
 
   A->>T: number, is_pr（true）, フィールドフラグ
   T-->>GH: PR を照会
+  T-->>GH: base ブランチを head に持つ PR を照会（親）
+  T-->>GH: スタック所属を照会
   T->>T: head / base ブランチ名を含む<br>スナップショットに変換
   T-->>A: スナップショット
 ```
@@ -169,7 +172,8 @@ sequenceDiagram
 
 - `head_ref` に PR の head ブランチ名が入っている
 - `base_ref` に PR の base ブランチ名が入っている
-- Sub-issue 系（`parent` / `sub_issues` / `sub_issues_summary`）が `null`
+- `parent` に base ブランチを head に持つ PR が入っている（無ければ `null`）
+- `sub_issues` / `sub_issues_summary` が `null`（PR は Sub-issue を持たないため）
 
 ## 異常系（API エラー）
 

@@ -98,7 +98,7 @@ ARCHITECTURE_RE_REPORT = """> from: @architecture-reverse-engineer
 ------
 """
 
-# 構成要件まで確定済みの system Issue 本文（土台生成 / 子epic起票 の起点）
+# 構成要件まで確定済みの system Issue 本文（土台生成 / 子epicPR作成 の起点）
 SYSTEM_ISSUE_BODY = """## 概要
 
 タスクを登録して編集・一覧できる個人向けのタスク管理ツール。

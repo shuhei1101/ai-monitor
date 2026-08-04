@@ -1,4 +1,4 @@
-"""「子epic起票」の E2E テスト。"""
+"""「子epicPR作成」の E2E テスト。"""
 from __future__ import annotations
 
 import ai_monitor.mcp.server as server

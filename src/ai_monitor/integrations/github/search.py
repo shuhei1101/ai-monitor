@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 from ai_monitor.integrations.github.client import get_client
 from ai_monitor.shared.settings import MonitoredProject
@@ -25,7 +26,33 @@ def list_open_targets(project: MonitoredProject) -> list[MonitorTarget]:
         if len(items) < _PER_PAGE:
             break
         page += 1
-    return targets
+    # Issue 一覧は PR の base / head を持たないため、PR 一覧から補う
+    # （base の連鎖を辿る処理が周期内で追加の API を呼ばずに済む）
+    refs = _list_pr_refs(project)
+    return [
+        replace(t, base_ref=refs[t.number][0], head_ref=refs[t.number][1])
+        if isinstance(t, PullRequest) and t.number in refs
+        else t
+        for t in targets
+    ]
+
+
+def _list_pr_refs(project: MonitoredProject) -> dict[int, tuple[str, str]]:
+    """open PR の番号 → (base ブランチ, head ブランチ) を全件取得する。"""
+    client = get_client()
+    owner, repo = project.repo.split("/")
+    refs: dict[int, tuple[str, str]] = {}
+    page = 1
+    while True:
+        items = client.rest.pulls.list(
+            owner=owner, repo=repo, state="open", per_page=_PER_PAGE, page=page
+        ).parsed_data
+        for item in items:
+            refs[item.number] = (item.base.ref, item.head.ref)
+        if len(items) < _PER_PAGE:
+            break
+        page += 1
+    return refs
 
 
 def to_target(item: object) -> MonitorTarget:
@@ -35,6 +62,7 @@ def to_target(item: object) -> MonitorTarget:
     # pull_request キーを持つ場合、本文から linked_issue_numbers を抽出して PR にする
     # （githubkit は欠損フィールドを UNSET（偽値）にするため真偽値で判定する）
     if getattr(item, "pull_request", None):
+        base = getattr(item, "base", None)
         return PullRequest(
             number=item.number,
             state=item.state,
@@ -42,16 +70,10 @@ def to_target(item: object) -> MonitorTarget:
             labels=labels,
             assignees=assignees,
             linked_issue_numbers=_parse_linked_issue_numbers(item.body or ""),
+            # 一覧 API は base を持たないため、単体取得の応答でだけ値が入る
+            base_ref=getattr(base, "ref", "") if base else "",
         )
-    summary = getattr(item, "sub_issues_summary", None)
-    return Issue(
-        number=item.number,
-        state=item.state,
-        labels=labels,
-        assignees=assignees,
-        sub_issues_total=summary.total if summary else 0,
-        sub_issues_completed=summary.completed if summary else 0,
-    )
+    return Issue(number=item.number, state=item.state, labels=labels, assignees=assignees)
 
 
 def _parse_linked_issue_numbers(body: str) -> list[int]:

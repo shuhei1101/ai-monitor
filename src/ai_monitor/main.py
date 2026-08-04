@@ -108,13 +108,17 @@ def run_cycle(
                 notify=notify,
             )
             # クリーンアップ検知を実行する
-            close_completed_intakes(project, targets, intake_label=labels.layer_intake)
+            close_completed_intakes(
+                project,
+                targets,
+                prev_targets.get(project.name, []),
+                intake_label=labels.layer_intake,
+            )
             release_closed_roots(
                 project,
                 targets,
                 prev_targets.get(project.name, []),
                 registry=registry,
-                intake_label=labels.layer_intake,
                 confirm_prefix=labels.confirm_prefix,
                 notify=notify,
             )

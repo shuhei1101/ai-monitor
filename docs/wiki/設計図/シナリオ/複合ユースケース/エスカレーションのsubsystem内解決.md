@@ -46,7 +46,7 @@ flowchart TD
 
 - architect のエスカレーション報告コメントのスレッドに subsystem-conductor の決定内容が返信追記され、Resolve 済み
 - 決定した方針に沿った設計 Wiki の commit が subsystem ブランチに積まれている
-- 親 story Issue / epic Issue へのラベル付与・コメント投稿が一切発生していない（1 段で折り返している）
+- 親 story PR / epic PR へのラベル付与・コメント投稿が一切発生していない（1 段で折り返している）
 - subsystem PR に `確認:tester` が付与され、`確認:architect` / `確認:subsystem-conductor` がどちらも残っていない
 - 循環経路（エスカレーション → 方針確認 → 決定 → 設計再開）の全ラベル遷移が完了している
 

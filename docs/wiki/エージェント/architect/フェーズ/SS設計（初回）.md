@@ -1,16 +1,16 @@
 # SS設計（初回）
 
-親 subsystem Issue の SA と担当範囲を把握し、タスク一覧の先頭にある設計ページを作成して提案コメントを投稿する。
+親 subsystem PR の SA と担当範囲を把握し、タスク一覧の先頭にある設計ページを作成して提案コメントを投稿する。
 
 ## 手順
 
 ### システム要件の確認
 
-subsystem PR 本文の `## 紐づく Issue` から親 subsystem Issue 番号を取り出す。
+成果物 PR の base ブランチを辿って親 subsystem PR を特定する。
 
 MCP `get_issue_or_pr` を呼ぶ:
-- `number`: 取り出した subsystem Issue の番号
-- `is_pr`: false
+- `number`: 特定した親 PR の番号
+- `is_pr`: true
 - `parent`: true
 - `comments`: false
 
@@ -19,15 +19,15 @@ MCP `get_issue_or_pr` を呼ぶ:
 ### 親 story の確認
 
 MCP `get_issue_or_pr` を呼ぶ:
-- `number`: subsystem Issue の `parent` の番号
-- `is_pr`: false
+- `number`: 成果物 PR の base を辿って着く親 PR の番号
+- `is_pr`: true
 - `comments`: false
 
 `## ユースケース要件` を読み、SA が UC のどの要件に対応するかを確認する。
 
 ### 領域別アーキ調査
 
-subsystem ブランチの worktree（`.claude/worktrees/{ブランチ名の / を - に置換}`。ブランチ名は subsystem PR の `head_ref`）へ移動し、`git pull --ff-only` でリモートの最新を取り込む。
+成果物ブランチの worktree（`.claude/worktrees/{ブランチ名の / を - に置換}`。ブランチ名は 成果物 PR の `head_ref`）へ移動し、`git pull --ff-only` でリモートの最新を取り込む。
 
 親 story ブランチに commit 済みの単一 UC シナリオと、`## タスク一覧` の設計タスクが指す既存の設計 Wiki・実装コードを読み、変更の起点を把握する（設計 Wiki のオンデマンド取得は共通ルール『Wikiページのオンデマンド取得』）。
 画面ありの subsystem では、epic の全体UI設計で確定した画面方向性を前提に画面構成・インターフェース定義（フロントエンド）を書く。
@@ -36,20 +36,20 @@ subsystem ブランチの worktree（`.claude/worktrees/{ブランチ名の / �
 
 ### 設計ページの作成
 
-`## タスク一覧` の設計タスクを上流順（インターフェース → ER図 → 画面構成 → インターフェース定義（バックエンド / フロントエンド）（フロー）→ モジュール構成）に並べ、担当分の全ページを作成 / 更新して subsystem ブランチに commit push する。
+`## タスク一覧` の設計タスクを上流順（インターフェース → ER図 → 画面構成 → インターフェース定義（バックエンド / フロントエンド）（フロー）→ モジュール構成）に並べ、担当分の全ページを作成 / 更新して 成果物ブランチに commit push する。
 
 ページごとにユーザーの確認を挟まない。
 上流のページが変わると下流のページも直すことになるため、全ページを揃えてから 1 回で確認する。
 
 `設計図/インターフェース定義/バックエンド/{論理名}.md` の `## インターフェース` を確定させた場合は、全ページの commit 後に subsystem-conductor へインターフェース確定報告を投稿する（後続 subsystem を起票するかの判断は story-conductor が行う）。
 
-報告先は subsystem PR ではなく親 subsystem Issue にする。
-subsystem PR に `確認:subsystem-conductor` を足すと `確認:architect` と 2 つ並び、両方が同時に起動してしまうため（規約『フェーズ索引の網羅』の 1 面 1 確認ラベル）。
-別の面へ報告することで、subsystem PR の手番は architect が持ったまま設計を続けられる。
+報告先は成果物 PR にする（発注元の conductor がマージする）。
+成果物 PR に `確認:subsystem-conductor` を足すと `確認:architect` と 2 つ並び、両方が同時に起動してしまうため（規約『フェーズ索引の網羅』の 1 面 1 確認ラベル）。
+別の面へ報告することで、成果物 PR の手番は architect が持ったまま設計を続けられる。
 
 MCP `comment` を呼ぶ:
-- `number`: 「システム要件の確認」で取り出した親 subsystem Issue の番号
-- `is_pr`: false
+- `number`: 「システム要件の確認」で取り出した親 subsystem PR の番号
+- `is_pr`: true
 - `sender`: `architect`
 - `receiver`: `subsystem-conductor`
 - `format`:
@@ -57,8 +57,8 @@ MCP `comment` を呼ぶ:
   - `body`: インターフェース確定の報告（確定した結合ドキュメントのページ名 + リクエスト / レスポンスの要約）
 
 続けて MCP `add_labels` を呼ぶ:
-- `number`: 親 subsystem Issue の番号
-- `is_pr`: false
+- `number`: 親 subsystem PR の番号
+- `is_pr`: true
 - `labels`:
   - `$AI_MONITOR_LABEL_CONFIRM_SUBSYSTEM_CONDUCTOR` の値
 

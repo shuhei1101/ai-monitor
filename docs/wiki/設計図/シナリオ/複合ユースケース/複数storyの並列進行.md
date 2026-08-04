@@ -15,15 +15,15 @@ template_version: 2.1.0
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| epic Issue | ユースケース一覧に 2 UC を記入済み | 衝突面が重ならない 2 UC |
+| epic PR | ユースケース一覧に 2 UC を記入済み | 衝突面が重ならない 2 UC |
 | epic PR | epic ブランチの Draft PR | story PR の base |
-| story Issue | 本文空 + `確認:story-conductor` の Issue を 2 件、同じ epic の Sub-issue として同時に作成 | 2 セッションの同時起動を誘発 |
+| story PR | 本文が `## 紐づく Issue` のみ + `確認:story-conductor` の PR を 2 件、同じ epic ブランチを base にして同時に作成 | 2 セッションの同時起動を誘発 |
 
 ### フロー
 
 ```mermaid
 flowchart TD
-  A0([epic-conductor]) -->|UC 一覧の 2 UC を story Issue として起票 +<br>確認:story-conductor を付与| FOCUS
+  A0([epic-conductor]) -->|UC 一覧の 2 UC を story PR として起票 +<br>確認:story-conductor を付与| FOCUS
 
   subgraph FOCUS["検証対象: 2 セッションの同時稼働"]
     subgraph PHASE1["story A（タスク編集）"]

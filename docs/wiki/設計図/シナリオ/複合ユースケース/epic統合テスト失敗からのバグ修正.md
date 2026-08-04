@@ -16,7 +16,7 @@ complex-scenario-writer のトリアージを経て epic-conductor が該当 sto
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| sandbox リポ状態 | 全 story PR が epic ブランチへ merge 済み・全 story / subsystem Issue closed。epic PR 自体は未マージで統合テスト待機中 | メインフローの epic 統合テスト直前を想定 |
+| sandbox リポ状態 | 全 story PR が epic ブランチへ merge 済み・全 story / subsystem PR closed。epic PR 自体は未マージで統合テスト待機中 | メインフローの epic 統合テスト直前を想定 |
 | ai-monitor プラグイン | marketplace 経由でインストール済みかつ最新版に更新済み | モニターが tmux 内で `claude` を起動するのが前提 |
 | バグ埋込 | 該当 subsystem の実装に意図的なバグを仕込む | 複合UC E2E が fail するように |
 | ai-monitor 起動 | モニターが polling 中 | - |
@@ -31,8 +31,8 @@ flowchart TD
 
   subgraph FOCUS1["検証対象: fail → 1 段ずつの差し戻し → 中継"]
     UC1([統合テストレビュー:異常シナリオ<br>（fail・実装側の問題）]) -->|テスト実行で fail →<br>トリアージ（実装側の問題）→<br>確認:epic-conductor + 失敗報告| UC3([統合テスト起動:正常シナリオ<br>（バグ差し戻し）])
-    UC3 -->|方針承認後に該当 story Issue を reopen +<br>バグ内容コメント + 確認:story-conductor| UC4([バグ差し戻しの中継:正常シナリオ<br>（差し戻しの中継）])
-    UC4 -->|該当 subsystem Issue を reopen +<br>バグ内容コメント +<br>確認:subsystem-conductor| UC5([バグ修正着手:正常シナリオ])
+    UC3 -->|方針承認後に該当 story PR を reopen +<br>バグ内容コメント + 確認:story-conductor| UC4([バグ差し戻しの中継:正常シナリオ<br>（差し戻しの中継）])
+    UC4 -->|該当 subsystem PR を reopen +<br>バグ内容コメント +<br>確認:subsystem-conductor| UC5([バグ修正着手:正常シナリオ])
   end
 
   UC5 -->|修正用 Draft PR（base=epic）+<br>確認:architect| UC6([SS設計:正常シナリオ（設計変更なし）])
@@ -45,7 +45,7 @@ flowchart TD
 
   subgraph FOCUS2["検証対象: 完了報告の遡上 → 再テスト → epic マージ"]
     UC12 -->|親 story に 確認:story-conductor +<br>完了報告（バグ修正完了）| UC13([バグ差し戻しの中継:正常シナリオ<br>（修正完了の中継）])
-    UC13 -->|story Issue close + 親 epic に<br>確認:epic-conductor + 完了報告| UC14([統合テスト起動:正常シナリオ<br>（統合テストの委任）])
+    UC13 -->|story PR close + 親 epic に<br>確認:epic-conductor + 完了報告| UC14([統合テスト起動:正常シナリオ<br>（統合テストの委任）])
     UC14 -->|epic PR に<br>確認:complex-scenario-writer 付与| UC15([統合テスト指揮:正常シナリオ<br>（再テストの実行）])
   end
 
@@ -71,10 +71,10 @@ flowchart TD
 
 ### 期待値
 
-- 該当 story / subsystem Issue が reopen を経て再び close 済み（新規のバグ Issue は存在しない）
+- 該当 story / subsystem PR が reopen を経て再び close 済み（新規のバグ Issue は存在しない）
 - 修正用 PR（base=epic ブランチ）が epic ブランチへ merge 済み
 - epic PR の `## 複合ユースケースシナリオテスト結果` が再実行後の結果（全 ✅）になっている
-- fail → pass の経過が親 epic Issue のコメント（complex-scenario-writer の失敗報告 → 全 pass の完了報告）に残っている
+- fail → pass の経過が親 epic PR のコメント（complex-scenario-writer の失敗報告 → 全 pass の完了報告）に残っている
 - epic PR が master へ merged 状態になっている
 
 ## 異常シナリオ

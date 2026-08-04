@@ -23,9 +23,14 @@ from ai_monitor.features.notify.service import build_targets, notify_event, send
 from ai_monitor.features.notify.types import SendResult
 from ai_monitor.features.sessions.registry import SessionRegistry
 from ai_monitor.integrations.github.labels import remove_label
+from ai_monitor.integrations.github.stacks import (
+    add_to_stack,
+    create_stack,
+    dissolve_stack,
+    get_stack,
+)
 from ai_monitor.mcp.models import (
     AssigneesResult,
-    BlockedByResult,
     Comment,
     CommentBlock,
     CommentFormat,
@@ -45,6 +50,9 @@ from ai_monitor.mcp.models import (
     PlainFormat,
     Question,
     ResolveResult,
+    StackInfo,
+    StackLinkResult,
+    StackUnlinkResult,
     ReviewThread,
     SearchResultItem,
     SubIssuesSummary,
@@ -89,28 +97,6 @@ _RESOLVE_THREAD_MUTATION = (
 _REPLY_THREAD_MUTATION = (
     "mutation($id: ID!, $body: String!) { addPullRequestReviewThreadReply("
     "input: { pullRequestReviewThreadId: $id, body: $body }) { comment { id url } } }"
-)
-_BLOCKED_BY_QUERY = """
-query($owner: String!, $repo: String!, $number: Int!) {
-  repository(owner: $owner, name: $repo) {
-    issue(number: $number) {
-      id
-      blockedBy(first: 50) { nodes { number title url state } }
-    }
-  }
-}
-"""
-_ADD_BLOCKED_BY_MUTATION = (
-    "mutation($id: ID!, $blocking: ID!) { addBlockedBy(input: { issueId: $id, blockingIssueId: $blocking })"
-    " { issue { number } } }"
-)
-_REMOVE_BLOCKED_BY_MUTATION = (
-    "mutation($id: ID!, $blocking: ID!) { removeBlockedBy(input: { issueId: $id, blockingIssueId: $blocking })"
-    " { issue { number } } }"
-)
-_ISSUE_NODE_ID_QUERY = (
-    "query($owner: String!, $repo: String!, $number: Int!)"
-    " { repository(owner: $owner, name: $repo) { issue(number: $number) { id } } }"
 )
 _REVIEW_THREADS_QUERY = """
 query($owner: String!, $repo: String!, $number: Int!) {
@@ -346,21 +332,17 @@ def _thumbs_up_logins(comment: dict) -> list[str]:
     return [node["user"]["login"] for node in nodes if node.get("user")]
 
 
-def _fetch_blocked_by(number: int, *, owner: str, repo: str) -> tuple[str, list[IssueRef]]:
-    """対象 Issue の node_id と、着手をブロックしている Issue 一覧を返す。"""
-    data = _get_client().graphql(_BLOCKED_BY_QUERY, {"owner": owner, "repo": repo, "number": number})
-    issue = data["repository"]["issue"]
-    blocked = [
-        IssueRef(number=n["number"], title=n["title"], url=n["url"], state=n["state"].upper())
-        for n in issue["blockedBy"]["nodes"]
-    ]
-    return issue["id"], blocked
-
-
-def _issue_node_id(number: int, *, owner: str, repo: str) -> str:
-    """Issue 番号から GraphQL の node_id を引く。"""
-    data = _get_client().graphql(_ISSUE_NODE_ID_QUERY, {"owner": owner, "repo": repo, "number": number})
-    return data["repository"]["issue"]["id"]
+def _fetch_parent_pr(base_ref: str, *, owner: str, repo: str) -> IssueRef | None:
+    """base ブランチを head に持つ PR を親として返す（見つからなければ None）。"""
+    # head 検索は `{owner}:{ブランチ}` 形式で指定する（マージ済みの親も引けるよう state=all）
+    found = _get_client().rest.pulls.list(
+        owner=owner, repo=repo, head=f"{owner}:{base_ref}", state="all", per_page=1
+    ).parsed_data
+    if not found:
+        return None
+    pr = found[0]
+    state = "MERGED" if getattr(pr, "merged_at", None) else pr.state.upper()
+    return IssueRef(number=pr.number, title=pr.title, url=pr.html_url, state=state)
 
 
 def _is_addressed(blocks: list[CommentBlock], addressee: str) -> bool:
@@ -479,14 +461,15 @@ def get_issue_or_pr(
     parent: bool = True,
     sub_issues: bool = True,
     sub_issues_summary: bool = True,
-    blocked_by: bool = True,
+    stack: bool = True,
     *,
     ctx: Context,
     settings: Settings,
 ) -> IssueSnapshot:
     """Issue / PR の情報を取得してスナップショットに変換する。"""
     client = _get_client()
-    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
+    project = _resolve_project(ctx, projects=settings.projects)
+    owner, repo = project.repo.split("/", 1)
 
     # REST で Issue / PR の基本情報を取得する（PR は is_pr でエンドポイントを切り替え）
     if is_pr:
@@ -519,7 +502,10 @@ def get_issue_or_pr(
         ]
 
     parent_value = None
-    if parent and not is_pr:
+    if parent and is_pr:
+        # PR の親は base ブランチを head に持つ PR（レイヤーの 1 段上）
+        parent_value = _fetch_parent_pr(data.base.ref, owner=owner, repo=repo)
+    elif parent:
         try:
             p = client.rest.issues.get_parent(owner=owner, repo=repo, issue_number=number).parsed_data
             parent_value = IssueRef(number=p.number, title=p.title, url=p.html_url, state=p.state.upper())
@@ -545,9 +531,15 @@ def get_issue_or_pr(
                 percent_completed=raw_summary.percent_completed,
             )
 
-    blocked_by_value = None
-    if blocked_by and not is_pr:
-        _, blocked_by_value = _fetch_blocked_by(number, owner=owner, repo=repo)
+    stack_value = None
+    if stack and is_pr:
+        found_stack = get_stack(project, number)
+        if found_stack is not None:
+            stack_value = StackInfo(
+                number=found_stack.number,
+                position=found_stack.position,
+                below_open=found_stack.below_open,
+            )
 
     # 結果をイシュースナップショットに変換して返す（取得しなかったフィールドは None）
     return IssueSnapshot(
@@ -579,7 +571,7 @@ def get_issue_or_pr(
         parent=parent_value,
         sub_issues=sub_issues_value,
         sub_issues_summary=summary_value,
-        blocked_by=blocked_by_value,
+        stack=stack_value,
     )
 
 
@@ -1055,27 +1047,45 @@ def reopen_issue(number: int, *, ctx: Context, settings: Settings) -> EmptyResul
 
 
 @_log_tool_call
-def set_blocked_by(
-    number: int,
-    blocking_numbers: list[int],
-    remove: bool = False,
-    *,
-    ctx: Context,
-    settings: Settings,
-) -> BlockedByResult:
-    """Issue 間の依存（blocked by）を設定 / 解除する。"""
-    client = _get_client()
-    owner, repo = _resolve_project(ctx, projects=settings.projects).repo.split("/", 1)
-    # 対象 Issue の node_id を取る（同時に現況も引ける）
-    issue_id, _ = _fetch_blocked_by(number, owner=owner, repo=repo)
-    # 依存先ごとに mutation を実行する（同じ組み合わせを繰り返しても増減しない冪等操作）
-    mutation = _REMOVE_BLOCKED_BY_MUTATION if remove else _ADD_BLOCKED_BY_MUTATION
-    for blocking_number in blocking_numbers:
-        blocking_id = _issue_node_id(blocking_number, owner=owner, repo=repo)
-        client.graphql(mutation, {"id": issue_id, "blocking": blocking_id})
-    # 操作後の一覧を取り直して返す
-    _, blocked = _fetch_blocked_by(number, owner=owner, repo=repo)
-    return BlockedByResult(blocked_by=blocked)
+def link_stack(pull_requests: list[int], *, ctx: Context, settings: Settings) -> StackLinkResult:
+    """複数の PR を Stacked Pull Requests として繋ぐ。"""
+    project = _resolve_project(ctx, projects=settings.projects)
+    stacks = {n: get_stack(project, n) for n in pull_requests}
+    existing = {s.number for s in stacks.values() if s is not None}
+    # 別々のスタックに属する PR が混ざると繋げない（1 PR は 1 スタックまで）
+    if len(existing) > 1:
+        return StackLinkResult(
+            linked=False, stack_number=None, reason="複数のスタックに属する PR が含まれる"
+        )
+    # 全て未所属なら新しいスタックを作る
+    if not existing:
+        return StackLinkResult(
+            linked=True, stack_number=create_stack(project, pull_requests), reason=None
+        )
+    # 既存スタックがある場合、まだ属していない PR だけを上端へ積む
+    stack_number = existing.pop()
+    additions = [n for n in pull_requests if stacks[n] is None]
+    if additions:
+        add_to_stack(project, stack_number, additions)
+    return StackLinkResult(linked=True, stack_number=stack_number, reason=None)
+
+
+@_log_tool_call
+def unlink_stack(pr_number: int, *, ctx: Context, settings: Settings) -> StackUnlinkResult:
+    """マージ前の PR をスタックから外し、残りを元の並びで組み直す。"""
+    project = _resolve_project(ctx, projects=settings.projects)
+    stack = get_stack(project, pr_number)
+    # 未所属なら何もしない（マージ手順から無条件に呼べるようにする）
+    if stack is None:
+        return StackUnlinkResult(unlinked=False, restacked=[], stack_number=None)
+    dissolve_stack(project, stack.number, [pr_number])
+    remaining = [n for n in stack.pull_requests if n != pr_number]
+    # スタックは 2 件以上必要なので、残りが 1 件以下なら組み直さない
+    if len(remaining) < 2:
+        return StackUnlinkResult(unlinked=True, restacked=[], stack_number=None)
+    return StackUnlinkResult(
+        unlinked=True, restacked=remaining, stack_number=create_stack(project, remaining)
+    )
 
 
 @_log_tool_call
@@ -1477,7 +1487,8 @@ def build_mcp_app(
         (close, "クローズ", _DESTRUCTIVE),
         (reopen_issue, "Issue再オープン", None),
         (create_child_issue, "子Issue作成", None),
-        (set_blocked_by, "依存設定", None),
+        (link_stack, "スタック接続", None),
+        (unlink_stack, "スタック解除", None),
         (create_intake_issue, "新規Issue起票", None),
         (create_defect_issue, "不具合Issue起票", None),
         (create_draft_pr, "DraftPR作成", None),

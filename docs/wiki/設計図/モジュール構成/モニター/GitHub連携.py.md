@@ -7,6 +7,8 @@ template_version: 1.4.0
 `GitHub連携` ドメイン（モニター側）に属する構成要素詳細。
 モニターが GitHub API（githubkit）を呼ぶ薄い連携層で、取得結果は[イシュー](./エージェント管理.py.md#イシュー) / [プルリクエスト](./エージェント管理.py.md#プルリクエスト)（別分類のドメインモデル）に変換して返す。
 
+- 対応テストファイル: `tests/unit/ai_monitor/integrations/github/test_search.py` / `tests/unit/ai_monitor/integrations/github/test_labels.py` / `tests/unit/ai_monitor/integrations/github/test_issues.py` / `tests/unit/ai_monitor/integrations/github/test_stacks.py`
+
 ## 一覧
 
 | ユースケース | 役割 | コンテナ | 種別 | 名前 | 概要 | 補足 |
@@ -19,8 +21,13 @@ template_version: 1.4.0
 | 共通 | ラベル操作 | `integrations/github/labels.py` | 関数 | [`remove_label`](#ラベル除去) | ラベルを 1 つ除去（未付与は無視） | 処理中ラベルの除去に使用 |
 | 共通 | クローズ | `integrations/github/issues.py` | 関数 | [`close_issue`](#issue-クローズ) | Issue を completed でクローズ | intake 自動クローズに使用 |
 | 共通 | 単体取得 | `integrations/github/issues.py` | 関数 | [`get_issue`](#issue-単体取得) | Issue / PR を 1 件取得して変換 | クローズ確認に使用 |
-| 共通 | 親取得 | `integrations/github/issues.py` | 関数 | [`get_parent_number`](#親-issue-番号取得) | Sub-issue リンクの親 Issue 番号を取得 | 親なしは `None` |
-| 共通 | 子取得 | `integrations/github/issues.py` | 関数 | [`list_sub_issue_numbers`](#sub-issue-番号一覧) | Sub-issue の子 Issue 番号一覧を取得 | 1 段のみ（再帰はクリーンアップ側） |
+| 共通 | 親取得 | `integrations/github/issues.py` | 関数 | [`get_parent_number`](#親番号取得) | 自分の base を head に持つ親 PR の番号を返す | 親なしは `None` |
+| 共通 | 子取得 | `integrations/github/issues.py` | 関数 | [`list_child_numbers`](#子番号一覧) | base に自分の head を持つ子 PR の番号一覧を取得 | 1 段のみ（再帰はクリーンアップ側） |
+| 共通 | ドメインモデル | `integrations/github/stacks.py` | データモデル | [`Stack`](#スタック) | PR のスタック所属（番号・位置・構成・下位の open PR） | frozen dataclass |
+| 共通 | スタック取得 | `integrations/github/stacks.py` | 関数 | [`get_stack`](#スタック所属取得) | PR のスタック番号・位置・下位の open PR を GraphQL で取得 | 未所属は `None` |
+| 共通 | スタック操作 | `integrations/github/stacks.py` | 関数 | [`create_stack`](#スタック作成) | PR 番号の並びからスタックを作る | REST `POST /stacks` |
+| 共通 | スタック操作 | `integrations/github/stacks.py` | 関数 | [`add_to_stack`](#スタック追加) | 既存スタックの上端へ PR を積む | REST `POST /stacks/{n}/add` |
+| 共通 | スタック操作 | `integrations/github/stacks.py` | 関数 | [`dissolve_stack`](#スタック解散) | スタックを解散する | REST `POST /stacks/{n}/unstack`。1 件指定でも全体が解散する |
 
 ## ディレクトリ構成
 
@@ -29,10 +36,13 @@ src/ai_monitor/integrations/github/
 ├── client.py    # get_client（githubkit クライアントの生成・共有）
 ├── search.py    # list_open_targets / to_target / _parse_linked_issue_numbers
 ├── labels.py    # add_label / remove_label
-└── issues.py    # close_issue / get_issue / get_parent_number / list_sub_issue_numbers
+├── issues.py    # close_issue / get_issue / get_parent_number / list_child_numbers
+└── stacks.py    # get_stack / create_stack / add_to_stack / dissolve_stack
 ```
 
 ## 構成図
+
+### 対象取得とラベル操作
 
 ```mermaid
 classDiagram
@@ -45,8 +55,6 @@ classDiagram
   ラベル除去 ..> クライアント生成 : 利用
   Issueクローズ ..> クライアント生成 : 利用
   Issue単体取得 ..> クライアント生成 : 利用
-  親Issue番号取得 ..> クライアント生成 : 利用
-  Sub-issue番号一覧 ..> クライアント生成 : 利用
 
   class クライアント生成 {
     <<function>>
@@ -80,13 +88,13 @@ classDiagram
     <<function>>
     +Issue単体取得(プロジェクト, 番号) イシュー
   }
-  class 親Issue番号取得 {
+  class 親番号取得 {
     <<function>>
-    +親Issue番号取得(プロジェクト, 番号) int | None
+    +親番号取得(プロジェクト, 番号, 対象一覧) int | None
   }
-  class Sub-issue番号一覧 {
+  class 子番号一覧 {
     <<function>>
-    +Sub-issue番号一覧(プロジェクト, 番号) list~int~
+    +子番号一覧(番号, 対象一覧) list~int~
   }
 
   click クライアント生成 href "#クライアント生成"
@@ -97,8 +105,54 @@ classDiagram
   click ラベル除去 href "#ラベル除去"
   click Issueクローズ href "#issue-クローズ"
   click Issue単体取得 href "#issue-単体取得"
-  click 親Issue番号取得 href "#親-issue-番号取得"
-  click Sub-issue番号一覧 href "#sub-issue-番号一覧"
+  click 親番号取得 href "#親番号取得"
+  click 子番号一覧 href "#子番号一覧"
+```
+
+---
+
+### スタック操作
+
+```mermaid
+classDiagram
+  direction LR
+  スタック所属取得 ..> クライアント生成 : 利用
+  スタック所属取得 --> スタック : 返す
+  スタック作成 ..> クライアント生成 : 利用
+  スタック追加 ..> クライアント生成 : 利用
+  スタック解散 ..> クライアント生成 : 利用
+
+  class クライアント生成 {
+  }
+  class スタック所属取得 {
+    <<function>>
+    +スタック所属取得(プロジェクト, PR番号) スタック | None
+  }
+  class スタック {
+    +スタック番号: int
+    +位置: int
+    +構成PR番号: list~int~
+    +下位のopenPR番号: list~int~
+  }
+  class スタック作成 {
+    <<function>>
+    +スタック作成(プロジェクト, PR番号一覧) int
+  }
+  class スタック追加 {
+    <<function>>
+    +スタック追加(プロジェクト, スタック番号, PR番号一覧) None
+  }
+  class スタック解散 {
+    <<function>>
+    +スタック解散(プロジェクト, スタック番号, PR番号一覧) None
+  }
+
+  click クライアント生成 href "#クライアント生成"
+  click スタック所属取得 href "#スタック所属取得"
+  click スタック href "#スタック"
+  click スタック作成 href "#スタック作成"
+  click スタック追加 href "#スタック追加"
+  click スタック解散 href "#スタック解散"
 ```
 
 ## `integrations/github/client.py`
@@ -208,7 +262,7 @@ list_open_targets(project)
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_list_open_targets_when_multi_page` | 正常 | ページ跨ぎの全件取得 | 2 ページ分の open 応答 | githubkit | `state=open` で照会され、ページを跨いだ全件が返る | - |
 | `test_list_open_targets_when_pr_mixed` | 正常 | Issue / PR の判別変換 | `pull_request` キーの有無が混在する応答 | githubkit | PR は `PullRequest`（`linked_issue_numbers` 解決済み）・それ以外は `Issue` になる | - |
-| `test_list_open_targets_when_sub_issues_summary` | 正常 | Sub-issue 件数の変換 | `sub_issues_summary`（total=2, completed=1）付きの Issue 応答 | githubkit | `Issue` の `sub_issues_total=2` / `sub_issues_completed=1` になる | - |
+| `test_list_open_targets_when_pr` | 正常 | PR の変換 | `pull_request` キーを持つ応答 | githubkit | `PullRequest` になり `base_ref` と `linked_issue_numbers` が入る | - |
 
 ---
 
@@ -249,7 +303,7 @@ PullRequest(number=52, state="open", draft=True, labels=["確認:tester"], assig
 1. ラベル名と assignee のログイン名を取り出す
 2. 応答の種別で変換先を分ける
    - `pull_request` キーを持つ場合、本文から `linked_issue_numbers` を抽出して[プルリクエスト](./エージェント管理.py.md#プルリクエスト)にする（[紐づく Issue 解析](#紐づく-issue-解析)）
-   - 持たない場合、[イシュー](./エージェント管理.py.md#イシュー)にする（応答の `sub_issues_summary` の件数も変換する）
+   - 持たない場合、[イシュー](./エージェント管理.py.md#イシュー)にする
 
 #### 例外
 
@@ -307,6 +361,194 @@ _parse_linked_issue_numbers("## 紐づく Issue\n\n- #50")
 | `test_parse_linked_issue_numbers` | 正常 | 番号の抽出 | セクション内に `#50` `#51` | なし | `[50, 51]` | - |
 | `test_parse_linked_issue_numbers_when_section_missing` | 正常 | セクションなしは空 | `## 紐づく Issue` の無い本文 | なし | `[]` | - |
 | `test_parse_linked_issue_numbers_when_duplicated` | 正常 | 重複の排除 | 同一番号が 2 回現れる本文 | なし | 1 件に畳まれる | - |
+
+## スタック
+> 物理名: `Stack`<br>
+> 種別: データモデル<br>
+> コンテナ: `integrations/github/stacks.py`
+
+PR のスタック所属（`@dataclass(frozen=True, slots=True, kw_only=True)`）。
+
+### プロパティ
+
+| 論理名 | プロパティ名 | 型 | 可視性 | デフォルト | 説明 | 例 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| スタック番号 | `number` | `int` | 公開 | - | スタック番号 | `123` | PR / Issue と同じ採番空間を共有する |
+| 位置 | `position` | `int` | 公開 | - | 自分のスタック上の位置 | `3` | 底が 1 |
+| 構成 PR 番号 | `pull_requests` | `list[int]` | 公開 | `[]` | 下から上の順に並んだ構成 PR 番号 | `[120, 121, 122]` | - |
+| 下位の open PR 番号 | `below_open` | `list[int]` | 公開 | `[]` | 自分より下でまだ open な PR 番号 | `[120]` | 空でない間は着手できない |
+
+### メソッド
+
+なし
+
+### 単体テスト
+
+なし
+
+## `integrations/github/stacks.py`
+
+GitHub の Stacked Pull Requests を読み書きする。
+`gh stack` CLI は底の PR の base をデフォルトブランチへ書き換えるため使わず、REST / GraphQL を直接呼ぶ。
+
+### スタック所属取得
+> 物理名: `get_stack`<br>
+> 種別: 関数
+
+PR のスタック所属を GraphQL で取得する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト | `project` | `MonitoredProject` | ✅ | - | 対象リポジトリ | - |
+| PR 番号 | `pr_number` | `int` | ✅ | - | 対象 PR 番号 | - |
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`Stack \| None`](#スタック) | スタック番号・自分の位置・構成 PR | 未所属は `None` |
+
+#### 処理
+
+1. `PullRequest.stack`（`number` / `size` / `entries`）と `stackEntry.position` を GraphQL で取る
+2. `stack` が `null` なら `None` を返す
+3. 自分より `position` が小さい entry のうち open な PR 番号を集めて返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | API 応答が 4xx / 5xx | HTTP ステータスと本文 | 呼び出し元の周期を見送る |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_get_stack` | 正常 | 所属ありの取得 | 3 件のスタックの上端 | githubkit | 番号・位置・下位の open PR が返る | - |
+| `test_get_stack_when_not_stacked` | 正常 | 未所属 | `stack` が `null` | githubkit | `None` が返る | - |
+| `test_get_stack_when_below_merged` | 正常 | 下位が全て merged | 下位 PR が closed | githubkit | 下位の open PR が空で返る | 起動可能の判定に使う |
+
+---
+
+### スタック作成
+> 物理名: `create_stack`<br>
+> 種別: 関数
+
+PR 番号の並びからスタックを作る。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト | `project` | `MonitoredProject` | ✅ | - | 対象リポジトリ | - |
+| PR 番号一覧 | `pull_requests` | `list[int]` | ✅ | - | 下から上の順 | 2 件以上 |
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `int` | 作成したスタック番号 | - |
+
+#### 処理
+
+1. `POST /repos/{owner}/{repo}/stacks` に `pull_requests` を渡す
+2. 応答の `number` を返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | base ref の連鎖が繋がっていない / 既に別スタックに属する PR を含む | HTTP ステータスと本文 | - |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_create_stack` | 正常 | スタック作成 | 連鎖する 2 件 | githubkit | `POST /stacks` が呼ばれ番号が返る | - |
+| `test_create_stack_when_base_broken` | 異常 | 連鎖の不整合 | API が 422 | githubkit | `RequestFailed` | - |
+
+---
+
+### スタック追加
+> 物理名: `add_to_stack`<br>
+> 種別: 関数
+
+既存スタックの上端へ PR を積む。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト | `project` | `MonitoredProject` | ✅ | - | 対象リポジトリ | - |
+| スタック番号 | `stack_number` | `int` | ✅ | - | 追加先のスタック | - |
+| PR 番号一覧 | `pull_requests` | `list[int]` | ✅ | - | 上端から上へ積む順 | - |
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `None` | なし（副作用のみ） | - |
+
+#### 処理
+
+1. `POST /repos/{owner}/{repo}/stacks/{stack_number}/add` に `pull_requests` を渡す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | base ref が繋がっていない / 既に別スタックに属する PR を含む | HTTP ステータスと本文 | - |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_add_to_stack` | 正常 | 上端への追加 | 既存スタック + 未所属 PR | githubkit | `/stacks/{n}/add` が呼ばれる | - |
+
+---
+
+### スタック解散
+> 物理名: `dissolve_stack`<br>
+> 種別: 関数
+
+スタックを解散する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト | `project` | `MonitoredProject` | ✅ | - | 対象リポジトリ | - |
+| スタック番号 | `stack_number` | `int` | ✅ | - | 解散するスタック | - |
+| PR 番号一覧 | `pull_requests` | `list[int]` | ✅ | - | API が要求する対象 | 何を渡してもスタック全体が解散する |
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `None` | なし（副作用のみ） | - |
+
+#### 処理
+
+1. `POST /repos/{owner}/{repo}/stacks/{stack_number}/unstack` に `pull_requests` を渡す
+
+解散しても各 PR の base ref は変わらない。
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `RequestFailed` | スタックが存在しない / 解散済み | HTTP ステータスと本文 | - |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_dissolve_stack` | 正常 | 解散 | 既存スタック | githubkit | `/stacks/{n}/unstack` が呼ばれる | - |
+| `test_dissolve_stack_when_dissolved` | 異常 | 解散済み | API が 404 | githubkit | `RequestFailed` | - |
+
+---
 
 ## `integrations/github/labels.py`
 > 種別: ファイル
@@ -490,7 +732,7 @@ Issue(number=35, state="closed", labels=["layer:epic"], assignees=[])
 #### 処理
 
 1. REST で 1 件取得する（Issues エンドポイント。PR も Issue として取れる）
-2. [イシュー](./エージェント管理.py.md#イシュー)に変換して返す（`sub_issues_summary` の件数も変換する）
+2. [イシュー](./エージェント管理.py.md#イシュー)に変換して返す
 
 #### 例外
 
@@ -506,81 +748,81 @@ Issue(number=35, state="closed", labels=["layer:epic"], assignees=[])
 
 ---
 
-### 親 Issue 番号取得
+### 親番号取得
 > 物理名: `get_parent_number`<br>
 > 種別: 関数
 
-Sub-issue リンクの親 Issue 番号を取得する（親なしは `None`）。
+自分の base を head に持つ親 PR の番号を返す（親なしは `None`）。
 
 #### 引数
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| プロジェクト | `project` | [`MonitoredProject`](./エージェント管理.py.md#監視対象プロジェクト) | ✅ | - | 対象のプロジェクト | - |
-| 番号 | `number` | `int` | ✅ | - | 子 Issue の番号 | - |
+| プロジェクト | `project` | [`MonitoredProject`](./エージェント管理.py.md#監視対象プロジェクト) | ✅ | - | 対象のプロジェクト | 呼び出し側の一貫性のために受ける |
+| 番号 | `number` | `int` | ✅ | - | 子 PR の番号 | - |
+| 対象一覧 | `targets` | [`list[PullRequest]`](./エージェント管理.py.md#プルリクエスト) | ✅ | - | base を辿る元の一覧 | メモリ上で辿るため API を呼ばない |
 
 引数例:
 
 ```python
-get_parent_number(project, 35)
+get_parent_number(project, 52, prs)
 ```
 
 #### 戻り値
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `int \| None` | 親 Issue の番号 | 親リンクなしは `None` |
+| `int \| None` | 親 PR の番号 | 一覧に親が居なければ `None` |
 
 戻り値例:
 
 ```python
-30
+50
 ```
 
 #### 処理
 
-1. REST で親 Issue を取得する（`GET .../parent`）
-2. 親の番号を返す（親なしの 404 は `None` を返す）
+1. `targets` から自分の PR を探して base ブランチを読む（見つからない / base が空なら `None`）
+2. その base を head に持つ PR を `targets` から探す
+3. 見つかればその番号を、見つからなければ `None` を返す
 
 #### 例外
 
-| 例外名 | 発生条件 | メッセージ | 補足 |
-| --- | --- | --- | --- |
-| `RequestFailed` | API 応答が 404 以外の 4xx / 5xx | HTTP ステータスと本文 | githubkit から伝播 |
+なし（`targets` を辿るだけで API を呼ばない）
 
 #### 単体テスト
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_get_parent_number` | 正常 | 親番号の取得 | 親 Issue 付きの応答 | githubkit | 親の番号が返る | - |
-| `test_get_parent_number_when_no_parent` | 正常 | 親なしは None | REST が 404 を返す | githubkit | `None`（例外を投げない） | 例外表「404 以外」に対応する握り分岐 |
+| `test_get_parent_number` | 正常 | 親番号の取得 | base が親の head と一致する PR | なし | 親の番号が返る | - |
+| `test_get_parent_number_when_no_parent` | 正常 | 親なしは None | base を head に持つ PR が一覧に不在 | なし | `None`（例外を投げない） | 最上位 PR の分岐 |
 
 ---
 
-### Sub-issue 番号一覧
-> 物理名: `list_sub_issue_numbers`<br>
+### 子番号一覧
+> 物理名: `list_child_numbers`<br>
 > 種別: 関数
 
-Sub-issue リンクの子 Issue 番号一覧を取得する（1 段のみ。再帰はクリーンアップ側で行う）。
+base に自分の head を持つ子 PR の番号一覧を返す（1 段のみ。再帰はクリーンアップ側で行う）。
 
 #### 引数
 
 | 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| プロジェクト | `project` | [`MonitoredProject`](./エージェント管理.py.md#監視対象プロジェクト) | ✅ | - | 対象のプロジェクト | - |
-| 番号 | `number` | `int` | ✅ | - | 親 Issue の番号 | - |
+| 番号 | `number` | `int` | ✅ | - | 親 PR の番号 | - |
+| 対象一覧 | `targets` | [`list[PullRequest]`](./エージェント管理.py.md#プルリクエスト) | ✅ | - | 子を探す元の一覧 | メモリ上で辿るため API を呼ばない |
 
 引数例:
 
 ```python
-list_sub_issue_numbers(project, 35)
+list_child_numbers(35, prs)
 ```
 
 #### 戻り値
 
 | 型 | 説明 | 補足 |
 | --- | --- | --- |
-| `list[int]` | 子 Issue の番号一覧 | 子なしは `[]` |
+| `list[int]` | 子 PR の番号一覧 | 子なしは `[]` |
 
 戻り値例:
 
@@ -590,18 +832,16 @@ list_sub_issue_numbers(project, 35)
 
 #### 処理
 
-1. REST で子 Issue 一覧をページネーションで全件取得する（`GET .../sub_issues`）
-2. 番号の一覧にして返す
+1. `targets` から自分の PR を探して head ブランチを読む（見つからない / head が空なら `[]`）
+2. その head を base に持つ PR の番号一覧を返す
 
 #### 例外
 
-| 例外名 | 発生条件 | メッセージ | 補足 |
-| --- | --- | --- | --- |
-| `RequestFailed` | API 応答が 4xx / 5xx | HTTP ステータスと本文 | githubkit から伝播 |
+なし（`targets` を辿るだけで API を呼ばない）
 
 #### 単体テスト
 
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `test_list_sub_issue_numbers` | 正常 | 子番号の取得 | 子 2 件の応答 | githubkit | `[40, 41]` | - |
-| `test_list_sub_issue_numbers_when_no_children` | 正常 | 子なしは空リスト | 空の応答 | githubkit | `[]` | - |
+| `test_list_child_numbers` | 正常 | 子番号の取得 | head を base に持つ PR 2 件 | なし | `[40, 41]` | - |
+| `test_list_child_numbers_when_no_children` | 正常 | 子なしは空リスト | head を base に持つ PR が不在 | なし | `[]` | - |

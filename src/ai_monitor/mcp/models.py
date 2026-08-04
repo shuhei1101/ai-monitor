@@ -233,6 +233,16 @@ class SubIssuesSummary(BaseModel):
     percent_completed: float
 
 
+class StackInfo(BaseModel):
+    """PR が属するスタックの情報。"""
+
+    number: int
+    # スタック内の自分の位置（1 が最も base に近い）
+    position: int
+    # 自分より下でまだ open な PR 番号（空でない間は着手できない）
+    below_open: list[int] = []
+
+
 class IssueSnapshot(BaseModel):
     """get_issue_or_pr が返す Issue / PR のスナップショット。
 
@@ -258,14 +268,24 @@ class IssueSnapshot(BaseModel):
     parent: IssueRef | None = None
     sub_issues: list[IssueRef] | None = []
     sub_issues_summary: SubIssuesSummary | None = None
-    # 着手をブロックしている Issue（GitHub の blocked by）。Issue のみ設定される
-    blocked_by: list[IssueRef] | None = None
+    # 所属している PR スタック。PR のみ設定され、未所属は None
+    stack: StackInfo | None = None
 
 
-class BlockedByResult(BaseModel):
-    """set_blocked_by の結果（操作後の依存一覧）。"""
+class StackLinkResult(BaseModel):
+    """link_stack の結果。"""
 
-    blocked_by: list[IssueRef]
+    linked: bool
+    stack_number: int | None = None
+    reason: str | None = None
+
+
+class StackUnlinkResult(BaseModel):
+    """unlink_stack の結果（組み直し後の構成を含む）。"""
+
+    unlinked: bool
+    restacked: list[int] = []
+    stack_number: int | None = None
 
 
 class MonitorAck(BaseModel):

@@ -117,7 +117,7 @@ def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, wait_until):
         ).parsed_data
         return subs or None
 
-    stories = wait_until(_story_created, timeout_sec=1800, message="子story起票（確認:story-conductor 付与）")
+    stories = wait_until(_story_created, timeout_sec=1800, message="子storyPR作成（確認:story-conductor 付与）")
     assert len(stories) == 1, f"story 1 件でない: {[s.title for s in stories]}"
     story = stories[0]
 
@@ -150,7 +150,7 @@ def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, wait_until):
         return (subs[0], prs[0]) if "確認:architect" in {label.name for label in prs[0].labels} else None
 
     subsystem, subsystem_pr = wait_until(
-        _subsystem_handed_off, timeout_sec=2400, message="子subsystem起票と SS設計への引き継ぎ（確認:architect）"
+        _subsystem_handed_off, timeout_sec=2400, message="子subsystemPR作成と SS設計への引き継ぎ（確認:architect）"
     )
 
     # 検証: intake の下に epic / story / subsystem が親子で連なっている
@@ -191,7 +191,7 @@ def test_error_when_impact_found_below(monitor, gh_live, repo_ctx, intake_issue_
         ).parsed_data
         return subs or None
 
-    stories = wait_until(_story_created, timeout_sec=1800, message="子story起票")
+    stories = wait_until(_story_created, timeout_sec=1800, message="子storyPR作成")
     story = stories[0]
 
     # 実行: story 要件確定で単一 UC の更新が必要と回答する

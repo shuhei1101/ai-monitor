@@ -1,6 +1,6 @@
 # ライブラリPoC結果まとめ
 
-library-poc-runner の検証結果を集約し、subsystem PR で採用判断を仰ぐ。
+library-poc-runner の検証結果を集約し、成果物 PR で採用判断を仰ぐ。
 本フェーズは PoC PR の完了報告で起動するため、ラベル操作と作業完了報告の対象は起動要因になった PoC PR になる。
 
 ## 手順

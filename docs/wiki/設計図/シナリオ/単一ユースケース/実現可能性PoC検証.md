@@ -4,7 +4,7 @@ template_version: 2.1.0
 
 # 実現可能性PoC検証
 
-epic-poc-runner が epic の成立条件になっている核心機構を最安直構成で検証し、結論を epic Issue 本文 `## PoC 結果` に記録する単一ユースケース。
+epic-poc-runner が epic の成立条件になっている核心機構を最安直構成で検証し、結論を epic PR 本文 `## PoC 結果` に記録する単一ユースケース。
 
 対応エージェント: `epic-poc-runner`
 
@@ -35,7 +35,7 @@ sequenceDiagram
   ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
   participant REPO as リポジトリ
   activate MON
-  MON->>GH: 指示コメント + 親 epic Issue 本文を確認して<br>PoC PR 本文を仮埋め<br>（リスク仮説 / 検証構成 / 成功条件の草案）
+  MON->>GH: 指示コメント + 親 epic PR 本文を確認して<br>PoC PR 本文を仮埋め<br>（リスク仮説 / 検証構成 / 成功条件の草案）
   MON->>GH: PoC PR に完了報告コメント +<br>確認質問コメント +<br>議論中 付与 + assignee=ユーザー 設定
   deactivate MON
 
@@ -74,19 +74,19 @@ sequenceDiagram
   ORC->>MON: 既存セッションへ送信（完了処理）
   activate MON
   MON->>GH: PoC PR の自分宛コメント一括 Resolve
-  MON->>GH: 親 epic Issue 本文に PoC 結果 サマリ記録
+  MON->>GH: 親 epic PR 本文に PoC 結果 サマリ記録
   MON->>GH: 確認:epic-poc-runner 除去<br>（PoC PR・ブランチは保持）
-  MON->>GH: epic Issue に 確認:epic-conductor 付与
-  MON->>GH: epic Issue に完了報告コメント<br>（@epic-conductor 宛・<br>確認後の Resolve 依頼付き）
+  MON->>GH: epic PR に 確認:epic-conductor 付与
+  MON->>GH: epic PR に完了報告コメント<br>（@epic-conductor 宛・<br>確認後の Resolve 依頼付き）
   deactivate MON
   Note over MON: セッションは PoC PR close まで常駐
 ```
 
 ### 期待値
 
-- epic Issue 本文に `## PoC 結果`（検証構成 / 成功条件 / 結果 / PoC PR リンク）が記録されている
+- epic PR 本文に `## PoC 結果`（検証構成 / 成功条件 / 結果 / PoC PR リンク）が記録されている
 - PoC PR は open のまま `確認:epic-poc-runner` だけが除去されている
-- epic Issue に `確認:epic-conductor` が付与され、完了報告コメント（@epic-conductor 宛・未解決）が投稿されている
+- epic PR に `確認:epic-conductor` が付与され、完了報告コメント（@epic-conductor 宛・未解決）が投稿されている
 - PoC PR の自分宛コメントが全て Resolve 済み
 
 ## 異常シナリオ（核心機構が成立しない結論）
@@ -121,5 +121,5 @@ sequenceDiagram
 
 ### 期待値
 
-- 不成立の実測値と理由が PoC PR 本文 + epic Issue `## PoC 結果` に記録されている
-- epic Issue・PoC PR とも open のまま（close されていない）
+- 不成立の実測値と理由が PoC PR 本文 + epic PR `## PoC 結果` に記録されている
+- epic PR・PoC PR とも open のまま（close されていない）

@@ -31,17 +31,17 @@ flowchart TD
 
   subgraph FOCUS1["検証対象 1: 終端までの遡上"]
     UC1([エスカレーション対応:正常シナリオ<br>（方針確認）]) -->|ユーザーが上位中継を選択| UC2([エスカレーション対応:正常シナリオ<br>（上位への中継）])
-    UC2 -->|親 story Issue に<br>確認:story-conductor +<br>中継コメント| UC3([エスカレーション対応:正常シナリオ<br>（方針確認）])
+    UC2 -->|親 story PR に<br>確認:story-conductor +<br>中継コメント| UC3([エスカレーション対応:正常シナリオ<br>（方針確認）])
     UC3 -->|ユーザーが上位中継を選択| UC4([エスカレーション対応:正常シナリオ<br>（上位への中継）])
-    UC4 -->|親 epic Issue に<br>確認:epic-conductor +<br>中継コメント| UC5([エスカレーション対応:正常シナリオ<br>（方針確認）])
+    UC4 -->|親 epic PR に<br>確認:epic-conductor +<br>中継コメント| UC5([エスカレーション対応:正常シナリオ<br>（方針確認）])
   end
 
   subgraph FOCUS2["検証対象 2: epic の決定 → 複合シナリオ修正 → 下位への伝播"]
     UC5 -->|epic レベルの選択肢提示 + 議論中 →<br>ユーザーが要件変更を選択| UC6([エスカレーション対応:正常シナリオ<br>（シナリオ修正を伴う解決）])
     UC6 -->|epic 本文更新 + epic PR に<br>確認:complex-scenario-writer +<br>修正指示コメント| UC7([複合シナリオ設計:正常シナリオ<br>（エスカレーション由来のシナリオ修正）])
     UC7 -->|シナリオ修正 commit +<br>確認:epic-conductor + 完了報告| UC8([エスカレーション対応:正常シナリオ<br>（シナリオ修正完了後の決定通知）])
-    UC8 -->|story Issue に<br>確認:story-conductor +<br>決定通知コメント| UC9([エスカレーション対応:正常シナリオ<br>（上位の決定の受領）])
-    UC9 -->|subsystem Issue に<br>確認:subsystem-conductor +<br>決定通知コメント| UC10([エスカレーション対応:正常シナリオ<br>（上位の決定の受領）])
+    UC8 -->|story PR に<br>確認:story-conductor +<br>決定通知コメント| UC9([エスカレーション対応:正常シナリオ<br>（上位の決定の受領）])
+    UC9 -->|subsystem PR に<br>確認:subsystem-conductor +<br>決定通知コメント| UC10([エスカレーション対応:正常シナリオ<br>（上位の決定の受領）])
     UC10 -->|subsystem PR に 確認:architect +<br>再開指示コメント| UC11([SS設計:正常シナリオ])
   end
 
@@ -62,11 +62,11 @@ flowchart TD
 
 ### 期待値
 
-- epic Issue 本文の `## 横断要件` が決定内容で更新されている
+- epic PR 本文の `## 横断要件` が決定内容で更新されている
 - 修正後の複合 UC シナリオの commit が epic ブランチに積まれている
 - 決定した方針に沿った設計 Wiki の commit が subsystem ブランチに積まれている
 - 各段のエスカレーション関連コメント（報告 / 中継 / 決定通知）が全て Resolve 済み
-- subsystem PR に `確認:tester` が付与され、エスカレーションで使った `確認:*`（epic Issue の `確認:epic-conductor` / epic PR の `確認:complex-scenario-writer` / subsystem Issue の `確認:subsystem-conductor`）がどこにも残っていない（設計再開後の通常フローが付ける確認ラベルは対象外）
+- subsystem PR に `確認:tester` が付与され、エスカレーションで使った `確認:*`（epic PR の `確認:epic-conductor` / epic PR の `確認:complex-scenario-writer` / subsystem PR の `確認:subsystem-conductor`）がどこにも残っていない（設計再開後の通常フローが付ける確認ラベルは対象外）
 - 全 3 段の往復（上り 2 回・下り 2 回）でラベル遷移が dead lock していない
 
 ## 異常シナリオ

@@ -1,7 +1,6 @@
 """Issue の状態更新と単体取得。"""
 from __future__ import annotations
 
-from githubkit.exception import RequestFailed
 
 from ai_monitor.integrations.github.client import get_client
 from ai_monitor.integrations.github.search import to_target
@@ -35,51 +34,18 @@ def get_issue(project: MonitoredProject, number: int) -> Issue:
     return target
 
 
-_BLOCKED_BY_QUERY = """
-query($owner: String!, $repo: String!, $number: Int!) {
-  repository(owner: $owner, name: $repo) {
-    issue(number: $number) { blockedBy(first: 50) { nodes { number state } } }
-  }
-}
-"""
+def get_parent_number(project: MonitoredProject, number: int, targets: list[PullRequest]) -> int | None:
+    """親 PR の番号を返す（base を head に持つ PR。無ければ None）。"""
+    target = next((t for t in targets if t.number == number), None)
+    if target is None or not target.base_ref:
+        return None
+    parent = next((t for t in targets if t.head_ref and t.head_ref == target.base_ref), None)
+    return parent.number if parent else None
 
 
-def has_open_blocker(project: MonitoredProject, number: int) -> bool:
-    """着手をブロックしている open の依存が残っているかを返す。"""
-    owner, repo = project.repo.split("/")
-    data = get_client().graphql(_BLOCKED_BY_QUERY, {"owner": owner, "repo": repo, "number": number})
-    issue = data["repository"]["issue"]
-    # PR を指定した場合など、Issue として解決できないものはブロックなしとして扱う
-    if issue is None:
-        return False
-    return any(node["state"].upper() == "OPEN" for node in issue["blockedBy"]["nodes"])
-
-
-def get_parent_number(project: MonitoredProject, number: int) -> int | None:
-    """Sub-issue リンクの親 Issue 番号を取得する（親なしは None）。"""
-    owner, repo = project.repo.split("/")
-    try:
-        parent = get_client().rest.issues.get_parent(owner=owner, repo=repo, issue_number=number).parsed_data
-    except RequestFailed as exc:
-        # 親なしの 404 は None を返す
-        if exc.response.status_code == 404:
-            return None
-        raise
-    return parent.number
-
-
-def list_sub_issue_numbers(project: MonitoredProject, number: int) -> list[int]:
-    """Sub-issue リンクの子 Issue 番号一覧を取得する（1 段のみ）。"""
-    owner, repo = project.repo.split("/")
-    numbers: list[int] = []
-    # 子 Issue 一覧をページネーションで全件取得する
-    page = 1
-    while True:
-        items = get_client().rest.issues.list_sub_issues(
-            owner=owner, repo=repo, issue_number=number, per_page=_PER_PAGE, page=page
-        ).parsed_data
-        numbers.extend(item.number for item in items)
-        if len(items) < _PER_PAGE:
-            break
-        page += 1
-    return numbers
+def list_child_numbers(number: int, targets: list[PullRequest]) -> list[int]:
+    """base に自分の head を持つ子 PR の番号一覧を返す（1 段のみ）。"""
+    target = next((t for t in targets if t.number == number), None)
+    if target is None or not target.head_ref:
+        return []
+    return [t.number for t in targets if t.base_ref == target.head_ref]

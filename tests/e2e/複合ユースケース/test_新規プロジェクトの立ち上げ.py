@@ -52,7 +52,7 @@ def test_normal(
         ]
         return subs if len(started) == 1 else None
 
-    # 実行: 構成確定 → 土台生成 → マージ → 子epic起票 の各ゲートに応答して終端まで進める
+    # 実行: 構成確定 → 土台生成 → マージ → 子epicPR作成 の各ゲートに応答して終端まで進める
     history, subs = drive_gates(
         gh_live, owner, repo,
         faces=_faces,

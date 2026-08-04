@@ -11,7 +11,7 @@ INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集できる機能を追加する。"
 
 EPIC_TITLE = "タスク編集機能"
-# 子story起票 の起動条件に合わせて 対応 story 列は 未起票 のままにする
+# 子storyPR作成 の起動条件に合わせて 対応 story 列は 未起票 のままにする
 EPIC_BODY = """## 前提条件
 
 なし
@@ -132,7 +132,7 @@ def _cleanup_agent_stories(gh_live, owner, repo, sandbox, story_numbers: list[in
 def test_normal(
     monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, sandbox, wait_until,
 ):
-    """複合シナリオ → 子story起票 → story要件確定 → 単一シナリオでリンクが成立することを確認する（正常系）。"""
+    """複合シナリオ → 子storyPR作成 → story要件確定 → 単一シナリオでリンクが成立することを確認する（正常系）。"""
     owner, repo = repo_ctx
     # 準備: ユースケース一覧 確定済みの epic Issue + epic Draft PR + epic ブランチの worktree
     intake, epic = epic_issue_factory(
@@ -171,7 +171,7 @@ def test_normal(
         # 準備: ユーザー承認（複合シナリオの確定）
         _approve(gh_live, owner, repo, epic_pr.number, pr_data.assignees)
 
-        # 実行: 完了報告 → epic-conductor の子story起票 を待つ
+        # 実行: 完了報告 → epic-conductor の子storyPR作成 を待つ
         def _stories_created():
             epic_now = _issue(gh_live, owner, repo, epic.number)
             if any(name.startswith("確認:") for name in _label_names(epic_now)):
@@ -182,7 +182,7 @@ def test_normal(
             return (epic_now, subs) if subs else None
 
         epic_now, stories = wait_until(
-            _stories_created, timeout_sec=1800, message="子story起票の完了（story Issue 起票 + 確認:* 除去）"
+            _stories_created, timeout_sec=1800, message="子storyPR作成の完了（story Issue 起票 + 確認:* 除去）"
         )
         story_numbers = [story.number for story in stories]
 

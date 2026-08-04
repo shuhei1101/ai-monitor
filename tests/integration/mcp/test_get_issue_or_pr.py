@@ -31,24 +31,8 @@ def test_normal(gh, resp, api):
     gh.rest.issues.list_comments.return_value = resp(
         [NS(node_id="IC_1", body="こんにちは", user=NS(login="shuhei1101"), html_url="http://c/1", created_at="t")]
     )
-    # GraphQL はコメントの Resolved 判定と blockedBy の取得で使い分けられる
-    def _graphql(query, variables=None):
-        if "blockedBy" in query:
-            return {
-                "repository": {
-                    "issue": {
-                        "id": "I_35",
-                        "blockedBy": {
-                            "nodes": [
-                                {"number": 30, "title": "先行 Issue", "url": "http://i/30", "state": "OPEN"}
-                            ]
-                        },
-                    }
-                }
-            }
-        return {"node": {"isMinimized": False}}
-
-    gh.graphql.side_effect = _graphql
+    # GraphQL はコメントの Resolved 判定で使う
+    gh.graphql.return_value = {"node": {"isMinimized": False}}
     gh.rest.issues.get_parent.return_value = resp(NS(number=12, title="親", html_url="http://i/12", state="open"))
     gh.rest.issues.list_sub_issues.return_value = resp(
         [NS(number=36, title="子", html_url="http://i/36", state="open")]
@@ -60,15 +44,15 @@ def test_normal(gh, resp, api):
     assert snap.parent.number == 12
     assert [s.number for s in snap.sub_issues] == [36]
     assert snap.sub_issues_summary.total == 2
-    # 着手をブロックしている Issue が状態付きで返る
-    assert [(b.number, b.state) for b in snap.blocked_by] == [(30, "OPEN")]
     assert snap.comments[0].id == "IC_1"
     assert snap.comments[0].is_minimized is False
     assert snap.head_ref is None
     assert snap.base_ref is None
+    # Issue はスタックに属さない
+    assert snap.stack is None
 
 
-def test_normal_when_pr(gh, resp, api):
+def test_normal_when_pr(gh, gh_mon, resp, api):
     """PR を取得して head / base ブランチ名を含むスナップショットを組み立てる一連を確認する（正常系・PR 指定）。"""
     # 準備
     gh.rest.pulls.get.return_value = resp(
@@ -90,14 +74,21 @@ def test_normal_when_pr(gh, resp, api):
         )
     )
     gh.rest.issues.list_comments.return_value = resp([])
+    # 親は base ブランチを head に持つ PR（レイヤーの 1 段上）
+    gh.rest.pulls.list.return_value = resp(
+        [NS(number=154, title="タスク編集", html_url="http://p/154", state="open", merged_at=None)]
+    )
+    # スタックには属していない
+    gh_mon.graphql.return_value = {"repository": {"pullRequest": {"stackEntry": None, "stack": None}}}
     # 実行
     snap = api.get_issue_or_pr(157, is_pr=True)
     # 検証
     assert snap.head_ref == "feat/backend/task-edit-154/update-api"
     assert snap.base_ref == "feat/story/task-edit-154"
-    assert snap.parent is None
+    assert snap.parent.number == 154
     assert snap.sub_issues is None
     assert snap.sub_issues_summary is None
+    assert snap.stack is None
 
 
 def test_error_when_api_error(gh, request_failed, api):

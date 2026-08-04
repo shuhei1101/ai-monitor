@@ -10,12 +10,12 @@ subsystem ブランチ名 `{type}/{scope}/{ドメイン}/{UC名}/{変更内容}`
 
 候補ごとに MCP `worktree_create` を呼ぶ:
 - `branch`: `poc/{scope}/{ドメイン}/{UC名}/{lib名}`
-- `base_ref`: `origin/master`
+- `base_ref`: `origin/{自分の subsystem ブランチ}`
 
 続けて候補ごとに MCP `create_draft_pr` を呼ぶ:
 - `head_branch`: 作成したブランチ
-- `base_branch`: `master`
-- `title`: `PoC: {ライブラリ名}（#{親 subsystem Issue 番号}）`
+- `base_branch`: 自分の subsystem ブランチ
+- `title`: `PoC: {ライブラリ名}（#{親 subsystem PR 番号}）`
 - `body`: テンプレート「PR本文/ライブラリPoC」の `## 紐づく Issue` / `## 発注元 PR` / `## 検証対象` / `## 調査結果` / `## 検証観点と結果`（観点と成功条件まで。実測値・判定は `-`）
 - `labels`: `$AI_MONITOR_LABEL_LAYER_SUBSYSTEM` の値
 
@@ -59,7 +59,7 @@ MCP `set_assignee` を呼ぶ:
 - `number`: $pr_number
 - `is_pr`: true
 
-subsystem PR の `確認:architect` と `議論中` は保持したまま検証結果を待つ（結果は PoC PR 側の完了報告で戻る）。
+成果物 PR の `確認:architect` と `議論中` は保持したまま検証結果を待つ（結果は PoC PR 側の完了報告で戻る）。
 
 ### 作業完了報告
 

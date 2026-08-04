@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
 
 import ai_monitor.integrations.github.issues as issues_mod
+from ai_monitor.shared.types import PullRequest
 
 
 def _resp(data):
@@ -35,7 +36,6 @@ def test_get_issue(gh_mon, mon_project):
             assignees=[],
             body="本文",
             pull_request=None,
-            sub_issues_summary=NS(total=1, completed=1),
         )
     )
     # 実行
@@ -44,44 +44,39 @@ def test_get_issue(gh_mon, mon_project):
     assert issue.number == 35
     assert issue.state == "closed"
     assert issue.labels == ["layer:epic"]
-    assert issue.sub_issues_total == 1
 
 
-def test_get_parent_number(gh_mon, mon_project):
-    """親番号の取得を確認する（正常系）。"""
+def test_get_parent_number(mon_project):
+    """base を head に持つ PR を親として返すことを確認する（正常系）。"""
     # 準備
-    gh_mon.rest.issues.get_parent.return_value = _resp(NS(number=30))
-    # 実行
-    number = issues_mod.get_parent_number(mon_project, 35)
-    # 検証
-    assert number == 30
+    targets = [
+        PullRequest(number=10, base_ref="master", head_ref="feat/epic/x"),
+        PullRequest(number=20, base_ref="feat/epic/x", head_ref="feat/story/x/y"),
+    ]
+    # 実行 / 検証
+    assert issues_mod.get_parent_number(mon_project, 20, targets) == 10
 
 
-def test_get_parent_number_when_no_parent(gh_mon, mon_project, request_failed):
-    """親なしは None を確認する（正常系）。"""
+def test_get_parent_number_when_no_parent(mon_project):
+    """親が一覧に無い場合に None を返すことを確認する（正常系）。"""
+    targets = [PullRequest(number=10, base_ref="master", head_ref="feat/epic/x")]
+    assert issues_mod.get_parent_number(mon_project, 10, targets) is None
+
+
+def test_list_child_numbers():
+    """base に自分の head を持つ PR を子として返すことを確認する（正常系）。"""
     # 準備
-    gh_mon.rest.issues.get_parent.side_effect = request_failed(404)
-    # 実行
-    number = issues_mod.get_parent_number(mon_project, 35)
-    # 検証
-    assert number is None
+    targets = [
+        PullRequest(number=10, base_ref="master", head_ref="feat/epic/x"),
+        PullRequest(number=20, base_ref="feat/epic/x", head_ref="docs/epic/x/mock"),
+        PullRequest(number=21, base_ref="feat/epic/x", head_ref="feat/story/x/y"),
+        PullRequest(number=30, base_ref="feat/story/x/y", head_ref="feat/be/x/y"),
+    ]
+    # 実行 / 検証（1 段のみ。孫は含まない）
+    assert issues_mod.list_child_numbers(10, targets) == [20, 21]
 
 
-def test_list_sub_issue_numbers(gh_mon, mon_project):
-    """子番号の取得を確認する（正常系）。"""
-    # 準備
-    gh_mon.rest.issues.list_sub_issues.side_effect = [_resp([NS(number=40), NS(number=41)])]
-    # 実行
-    numbers = issues_mod.list_sub_issue_numbers(mon_project, 35)
-    # 検証
-    assert numbers == [40, 41]
-
-
-def test_list_sub_issue_numbers_when_no_children(gh_mon, mon_project):
-    """子なしは空リストを確認する（正常系）。"""
-    # 準備
-    gh_mon.rest.issues.list_sub_issues.side_effect = [_resp([])]
-    # 実行
-    numbers = issues_mod.list_sub_issue_numbers(mon_project, 35)
-    # 検証
-    assert numbers == []
+def test_list_child_numbers_when_no_children():
+    """子が無い場合に空リストを返すことを確認する（正常系）。"""
+    targets = [PullRequest(number=10, base_ref="master", head_ref="feat/epic/x")]
+    assert issues_mod.list_child_numbers(10, targets) == []

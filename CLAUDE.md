@@ -1,5 +1,19 @@
 # ai-monitor
 
+## Wiki 索引の取得
+
+`docs/wiki/` 配下の全ページを「パス / 概要」の表で吐く。
+モニターがエージェントを起動するとき、起動プロンプトへ注入しているものと同じ。
+
+```bash
+python3 plugins/ai-monitor/inject/build_wiki_index.py
+```
+
+`WIKI_BASE` を読む（SessionStart フックが設定済み。別プロジェクトを見るときだけ `WIKI_BASE=... python3 ...` で上書きする）。
+
+ローカルの Claude Code で作業するときは、着手前にこれを実行して結果を読む。
+各フォルダの `README.md` の `## 目次` を再帰的に辿って作るため、目次に載っていないページは出てこない。
+
 ## モニターの起動と再起動
 
 Claude Code の作業を止めずに動かすため、モニターは tmux の名前付きセッションで常駐させる。

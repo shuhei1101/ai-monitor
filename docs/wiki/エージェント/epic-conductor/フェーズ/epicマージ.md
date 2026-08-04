@@ -18,7 +18,7 @@ MCP `resolve_comments` で完了報告コメントを Resolve する。
 
 ### 最終マージかの判定
 
-初期処理で取得した epic Issue の `parent` から、最終マージか通常マージかを決める（共通ルール『最終マージの判定』）。
+初期処理で取得した epic PR の base ブランチから、最終マージか通常マージかを決める（共通ルール『最終マージの判定』）。
 
 ### Draft 解除
 
@@ -34,48 +34,44 @@ Ready 済みの PR に呼んでも何も起きない。
 
 - コンフリクトが発生した場合、epic PR に競合ファイルとどちらを残すかの相談コメントを投稿し、`議論中` 付与 + `assignee=ユーザー` で待機する（解消の往復は「応答ループ」で回し、全競合解消後に本手順へ合流する）
 
-MCP `merge_pr` を呼ぶ:
+MCP `unlink_stack` を呼ぶ:
+- `pr_number`: epic PR の番号
+
+スタックに属したままマージすると下位の PR まで一緒にマージされるため、先に外す（外したスタックの残りはツール側で組み直される）。
+
+続けて MCP `merge_pr` を呼ぶ:
 - `pr_number`: epic PR の番号
 - `strategy`: `squash`
 
 続けて MCP `worktree_remove` を呼ぶ:
 - `branch`: epic ブランチ
 
-### epic Issue の close
-
-MCP `close` を呼ぶ:
-- `number`: $issue_number
-- `is_pr`: false
-- `reason`: `completed`
-
-最終マージではモニターがこの close を検知して配下のセッションを一括解放するため、通常マージ / 最終マージのどちらでも実行する。
-
-### 親 Issue への完了報告
+### 親 PR への完了報告
 
 「最終マージかの判定」で最終マージと判定した場合は本手順を実行しない（報告先の conductor が居ないため）。
 
-通常マージの場合、親 Issue を放置すると上位レイヤーの進行が止まるので必ず報告する。
+通常マージの場合、親 PR を放置すると上位レイヤーの進行が止まるので必ず報告する。
 
 MCP `comment` を呼ぶ:
-- `number`: 親 Issue 番号
-- `is_pr`: false
+- `number`: 親 PR 番号
+- `is_pr`: true
 - `sender`: `epic-conductor`
-- `receiver`: 親 Issue の `layer:` に対応する conductor（`layer:system` なら `system-conductor`）
+- `receiver`: 親 PR の `layer:` に対応する conductor（`layer:system` なら `system-conductor`）
 - `format`:
   - `type`: `plain`
-  - `body`: epic のマージ完了報告（対象 epic Issue 番号 + マージした epic PR へのリンク + マージした内容の要約）
+  - `body`: epic のマージ完了報告（対象 epic PR 番号 + マージした epic PR へのリンク + マージした内容の要約）
 
 続けて MCP `add_labels` を呼ぶ:
-- `number`: 親 Issue 番号
-- `is_pr`: false
+- `number`: 親 PR 番号
+- `is_pr`: true
 - `labels`:
   - 報告先 conductor の確認ラベルの値（`layer:system` なら `$AI_MONITOR_LABEL_CONFIRM_SYSTEM_CONDUCTOR`）
 
 ### ラベル除去
 
 MCP `transition_phase` を呼ぶ:
-- `number`: $issue_number
-- `is_pr`: false
+- `number`: $number
+- `is_pr`: true
 - `remove_labels_`:
   - `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` の値
 - `add_labels_`: なし
@@ -84,7 +80,7 @@ MCP `transition_phase` を呼ぶ:
 
 MCP `report_completion` を呼ぶ:
 - `agent_name`: `epic-conductor`
-- `number`: $issue_number
+- `number`: $number
 
 ### 監視面の除去
 

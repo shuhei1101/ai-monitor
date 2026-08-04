@@ -15,6 +15,7 @@ import ai_monitor.features.sessions.registry as registry_mod
 from ai_monitor.features.agents.docs import PhaseConfig
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
+from ai_monitor.integrations.github.stacks import Stack
 from ai_monitor.shared.settings import TelemetrySettings
 from ai_monitor.shared.types import Issue, PullRequest
 
@@ -45,9 +46,9 @@ def io_mocks(monkeypatch):
         phases={"intake-issue-triager": ["エージェント/intake-issue-triager/フェーズ/初期処理.md"]}
     )
     monkeypatch.setattr(service, "load_phase_config", mocks.load_phase_config)
-    # 依存の照会は既定でブロックなしにする（依存あり側は各テストで上書きする）
-    mocks.has_open_blocker.return_value = False
-    monkeypatch.setattr(service, "has_open_blocker", mocks.has_open_blocker)
+    # スタック所属の照会は既定で未所属にする（下位が open の側は各テストで上書きする）
+    mocks.get_stack.return_value = None
+    monkeypatch.setattr(service, "get_stack", mocks.get_stack)
     return mocks
 
 
@@ -59,6 +60,18 @@ def registry(tmp_state_path, monkeypatch):
 
 def _issue(number, labels=None, assignees=None):
     return Issue(number=number, state="open", labels=labels or [], assignees=assignees or [])
+
+
+def _pr(number, base="master", head="", labels=None, assignees=None, linked=None):
+    return PullRequest(
+        number=number,
+        state="open",
+        labels=labels or [],
+        assignees=assignees or [],
+        linked_issue_numbers=linked or [],
+        base_ref=base,
+        head_ref=head or f"branch-{number}",
+    )
 
 
 def test_poll_when_mixed_targets(agent, io_mocks, registry, mon_project, rate_limit_gate):
@@ -138,11 +151,11 @@ def test_poll_when_rate_limited(agent, io_mocks, registry, mon_project, rate_lim
     io_mocks.send_keys.assert_not_called()
 
 
-def test_poll_when_blocked(agent, io_mocks, registry, mon_project, rate_limit_gate):
-    """open の依存が残っている対象を送らないことを確認する（正常系）。"""
-    # 準備
-    io_mocks.has_open_blocker.return_value = True
-    targets = [_issue(35, labels=["確認:intake-issue-triager"])]
+def test_poll_when_stack_below_open(agent, io_mocks, registry, mon_project, rate_limit_gate):
+    """スタック下位に open な PR が残っている対象を送らないことを確認する（正常系）。"""
+    # 準備: 対象がスタックに属し、自分より下に open な PR がある
+    io_mocks.get_stack.return_value = Stack(number=90, position=1, pull_requests=[34, 35], below_open=[34])
+    targets = [_pr(35, labels=["確認:intake-issue-triager"])]
     # 実行
     service.poll(
         mon_project,
@@ -375,14 +388,14 @@ def test_sort_key():
 
 
 def test_build_context_snapshot():
-    """Issue 起点の PR ぶら下げを確認する（正常系）。"""
-    # 準備
-    issue = _issue(50, labels=["layer:subsystem"])
-    draft_pr = PullRequest(number=52, state="open", labels=["確認:architect"], linked_issue_numbers=[50])
-    poc_pr = PullRequest(number=60, state="open", labels=["確認:library-poc-runner"], linked_issue_numbers=[50])
-    other_pr = PullRequest(number=99, state="open", linked_issue_numbers=[90])
+    """base 連鎖での配下のぶら下げを確認する（正常系）。"""
+    # 準備: subsystem PR の下に成果物 PR と PoC PR、無関係の epic PR を混ぜる
+    subsystem = _pr(50, base="feat/story/x/y", head="feat/be/x/y", labels=["layer:subsystem"])
+    interface = _pr(52, base="feat/be/x/y", head="docs/be/x/y/interface", labels=["確認:architect"])
+    poc = _pr(60, base="feat/be/x/y", head="poc/be/x/y/lib", labels=["確認:library-poc-runner"])
+    other = _pr(99, base="master", head="feat/epic/z")
     # 実行
-    snapshot = service.build_context_snapshot(issue, [issue, draft_pr, poc_pr, other_pr])
+    snapshot = service.build_context_snapshot(subsystem, [subsystem, interface, poc, other])
     # 検証
     assert "#50" in snapshot and "#52" in snapshot and "#60" in snapshot
     assert "#99" not in snapshot
@@ -390,28 +403,40 @@ def test_build_context_snapshot():
     assert "[open]" in snapshot
 
 
-def test_build_context_snapshot_when_pr_target():
-    """PR 起点の基準解決を確認する（正常系）。"""
-    # 準備
-    issue = _issue(50, labels=["layer:subsystem"])
-    pr = PullRequest(number=52, state="open", labels=["確認:architect"], linked_issue_numbers=[50])
-    sibling = PullRequest(number=60, state="open", linked_issue_numbers=[50])
+def test_build_context_snapshot_when_child_target():
+    """子 PR 起点で最上位まで遡ることを確認する（正常系）。"""
+    # 準備: 成果物 PR を起点にし、base で繋がる親 PR と兄弟を open 一覧に含める
+    subsystem = _pr(50, base="master", head="feat/be/x/y", labels=["layer:subsystem"])
+    interface = _pr(52, base="feat/be/x/y", head="docs/be/x/y/interface", labels=["確認:architect"])
+    sibling = _pr(60, base="feat/be/x/y", head="poc/be/x/y/lib")
+    open_targets = [subsystem, interface, sibling]
     # 実行
-    from_pr = service.build_context_snapshot(pr, [issue, pr, sibling])
-    from_issue = service.build_context_snapshot(issue, [issue, pr, sibling])
-    # 検証
-    assert from_pr == from_issue
+    from_child = service.build_context_snapshot(interface, open_targets)
+    from_root = service.build_context_snapshot(subsystem, open_targets)
+    # 検証: 親を基準に組み直されるので最上位起点と同じツリーになる
+    assert from_child == from_root
 
 
-def test_build_context_snapshot_when_linked_issue_not_open():
-    """紐づく Issue が open 一覧に無い場合を確認する（正常系）。"""
-    # 準備
-    pr = PullRequest(number=52, state="open", labels=["確認:architect"], linked_issue_numbers=[50])
+def test_build_context_snapshot_when_parent_not_open():
+    """親 PR が open 一覧に無い場合を確認する（正常系）。"""
+    # 準備: base を head に持つ PR が open 一覧に居ない
+    interface = _pr(52, base="feat/be/x/y", head="docs/be/x/y/interface", labels=["確認:architect"])
     # 実行
-    snapshot = service.build_context_snapshot(pr, [pr])
-    # 検証
+    snapshot = service.build_context_snapshot(interface, [interface])
+    # 検証: 遡れないので対象自身が基準になる
     assert "#52" in snapshot
     assert "#50" not in snapshot
+
+
+def test_build_context_snapshot_when_issue_target():
+    """Issue 起点は対象 1 行だけになることを確認する（正常系）。"""
+    # 準備: intake Issue は base 連鎖を持たない
+    intake = _issue(30, labels=["layer:intake"])
+    epic = _pr(35, base="master", head="feat/epic/x", linked=[30])
+    # 実行
+    snapshot = service.build_context_snapshot(intake, [intake, epic])
+    # 検証
+    assert snapshot == "intake #30 [open] labels=['layer:intake'] assignees=[]"
 
 
 def test_build_launch_env_when_hook_variables(mon_project, agent):

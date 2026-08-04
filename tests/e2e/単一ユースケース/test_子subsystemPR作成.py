@@ -1,4 +1,4 @@
-"""「子subsystem起票」の E2E テスト。"""
+"""「子subsystemPR作成」の E2E テスト。"""
 from __future__ import annotations
 
 import ai_monitor.mcp.server as server
@@ -147,7 +147,7 @@ subsystem #{subsystem_number} のインターフェースが確定しました�
 
 SUBSYSTEM_TITLE_BE = "タスク編集 バックエンド"
 
-# 子subsystem起票（初回）が記入した後の状態（先頭グループの BE だけ起票済み）
+# 子subsystemPR作成（初回）が記入した後の状態（先頭グループの BE だけ起票済み）
 SUBSYSTEM_TABLE = """
 ## サブシステム一覧
 
@@ -229,7 +229,7 @@ def test_normal_when_first(
         owner=owner, repo=repo, issue_number=story.number, labels=["確認:story-conductor"]
     )
 
-    # 実行: 子subsystem起票（初回）の完了を待つ（確認:story-conductor 除去 + Sub-issue 出現）
+    # 実行: 子subsystemPR作成（初回）の完了を待つ（確認:story-conductor 除去 + Sub-issue 出現）
     def _first_done():
         data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=story.number).parsed_data
         labels = {label.name for label in data.labels}
@@ -239,7 +239,7 @@ def test_normal_when_first(
         return (data, subs) if subs else None
 
     data, subs = wait_until(
-        _first_done, timeout_sec=1800, message="子subsystem起票（初回）の完了（確認:* 除去 + Sub-issue 起票）"
+        _first_done, timeout_sec=1800, message="子subsystemPR作成（初回）の完了（確認:* 除去 + Sub-issue 起票）"
     )
 
     # 検証: 依存のない先頭グループだけが起票されている（FE は BE 依存のため未起票）
@@ -311,7 +311,7 @@ def test_normal_when_sequential(
         owner=owner, repo=repo, issue_number=story.number, labels=["確認:story-conductor"]
     )
 
-    # 実行: 子subsystem起票（逐次）の完了を待つ（確認:story-conductor 除去 + Sub-issue が 2 件）
+    # 実行: 子subsystemPR作成（逐次）の完了を待つ（確認:story-conductor 除去 + Sub-issue が 2 件）
     def _sequential_done():
         data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=story.number).parsed_data
         labels = {label.name for label in data.labels}
@@ -321,7 +321,7 @@ def test_normal_when_sequential(
         return (data, subs) if len(subs) >= 2 else None
 
     data, subs = wait_until(
-        _sequential_done, timeout_sec=1800, message="子subsystem起票（逐次）の完了（確認:* 除去 + 2 件目の起票）"
+        _sequential_done, timeout_sec=1800, message="子subsystemPR作成（逐次）の完了（確認:* 除去 + 2 件目の起票）"
     )
 
     # 検証: 次の subsystem が 1 件だけ追加されている

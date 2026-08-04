@@ -44,6 +44,7 @@ gh auth login
 | コマンド | [`gh pr ready`](#gh-pr-ready) | Draft の解除 | - |
 | コマンド | [`gh pr merge`](#gh-pr-merge) | PR のマージ | - |
 | コマンド | [`gh api`](#gh-api) | REST / GraphQL API の直接呼び出し | - |
+| 拡張 | [`gh stack`](#gh-stack) | Stacked Pull Requests の操作 | 別途インストールが要る。`link` は base を書き換える |
 
 ### `gh issue view`
 
@@ -388,4 +389,43 @@ stdout に呼び出した API のレスポンス JSON がそのまま出力さ�
 
 ```json
 { "data": { "minimizeComment": { "minimizedComment": { "isMinimized": true } } } }
+```
+
+### `gh stack`
+
+Stacked Pull Requests を操作する公式拡張。
+本体には同梱されておらず、`gh extension install github/gh-stack` でインストールする（本体は v2.90.0 以上が要る）。
+
+ローカルにスタックの追跡状態を持つコマンド（`init` / `add` / `submit` / `sync` / `rebase`）と、持たないコマンド（`link` / `unstack` / `view`）がある。
+エージェントが worktree ごとに分かれて作業する構成ではローカル状態を共有できないため、`link` 系だけを使う。
+
+| サブコマンド | 用途 | 補足 |
+| --- | --- | --- |
+| `gh stack link <stack-number or branch-or-pr> <branch-or-pr>...` | ブランチ / PR 番号を下から上の順に指定してスタックを作る・広げる | ローカル追跡なしで使える。第 1 引数がスタック番号なら既存スタックの上端へ追加 |
+| `gh stack view [--json]` | 現在のスタックを一覧する | ローカル追跡が要る |
+| `gh stack unstack [<stack-number>]` | スタックを解除する | `--local` でローカル追跡だけ外す |
+| `gh stack merge [<stack-number> or <pr-number>]` | スタックをまとめてマージする | all-or-nothing。下から順にマージされる |
+
+使用例:
+
+```bash
+gh extension install github/gh-stack
+gh stack link 41 42 43        # PR #41 を底に #42 → #43 の順で積む
+gh stack link 1466 44         # スタック #1466 の上端へ PR #44 を積む
+```
+
+**落とし穴: `link` がブランチの base を書き換える**
+
+`gh stack link` は、スタックの底になる PR の base をリポジトリのデフォルトブランチ（`master` 等）へ強制的に書き換える。
+また、指定した並びに合わせて中間の PR の base も書き換える。
+
+そのため「epic ブランチを base にした story PR を底にしたスタック」を作ろうとすると、story PR の base が `master` に変わってレイヤー構造が壊れる。
+base を保ったままスタックを作る場合は CLI を使わず `POST /repos/{owner}/{repo}/stacks` を直接呼ぶ（外部API『GitHub』を参照）。
+
+実際に踏んだ挙動:
+
+```
+実行前: #1464 の base = stacktest-base
+gh stack link 1464 1467
+実行後: ✓ Updated base branch for PR #1464 to master
 ```

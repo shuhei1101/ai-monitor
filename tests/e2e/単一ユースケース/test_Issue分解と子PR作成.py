@@ -1,4 +1,4 @@
-"""「Issue分解と子起票」の E2E テスト。"""
+"""「Issue分解と子PR作成」の E2E テスト。"""
 from __future__ import annotations
 
 from githubkit.exception import RequestFailed

@@ -1,4 +1,4 @@
-"""「子story起票」の E2E テスト。"""
+"""「子storyPR作成」の E2E テスト。"""
 from __future__ import annotations
 
 import ai_monitor.mcp.server as server
@@ -68,7 +68,7 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
         owner=owner, repo=repo, issue_number=epic.number, labels=["確認:epic-conductor"]
     )
 
-    # 実行: 子story起票 の完了を待つ（確認:* 除去 + Sub-issue 起票）
+    # 実行: 子storyPR作成 の完了を待つ（確認:* 除去 + Sub-issue 起票）
     def _created():
         data = issue(gh_live, owner, repo, epic.number)
         if any(name.startswith("確認:") for name in label_names(data)):
@@ -78,7 +78,7 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
         ).parsed_data
         return (data, subs) if subs else None
 
-    data, stories = wait_until(_created, timeout_sec=1800, message="子story起票の完了（確認:* 除去 + 起票）")
+    data, stories = wait_until(_created, timeout_sec=1800, message="子storyPR作成の完了（確認:* 除去 + 起票）")
 
     # 検証: ユースケース一覧の行数と同数の story が起票されている
     assert len(stories) == 2, f"UC 2 件に対し story が {len(stories)} 件: {[s.title for s in stories]}"

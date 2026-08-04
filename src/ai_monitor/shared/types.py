@@ -18,8 +18,6 @@ class Issue:
     state: Literal["open", "closed"] = "open"
     labels: list[str] = field(default_factory=list)
     assignees: list[str] = field(default_factory=list)
-    sub_issues_total: int = 0
-    sub_issues_completed: int = 0
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -32,6 +30,10 @@ class PullRequest:
     labels: list[str] = field(default_factory=list)
     assignees: list[str] = field(default_factory=list)
     linked_issue_numbers: list[int] = field(default_factory=list)
+    # マージ先ブランチ名（親 PR の特定と最上位判定に使う）
+    base_ref: str = ""
+    # 自身のブランチ名（子 PR の特定に使う）
+    head_ref: str = ""
 
 
 type MonitorTarget = Issue | PullRequest

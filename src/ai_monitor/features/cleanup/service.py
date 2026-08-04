@@ -9,12 +9,7 @@ from githubkit.exception import RequestFailed
 
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.notify.types import NotifyFn
-from ai_monitor.integrations.github.issues import (
-    close_issue,
-    get_issue,
-    get_parent_number,
-    list_sub_issue_numbers,
-)
+from ai_monitor.integrations.github.issues import close_issue, get_issue, list_child_numbers
 from ai_monitor.integrations.github.labels import remove_label
 from ai_monitor.integrations.tmux.ops import has_session, kill_session
 from ai_monitor.shared.settings import MonitoredProject
@@ -27,21 +22,35 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 def close_completed_intakes(
-    project: MonitoredProject, targets: list[MonitorTarget], *, intake_label: str
+    project: MonitoredProject,
+    targets: list[MonitorTarget],
+    prev_targets: list[MonitorTarget],
+    *,
+    intake_label: str,
 ) -> None:
-    """全 Sub-issue closed の intake Issue をクローズする。"""
+    """紐づく PR が全てマージされた intake Issue をクローズする。"""
     for target in targets:
         if not isinstance(target, Issue) or intake_label not in target.labels:
             continue
-        # total > 0 かつ completed == total のものをクローズする
-        if target.sub_issues_total > 0 and target.sub_issues_completed == target.sub_issues_total:
+        # 前周期にはあり、今周期に 1 件も残っていないものを完了とみなす
+        before = _linked_pr_count(prev_targets, target.number)
+        if before > 0 and _linked_pr_count(targets, target.number) == 0:
             close_issue(project, target.number)
             logger.info(
-                "intake Issue をクローズしました: project=%s number=%s sub_issues=%s",
+                "intake Issue をクローズしました: project=%s number=%s linked_prs=%s",
                 project.name,
                 target.number,
-                target.sub_issues_total,
+                before,
             )
+
+
+def _linked_pr_count(targets: list[MonitorTarget], issue_number: int) -> int:
+    """その Issue を `## 紐づく Issue` に持つ open PR の件数を返す。"""
+    return sum(
+        1
+        for t in targets
+        if isinstance(t, PullRequest) and issue_number in t.linked_issue_numbers
+    )
 
 
 def release_closed_roots(
@@ -50,15 +59,14 @@ def release_closed_roots(
     prev_targets: list[MonitorTarget],
     *,
     registry: SessionRegistry,
-    intake_label: str,
     confirm_prefix: str,
     notify: NotifyFn,
 ) -> None:
-    """前周期との差分で最上位 Issue のクローズを検知し、配下の全セッションを一括解放する。"""
+    """前周期との差分で最上位面のクローズを検知し、配下の全セッションを一括解放する。"""
     open_numbers = {t.number for t in targets}
     for closed in prev_targets:
-        # 前周期に居て今周期に居ない Issue をクローズ候補にする
-        if not isinstance(closed, Issue) or closed.number in open_numbers:
+        # 前周期に居て今周期に居ない PR をクローズ候補にする
+        if not isinstance(closed, PullRequest) or closed.number in open_numbers:
             continue
         # 単体取得で closed を確認する（open は一覧の取りこぼし）
         if get_issue(project, closed.number).state != "closed":
@@ -69,7 +77,7 @@ def release_closed_roots(
             )
             continue
         # 上位レイヤーが残っている Issue は解放しない（最上位の close まで配下を常駐させる）
-        if not _is_root(project, closed.number, intake_label=intake_label):
+        if not _is_root(closed, prev_targets):
             logger.info(
                 "上位レイヤーが残っているため解放を見送ります: project=%s number=%s",
                 project.name,
@@ -77,7 +85,7 @@ def release_closed_roots(
             )
             continue
         logger.info("最上位 Issue のクローズを検知しました: project=%s number=%s", project.name, closed.number)
-        family = _collect_family_numbers(project, closed.number)
+        family = _collect_family_numbers(closed.number, prev_targets)
         family_set = set(family)
         # 配下の Issue / 紐づく PR に 確認:* が残っていれば解放しない（次周期で再判定）
         remaining = None
@@ -118,30 +126,32 @@ def release_closed_roots(
         )
 
 
-def _is_root(project: MonitoredProject, number: int, *, intake_label: str) -> bool:
-    """報告先の conductor を持つ親がない（= 最上位）かを返す。"""
-    parent = get_parent_number(project, number)
-    # 親なしは最上位
-    if parent is None:
+def _is_root(target: MonitorTarget, targets: list[MonitorTarget]) -> bool:
+    """base が master の PR（= 上位レイヤーを持たない）かを返す。"""
+    pr = next(
+        (t for t in targets if isinstance(t, PullRequest) and t.number == target.number), None
+    )
+    # 一覧から消えた面は base を引けないので最上位として扱う（配下の解放判定は確認ラベルで守られる）
+    if pr is None or not pr.base_ref:
         return True
-    # intake は起票専用で以降の会話を持たないため、親であっても最上位として扱う
-    return intake_label in get_issue(project, parent).labels
+    return pr.base_ref == "master"
 
 
-def _collect_family_numbers(project: MonitoredProject, root_number: int) -> list[int]:
-    """最上位配下（全子孫）と親 intake の Issue 番号を収集する。"""
+def _collect_family_numbers(root_number: int, targets: list[MonitorTarget]) -> list[int]:
+    """base の連鎖を辿って配下の全 PR 番号と起点 Issue の番号を収集する。"""
+    prs = [t for t in targets if isinstance(t, PullRequest)]
     numbers = [root_number]
-    # Sub-issue の子番号を再帰取得して集める
+    # base に自分の head を持つ PR を再帰的に集める（周期の一覧だけで完結し API を呼ばない）
     stack = [root_number]
     while stack:
-        for child in list_sub_issue_numbers(project, stack.pop()):
+        for child in list_child_numbers(stack.pop(), prs):
             if child not in numbers:
                 numbers.append(child)
                 stack.append(child)
-    # 親 Issue（intake）を加える（親なしは加えない）
-    parent = get_parent_number(project, root_number)
-    if parent is not None and parent not in numbers:
-        numbers.append(parent)
+    # 起点の Issue（intake / 立ち上げ）を加える
+    root = next((t for t in prs if t.number == root_number), None)
+    if root is not None:
+        numbers.extend(n for n in root.linked_issue_numbers if n not in numbers)
     return numbers
 
 

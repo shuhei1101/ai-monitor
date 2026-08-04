@@ -19,7 +19,7 @@ template_version: 2.0.0
 | 自分の確認ラベル | `$AI_MONITOR_LABEL_CONFIRM_SINGLE_SCENARIO_REVERSE_ENGINEER` |
 | 発注元の確認ラベル | `$AI_MONITOR_LABEL_CONFIRM_STORY_CONDUCTOR` |
 | RE ブランチの base | epic ブランチ |
-| 読み取り範囲 | 親 epic Issue の `## ユースケース一覧` の当該 UC |
+| 読み取り範囲 | 親 epic PR の `## ユースケース一覧` の当該 UC |
 
 ## 目次
 

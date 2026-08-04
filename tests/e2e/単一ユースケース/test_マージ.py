@@ -232,7 +232,7 @@ def test_normal_when_story(
         epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
         pr_body=STORY_PR_BODY_ALL_PASSED, files=story_branch_files(e2e_test=E2E_TEST_PY),
     )
-    # 全 subsystem がマージ済み（closed）の状態にする（子subsystem起票 フェーズを避けるため）
+    # 全 subsystem がマージ済み（closed）の状態にする（子subsystemPR作成 フェーズを避けるため）
     add_merged_subsystem(gh_live, owner, repo, subsystem_issue_factory, ctx["story"].number)
     add_worktree(sandbox["local_path"], ctx["story_branch"])
 
@@ -291,7 +291,7 @@ def test_normal_when_epic(
         pr_body=EPIC_PR_BODY_ALL_PASSED,
         files=epic_branch_files(complex_e2e_test=COMPLEX_E2E_TEST_PY),
     )
-    # 全 story がマージ済み（closed）の状態にする（子story起票 フェーズを避けるため）
+    # 全 story がマージ済み（closed）の状態にする（子storyPR作成 フェーズを避けるため）
     story = story_issue_factory(
         ctx["epic"].number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=ctx["epic"].number),
@@ -366,7 +366,7 @@ def test_normal_when_epic_with_parent(
     )
     # parent_labels を layer:system にしているので intake キーの実体は system Issue
     system = ctx["intake"]
-    # 全 story がマージ済み（closed）の状態にする（子story起票 フェーズを避けるため）
+    # 全 story がマージ済み（closed）の状態にする（子storyPR作成 フェーズを避けるため）
     story = story_issue_factory(
         ctx["epic"].number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=ctx["epic"].number),
@@ -447,7 +447,7 @@ def test_normal_when_system(
     monitor, gh_live, repo_ctx, system_issue_factory, draft_pr_factory, commit_file,
     wait_until, sandbox, master_baseline, e2e_state_path,
 ):
-    """土台生成後の system PR 自動マージと子epic起票への引き継ぎを確認する（正常系・system レベル）。"""
+    """土台生成後の system PR 自動マージと子epicPR作成への引き継ぎを確認する（正常系・system レベル）。"""
     owner, repo = repo_ctx
     login = gh_live.rest.users.get_authenticated().parsed_data.login
     system = system_issue_factory(
@@ -486,12 +486,12 @@ def test_normal_when_system(
             f"master に {path} が入っていない"
         )
 
-    # 実行: 子epic起票への引き継ぎ（system Issue への確認ラベル付与）を待つ
+    # 実行: 子epicPR作成への引き継ぎ（system Issue への確認ラベル付与）を待つ
     def _handed_off():
         data = issue(gh_live, owner, repo, system.number)
         return data if "確認:system-conductor" in label_names(data) else None
 
-    wait_until(_handed_off, timeout_sec=1800, message="子epic起票への引き継ぎ")
+    wait_until(_handed_off, timeout_sec=1800, message="子epicPR作成への引き継ぎ")
 
     # 検証: PR 側の確認ラベルは除去され、完了報告は Resolve 済み
     pr_now = issue(gh_live, owner, repo, pr.number)

@@ -14,6 +14,7 @@ from githubkit.exception import RequestFailed
 from mcp import types as mcp_types
 
 import ai_monitor.mcp.server as server
+from ai_monitor.integrations.github.stacks import Stack
 from ai_monitor.mcp.models import (
     AssigneesResult,
     Choice,
@@ -32,6 +33,8 @@ from ai_monitor.mcp.models import (
     Question,
     ResolveResult,
     SearchResultItem,
+    StackLinkResult,
+    StackUnlinkResult,
     WorktreeRemoveResult,
 )
 
@@ -60,7 +63,8 @@ EXPECTED_TOOLS = {
     "reopen_issue",
     "mark_pr_ready",
     "create_child_issue",
-    "set_blocked_by",
+    "link_stack",
+    "unlink_stack",
     "create_intake_issue",
     "create_defect_issue",
     "create_draft_pr",
@@ -167,17 +171,21 @@ def test_get_issue_or_pr(gh, api):
     assert snap.base_ref is None
 
 
+def _pr_ns(head="feat/backend/profile/edit/edit-api", base="feat/story/profile/edit"):
+    pr = _issue_ns()
+    pr.head = NS(ref=head)
+    pr.base = NS(ref=base)
+    pr.merged_at = None
+    return pr
+
+
 def test_get_issue_or_pr_when_pr(gh, api):
     """PR の head / base ブランチ名の取り込みを確認する（正常系）。"""
     # 準備
-    pr = _issue_ns()
-    pr.head = NS(ref="feat/backend/profile/edit/edit-api")
-    pr.base = NS(ref="feat/story/profile/edit")
-    pr.merged_at = None
-    gh.rest.pulls.get.return_value = _resp(pr)
+    gh.rest.pulls.get.return_value = _resp(_pr_ns())
     # 実行
     snap = api.get_issue_or_pr(
-        35, is_pr=True, comments=False, parent=False, sub_issues=False, sub_issues_summary=False
+        35, is_pr=True, comments=False, parent=False, sub_issues=False, sub_issues_summary=False, stack=False
     )
     # 検証
     assert snap.head_ref == "feat/backend/profile/edit/edit-api"
@@ -185,14 +193,70 @@ def test_get_issue_or_pr_when_pr(gh, api):
     gh.rest.issues.get.assert_not_called()
 
 
+def test_get_issue_or_pr_when_pr_parent(gh, api):
+    """PR の親を base ブランチから解決することを確認する（正常系）。"""
+    # 準備: base ブランチを head に持つ PR が親
+    gh.rest.pulls.get.return_value = _resp(_pr_ns())
+    gh.rest.pulls.list.return_value = _resp(
+        [NS(number=50, title="プロフィール編集", html_url="http://p/50", state="open", merged_at=None)]
+    )
+    # 実行
+    snap = api.get_issue_or_pr(
+        35, is_pr=True, comments=False, sub_issues=False, sub_issues_summary=False, stack=False
+    )
+    # 検証: head 検索で親を引き、Sub-issue の親取得は使わない
+    assert (snap.parent.number, snap.parent.state) == (50, "OPEN")
+    assert gh.rest.pulls.list.call_args.kwargs["head"] == "shuhei1101:feat/story/profile/edit"
+    gh.rest.issues.get_parent.assert_not_called()
+
+
+def test_get_issue_or_pr_when_pr_parent_missing(gh, api):
+    """base を head に持つ PR が無いときに親が None になることを確認する（正常系）。"""
+    # 準備: 最上位 PR（base が master）
+    gh.rest.pulls.get.return_value = _resp(_pr_ns(base="master"))
+    gh.rest.pulls.list.return_value = _resp([])
+    # 実行
+    snap = api.get_issue_or_pr(
+        35, is_pr=True, comments=False, sub_issues=False, sub_issues_summary=False, stack=False
+    )
+    # 検証
+    assert snap.parent is None
+
+
+def test_get_issue_or_pr_when_stack(gh, gh_mon, api):
+    """PR のスタック所属の取り込みを確認する（正常系）。"""
+    # 準備: 3 件のスタックの上端で、下位 1 件が open
+    gh.rest.pulls.get.return_value = _resp(_pr_ns())
+    gh_mon.graphql.return_value = {
+        "repository": {
+            "pullRequest": {
+                "stackEntry": {"position": 3},
+                "stack": {
+                    "number": 90,
+                    "entries": {
+                        "nodes": [
+                            {"position": 1, "pullRequest": {"number": 120, "state": "OPEN"}},
+                            {"position": 2, "pullRequest": {"number": 121, "state": "MERGED"}},
+                            {"position": 3, "pullRequest": {"number": 35, "state": "OPEN"}},
+                        ]
+                    },
+                },
+            }
+        }
+    }
+    # 実行
+    snap = api.get_issue_or_pr(
+        35, is_pr=True, comments=False, parent=False, sub_issues=False, sub_issues_summary=False
+    )
+    # 検証
+    assert (snap.stack.number, snap.stack.position) == (90, 3)
+    assert snap.stack.below_open == [120]
+
+
 def test_get_issue_or_pr_when_flags_false(gh, api):
     """取得フラグ False のフィールド除外を確認する（正常系）。"""
     # 準備
-    pr = _issue_ns()
-    pr.head = NS(ref="feat/a")
-    pr.base = NS(ref="master")
-    pr.merged_at = None
-    gh.rest.pulls.get.return_value = _resp(pr)
+    gh.rest.pulls.get.return_value = _resp(_pr_ns(head="feat/a", base="master"))
     # 実行
     snap = api.get_issue_or_pr(
         35,
@@ -202,11 +266,13 @@ def test_get_issue_or_pr_when_flags_false(gh, api):
         parent=False,
         sub_issues=False,
         sub_issues_summary=False,
+        stack=False,
     )
     # 検証
     assert snap.comments is None
     assert snap.base_ref is None
     assert snap.head_ref == "feat/a"
+    assert snap.stack is None
     gh.rest.issues.list_comments.assert_not_called()
 
 
@@ -1018,6 +1084,122 @@ def test_create_intake_issue(gh, api):
     ]
     gh.rest.issues.add_sub_issue.assert_not_called()
     assert res == CreatedIssueResult(issue_number=58, url="http://i/58", parent_issue_number=None)
+
+
+# ---- スタック接続 / 解除 ----
+
+
+@pytest.fixture
+def stack_ops(monkeypatch):
+    """スタック操作 4 関数を MagicMock に差し替える。"""
+    mocks = MagicMock()
+    mocks.get_stack.return_value = None
+    monkeypatch.setattr(server, "get_stack", mocks.get_stack)
+    monkeypatch.setattr(server, "create_stack", mocks.create_stack)
+    monkeypatch.setattr(server, "add_to_stack", mocks.add_to_stack)
+    monkeypatch.setattr(server, "dissolve_stack", mocks.dissolve_stack)
+    return mocks
+
+
+def _stack(number: int, position: int, pull_requests: list[int]):
+    return Stack(number=number, position=position, pull_requests=pull_requests, below_open=[])
+
+
+def test_link_stack(stack_ops, api):
+    """全 PR が未所属のときの新規スタック作成を確認する（正常系）。"""
+    # 準備
+    stack_ops.create_stack.return_value = 123
+    # 実行
+    res = api.link_stack([120, 121, 122])
+    # 検証
+    assert res == StackLinkResult(linked=True, stack_number=123, reason=None)
+    assert stack_ops.create_stack.call_args.args[1] == [120, 121, 122]
+    stack_ops.add_to_stack.assert_not_called()
+
+
+def test_link_stack_when_existing(stack_ops, api):
+    """先頭が既存スタックに属するときの上端追加を確認する（正常系）。"""
+    # 準備: 底の 120 だけが既存スタック 123 に属している
+    existing = _stack(123, 1, [120])
+    stack_ops.get_stack.side_effect = lambda project, number: existing if number == 120 else None
+    # 実行
+    res = api.link_stack([120, 121])
+    # 検証: 未所属の 121 だけが積まれ、既存のスタック番号が返る
+    assert res == StackLinkResult(linked=True, stack_number=123, reason=None)
+    assert stack_ops.add_to_stack.call_args.args[1:] == (123, [121])
+    stack_ops.create_stack.assert_not_called()
+
+
+def test_link_stack_when_other_stack(stack_ops, api):
+    """別スタックに属する PR が混ざるときの見送りを確認する（正常系）。"""
+    # 準備: 120 と 121 が別々のスタックに属する（1 PR は 1 スタックまで）
+    by_number = {120: _stack(123, 1, [120]), 121: _stack(124, 1, [121])}
+    stack_ops.get_stack.side_effect = lambda project, number: by_number.get(number)
+    # 実行
+    res = api.link_stack([120, 121])
+    # 検証: 例外にせず理由を返す
+    assert res.linked is False
+    assert res.stack_number is None
+    assert res.reason
+    stack_ops.create_stack.assert_not_called()
+    stack_ops.add_to_stack.assert_not_called()
+
+
+def test_link_stack_when_base_broken(stack_ops, api, request_failed):
+    """base 連鎖の不整合で例外が伝播することを確認する（異常系）。"""
+    # 準備
+    stack_ops.create_stack.side_effect = request_failed(422)
+    # 実行・検証
+    with pytest.raises(RequestFailed):
+        api.link_stack([120, 121])
+
+
+def test_unlink_stack(stack_ops, api):
+    """解除と残りの組み直しを確認する（正常系）。"""
+    # 準備: 3 件のスタックの上端を外す
+    stack_ops.get_stack.return_value = _stack(123, 3, [120, 121, 122])
+    stack_ops.create_stack.return_value = 124
+    # 実行
+    res = api.unlink_stack(122)
+    # 検証
+    assert res == StackUnlinkResult(unlinked=True, restacked=[120, 121], stack_number=124)
+    assert stack_ops.dissolve_stack.call_args.args[1:] == (123, [122])
+    assert stack_ops.create_stack.call_args.args[1] == [120, 121]
+
+
+def test_unlink_stack_when_one_left(stack_ops, api):
+    """残りが 1 件のときに組み直さないことを確認する（正常系）。"""
+    # 準備: スタックは 2 件以上必要なので組み直せない
+    stack_ops.get_stack.return_value = _stack(123, 2, [120, 122])
+    # 実行
+    res = api.unlink_stack(122)
+    # 検証
+    assert res == StackUnlinkResult(unlinked=True, restacked=[], stack_number=None)
+    stack_ops.dissolve_stack.assert_called_once()
+    stack_ops.create_stack.assert_not_called()
+
+
+def test_unlink_stack_when_not_stacked(stack_ops, api):
+    """未所属の読み飛ばしを確認する（正常系）。"""
+    # 準備: どのスタックにも属していない（マージ手順から無条件に呼べるようにする）
+    stack_ops.get_stack.return_value = None
+    # 実行
+    res = api.unlink_stack(122)
+    # 検証: 例外にせず何もしない
+    assert res == StackUnlinkResult(unlinked=False, restacked=[], stack_number=None)
+    stack_ops.dissolve_stack.assert_not_called()
+    stack_ops.create_stack.assert_not_called()
+
+
+def test_unlink_stack_when_dissolved(stack_ops, api, request_failed):
+    """解散済みスタックで例外が伝播することを確認する（異常系）。"""
+    # 準備
+    stack_ops.get_stack.return_value = _stack(123, 3, [120, 121, 122])
+    stack_ops.dissolve_stack.side_effect = request_failed(404)
+    # 実行・検証
+    with pytest.raises(RequestFailed):
+        api.unlink_stack(122)
+    stack_ops.create_stack.assert_not_called()
 
 
 # ---- 不具合Issue起票 ----
