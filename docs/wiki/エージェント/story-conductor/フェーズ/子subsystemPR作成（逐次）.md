@@ -1,14 +1,14 @@
-# 子subsystem起票（逐次）
+# 子subsystemPR作成（逐次）
 
-subsystem-conductor のインターフェース確定報告を受けて、依存順の次の subsystem を 1 件起票する。
+subsystem-conductor のインターフェース確定報告を受けて、依存順の次の subsystem PR を 1 件作成する。
 
 ## 手順
 
 ### 次の未作成 subsystem の特定
 
-story PR 本文の `## サブシステム一覧` から `対応 subsystem` が `未起票` の行を拾い、依存列が満たされたものを 1 件特定する。
+story PR 本文の `## サブシステム一覧` から `対応 subsystem` が `未作成` の行を拾い、依存列が満たされたものを 1 件特定する。
 
-- 未起票の行が残っていない場合、「インターフェース確定報告の Resolve」と「ラベル除去」「作業完了報告」だけを実行する（「subsystem PR の起票」と「サブシステム一覧の更新」は実行しない）
+- 未作成の行が残っていない場合、「インターフェース確定報告の Resolve」と「ラベル除去」「作業完了報告」だけを実行する（「subsystem PR の作成」と「サブシステム一覧の更新」は実行しない）
 
 ### インターフェース確定報告の Resolve
 
@@ -16,7 +16,7 @@ MCP `resolve_comments` で subsystem-conductor のインターフェース確定
 
 ### scope ラベルの用意
 
-起票する subsystem の `scope` について MCP `create_label` を呼ぶ:
+作成する subsystem の `scope` について MCP `create_label` を呼ぶ:
 - `name`: `scope:{識別子}`
 - `color`: `$AI_MONITOR_LABEL_COLOR_SCOPE` の値
 - `description`: `$AI_MONITOR_LABEL_DESC_SCOPE` の値
@@ -26,7 +26,7 @@ MCP `resolve_comments` で subsystem-conductor のインターフェース確定
 ### 次の subsystem のブランチ作成
 
 MCP `worktree_create` を呼ぶ:
-- `branch`: `{type}/{scope}/{ドメイン}/{UC名}`（規約『ブランチ戦略』の命名形式）
+- `branch`: `{type}/{scope}/{ドメイン}/{UC名}/base`（規約『ブランチ戦略』の命名形式）
 - `base_ref`: `origin/{自分の story ブランチ}`
 
 ### 次の subsystem の PR 作成

@@ -28,7 +28,7 @@ EPIC_BODY = """## 前提条件
 
 | UC 名 | 概要 | 対応 story |
 | --- | --- | --- |
-| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 未起票 |
+| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 未作成 |
 
 ## 横断要件
 
@@ -48,7 +48,7 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic"]
     )
     # 準備: epic Draft PR（本文は `## 紐づく Issue` のみ）
-    branch = f"feat/epic/task-edit-{epic.number}"
+    branch = f"feat/epic/task-edit-{epic.number}/base"
     pr = epic_pr_factory(
         branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
     )
@@ -180,7 +180,7 @@ def test_normal_when_scenario_fix(
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic"]
     )
-    branch = f"feat/epic/task-edit-{epic.number}"
+    branch = f"feat/epic/task-edit-{epic.number}/base"
     pr = epic_pr_factory(branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     commit_file(branch, CURRENT_COMPLEX_PATH, CURRENT_COMPLEX_MD, "docs: 複合UC シナリオを追加")
     _worktree(sandbox["local_path"], branch)
@@ -243,7 +243,7 @@ def test_normal_when_reverse(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
         epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
     )
-    branch = f"feat/epic/task-edit-{epic.number}"
+    branch = f"feat/epic/task-edit-{epic.number}/base"
     pr = epic_pr_factory(branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     commit_file(branch, CURRENT_COMPLEX_PATH, CURRENT_COMPLEX_MD, "docs: 現状の複合UC シナリオを追加")
     _worktree(sandbox["local_path"], branch)

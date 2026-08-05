@@ -107,10 +107,14 @@ class Settings(BaseSettings):
     session_timeout_min: int = 30
     heartbeat_interval_sec: int = 60
     rate_limit_fallback_min: int = 60
+    # git CLI 1 回あたりの上限（秒）。超えたら打ち切ってツールエラーにする
+    git_timeout_sec: int = 120
     state_path: str = "data/state.yaml"
     ai_monitor_wiki_base: str
     # 不具合 Issue の起票先（owner/name）。未設定なら create_defect_issue が使えない
     ai_monitor_repo: str | None = None
+    # 言語 / フレームワークの規約を持つリポジトリ（owner/name）。未設定なら create_plugin_rule_issue が使えない
+    my_plugins_repo: str | None = None
     projects: list[MonitoredProject] = []
     agents: dict[str, AgentSettings]
     telemetry: TelemetrySettings | None = None

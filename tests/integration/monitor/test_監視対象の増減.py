@@ -95,6 +95,7 @@ def _polled_repos(gh_mon, settings, agents, mon_registry, label_settings, notify
         last_heartbeat_at=FUTURE,
         labels=label_settings,
         gate=RateLimitGate(),
+        notified_gates={},
         notify=notify,
     )
     return {c.kwargs["repo"] for c in gh_mon.rest.issues.list_for_repo.call_args_list}

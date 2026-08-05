@@ -11,9 +11,10 @@
 
 ### 相談コメントの投稿
 
-MCP `comment` を呼ぶ:
-- `number`: RE PR の番号
-- `is_pr`: true
+差し戻し報告のスレッドを続けるため、新しいコメントを立てず報告コメントへ返信追記する（規約『コメント』の「返信先の使い分け」）。
+
+MCP `reply_comment` を呼ぶ:
+- `comment_node_id`: 依頼先の差し戻し報告コメントの node_id
 - `sender`: `{自分}`
 - `receiver`: ユーザーログイン名（`gh api user --jq '.login'` で取得）
 - `format`:

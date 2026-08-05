@@ -7,7 +7,13 @@ from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import comments_from, issue, label_names, supplement_review_comments
-from tests.e2e.システム import BUILD_REQUEST, SYSTEM_ISSUE_BODY, SYSTEM_PR_BODY, SYSTEM_TITLE, system_branch
+from tests.e2e.システム import (
+    BUILD_REQUEST,
+    SYSTEM_BODY,
+    SYSTEM_PR_BODY_CONFIRMED,
+    SYSTEM_TITLE,
+    system_branch,
+)
 from tests.e2e.実装対象 import add_worktree
 
 # 土台として生成されるべきページ（骨格の抜け漏れ検出用）
@@ -40,11 +46,11 @@ def test_normal(
     """構成要件からの土台生成と system-conductor への引き継ぎを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
     system = system_issue_factory(
-        SYSTEM_TITLE, SYSTEM_ISSUE_BODY, labels=["layer:system", "type:feat"],
+        SYSTEM_TITLE, SYSTEM_BODY, labels=["layer:system", "type:feat"],
     )
     branch = system_branch(system.number)
     pr = draft_pr_factory(
-        branch, SYSTEM_TITLE, SYSTEM_PR_BODY.format(system_number=system.number)
+        branch, SYSTEM_TITLE, SYSTEM_PR_BODY_CONFIRMED.format(system_number=system.number)
     )
     add_worktree(sandbox["local_path"], branch)
 

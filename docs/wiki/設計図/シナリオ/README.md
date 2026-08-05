@@ -16,7 +16,7 @@ template_version: 2.1.0
 | 単一ユースケース | 子epicPR作成 | 承認済みエピック一覧からの epic ブランチ + Draft PR 一括作成 + 先頭 epic の起動 | [子epicPR作成](./単一ユースケース/子epicPR作成.md) | system-conductor 復帰・新規 / 既存とも通る |
 | 単一ユースケース | リバースエンジニアリング起動 | RE PR の作成と依頼 → 完了報告の受領 → マージ → 通常 PR の作成 | [リバースエンジニアリング起動](./単一ユースケース/リバースエンジニアリング起動.md) | system / epic / story / subsystem-conductor |
 | 単一ユースケース | 現状設計書の起こし | RE PR 上で実装コードから現状の設計書を起こして発注元の conductor へ報告 | [現状設計書の起こし](./単一ユースケース/現状設計書の起こし.md) | architecture / complex-scenario / single-scenario / ss-design の各 reverse-engineer |
-| 単一ユースケース | Issue分解と子PR作成 | intake Issue の分解 → 承認 → 作業単位ごとのブランチ + Draft PR 作成 | [Issue分解と子PR作成](./単一ユースケース/Issue分解と子PR作成.md) | intake-issue-triager |
+| 単一ユースケース | Issue分解と子PR作成 | 重複判定 → intake Issue の分解 → 承認 → 作業単位ごとのブランチ + Draft PR 作成 | [Issue分解と子PR作成](./単一ユースケース/Issue分解と子PR作成.md) | intake-issue-triager |
 | 単一ユースケース | epic要件確定 | epic 本文 5 セクション確定 + PoC 要否判定 | [epic要件確定](./単一ユースケース/epic要件確定.md) | epic-conductor 初回 |
 | 単一ユースケース | 実現可能性PoC検証 | 核心機構の成立検証・PoC PR はマージせず close | [実現可能性PoC検証](./単一ユースケース/実現可能性PoC検証.md) | epic-poc-runner・条件付き |
 | 単一ユースケース | PoC結果確認 | PoC 結果の確認 → epic Draft PR 作成 + 引き継ぎ | [PoC結果確認](./単一ユースケース/PoC結果確認.md) | epic-conductor 復帰・条件付き |

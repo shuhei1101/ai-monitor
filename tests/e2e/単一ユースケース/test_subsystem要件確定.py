@@ -163,7 +163,7 @@ def test_normal(
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     # 準備: 要件確定済みの story Issue（確認ラベルなし・親 epic 付き）
     story = story_issue_factory(
@@ -171,7 +171,7 @@ def test_normal(
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number), labels=["layer:story"],
     )
     # 準備: story Draft PR（base=epic ブランチ）と、story ブランチ上の単一 UC シナリオ
-    story_branch = f"feat/story/task-edit-{story.number}"
+    story_branch = f"feat/story/task-edit-{story.number}/base"
     draft_pr_factory(
         story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
     )
@@ -309,14 +309,14 @@ def test_normal_when_reverse(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
         epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     story = story_issue_factory(
         epic.number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
         labels=["layer:story", "type:docs", "リバースエンジニアリング"],
     )
-    story_branch = f"feat/story/task-edit-{story.number}"
+    story_branch = f"feat/story/task-edit-{story.number}/base"
     draft_pr_factory(
         story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
     )

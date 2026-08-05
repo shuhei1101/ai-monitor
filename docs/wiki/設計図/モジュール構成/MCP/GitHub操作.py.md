@@ -71,7 +71,11 @@ template_version: 1.4.0
 | 子 Issue 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_child_issue`](#子issue作成) | Sub-issue リンク付きで子 Issue を作成 | - |
 | 新規 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_intake_issue`](#新規issue起票) | 親を持たない intake Issue を作成 | 全エージェントが使う。ラベルは固定 |
 | 不具合 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_defect_issue`](#不具合issue起票) | ai-monitor 自身のリポジトリへ不具合 Issue を作成 | 全エージェントが使う。assignee = 認証ユーザー・ラベルは `AI不具合報告` のみ |
+| ルール改修 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_plugin_rule_issue`](#ルール改修issue起票プラグイン) | my-plugins へルール改修 Issue を作成 | 言語 / フレームワークの規約が対象 |
+| ルール改修 Issue 起票 | MCP ツール | `mcp/server.py` | 関数 | [`create_monitor_rule_issue`](#ルール改修issue起票モニター) | ai-monitor へルール改修 Issue を作成 | 手順書 / 規約 / テンプレートが対象 |
+| ルール改修 Issue 起票 | 内部処理 | `mcp/server.py` | 関数 | [`_create_rule_issue`](#ルール改修issue起票実体) | 起票先を受け取って Issue を作成する共通処理 | 上記 2 ツールが起票先だけを変えて呼ぶ |
 | 不具合本文組立 | 内部処理 | `mcp/server.py` | 関数 | [`_build_defect_body`](#不具合本文組立) | 報告元 / 該当ページ / 事象 / 回避策を定型セクションに組み立てる | 不具合 Issue 起票からのみ使う |
+| ルール改修本文組立 | 内部処理 | `mcp/server.py` | 関数 | [`_build_rule_issue_body`](#ルール改修本文組立) | 報告元 / 対象ルール / 指摘の内容を定型セクションに組み立てる | ルール改修 Issue 起票からのみ使う |
 | Draft PR 作成 | MCP ツール | `mcp/server.py` | 関数 | [`create_draft_pr`](#draftpr作成) | base 明示で Draft PR を作成 | Stacked PR 対応。`layer:*` は作成時に付与する |
 | PR Ready 化 | MCP ツール | `mcp/server.py` | 関数 | [`mark_pr_ready`](#pr_ready化) | Draft を解除 | Ready 済みなら何もしない（冪等） |
 | PR マージ | MCP ツール | `mcp/server.py` | 関数 | [`merge_pr`](#prマージ) | 既定 squash + ブランチ削除でマージ | - |
@@ -546,6 +550,9 @@ classDiagram
   子Issue作成 ..> IssuePR情報取得 : 親の確認
   新規Issue起票 ..> ラベル追加 : intake ラベルの付与
   不具合Issue起票 ..> 不具合本文組立 : 定型本文の組み立て
+  ルール改修Issue起票プラグイン ..> ルール改修Issue起票実体 : 起票先を渡す
+  ルール改修Issue起票モニター ..> ルール改修Issue起票実体 : 起票先を渡す
+  ルール改修Issue起票実体 ..> ルール改修本文組立 : 定型本文の組み立て
 
   class IssuePR情報取得["Issue・PR情報取得"] {
     <<function>>
@@ -583,6 +590,22 @@ classDiagram
     <<function>>
     +不具合Issue起票(タイトル, 本文, エージェント名, 番号, 該当ページ一覧, 回避策) dict
   }
+  class ルール改修Issue起票プラグイン {
+    <<function>>
+    +ルール改修Issue起票プラグイン(タイトル, 本文, ルールページ, ルール引用, エージェント名, 番号) dict
+  }
+  class ルール改修Issue起票モニター {
+    <<function>>
+    +ルール改修Issue起票モニター(タイトル, 本文, ルールページ, ルール引用, エージェント名, 番号) dict
+  }
+  class ルール改修Issue起票実体 {
+    <<function>>
+    +ルール改修Issue起票実体(起票先, 設定キー名, タイトル, 本文, ルールページ, ルール引用, エージェント名, 番号) dict
+  }
+  class ルール改修本文組立 {
+    <<function>>
+    +ルール改修本文組立(プロジェクト名, リポジトリ, エージェント名, 番号, 本文, ルールページ, ルール引用) str
+  }
   class 不具合本文組立 {
     <<function>>
     +不具合本文組立(プロジェクト名, エージェント名, 番号, 該当ページ一覧, 本文, 回避策) str
@@ -608,6 +631,10 @@ classDiagram
   click 新規Issue起票 href "#新規issue起票"
   click 不具合Issue起票 href "#不具合issue起票"
   click 不具合本文組立 href "#不具合本文組立"
+  click ルール改修Issue起票プラグイン href "#ルール改修issue起票プラグイン"
+  click ルール改修Issue起票モニター href "#ルール改修issue起票モニター"
+  click ルール改修Issue起票実体 href "#ルール改修issue起票実体"
+  click ルール改修本文組立 href "#ルール改修本文組立"
   click 検索結果 href "#検索結果"
   click イシュースナップショット href "#イシュースナップショット"
   click ラベル追加 href "#ラベル追加"
@@ -2276,6 +2303,234 @@ CreatedIssueResult(issue_number=214, url="https://github.com/.../issues/214", pa
 
 ---
 
+### ルール改修Issue起票（プラグイン）
+> 物理名: `create_plugin_rule_issue`<br>
+> 種別: 関数
+
+言語 / フレームワークの規約に起因する指摘を my-plugins へルール改修 Issue として起票する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| タイトル | `title` | `str` | ✅ | - | ルール改修の要約 | - |
+| 本文 | `body` | `str` | ✅ | - | 指摘内容と経緯 | 定型セクションは本関数が組み立てる |
+| ルールページ | `rule_page` | `str` | ✅ | - | 対象ルールのページパス | 起票先リポジトリ内の相対パス |
+| ルール引用 | `rule_excerpt` | `str` | ✅ | - | 指摘の元になったルールの記述 | 記述が無い場合はその旨を書く |
+| エージェント名 | `agent_name` | `str` | ✅ | - | 報告元のエージェント名 | - |
+| 番号 | `number` | `int` | ✅ | - | 報告元の Issue / PR 番号 | - |
+
+引数例:
+
+```python
+create_plugin_rule_issue(
+    title="関数ファースト規約が DTO のファクトリ関数を禁止しているように読める",
+    body="規約どおりに書いた箇所への指摘を受けた。",
+    rule_page="docs/rules/python/architecture/TypeScriptスタイル適用.md",
+    rule_excerpt="クラスを書いてよいのは: DTO / ライブラリ要求 / 長期保持のランタイム状態 のみ",
+    agent_name="architect",
+    number=152,
+)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`CreatedIssueResult`](#issue-作成結果) | 作成した Issue の番号と URL | `parent_issue_number` は `None` |
+
+戻り値例:
+
+```python
+CreatedIssueResult(issue_number=87, url="https://github.com/shuhei1101/my-plugins/issues/87")
+```
+
+#### 処理
+
+1. 設定の `my_plugins_repo` を起票先として[ルール改修Issue起票実体](#ルール改修issue起票実体)へ委譲する
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `ValueError` | 全体設定に `my_plugins_repo` が無い | 必要な設定キー名 | Issue の作成 API は呼ばない |
+| `RequestFailed` | API 応答が 4xx / 5xx（認証エラー 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_create_plugin_rule_issue` | 正常 | 起票先と assignee / ラベル | `my_plugins_repo` 設定あり + 呼び出し元は別プロジェクト | githubkit | `my_plugins_repo` の owner / repo で起票され、assignee が認証ユーザー 1 名・ラベルが `AI不具合報告` 1 件 | 起票先の取り違えを検出する |
+| `test_create_plugin_rule_issue_when_repo_unset` | 異常 | 起票先の未設定 | `my_plugins_repo` を設定しない | githubkit | `ValueError` が送出され、Issue 作成 API が呼ばれない | 例外表「`my_plugins_repo` が無い」に対応 |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_create_plugin_rule_issue` | GitHub | assignee + ラベル付きの起票 | Issue 作成 API / assignee とラベルの設定 | 副作用: sandbox に Issue 作成（テスト後クローズ） |
+
+---
+
+### ルール改修Issue起票（モニター）
+> 物理名: `create_monitor_rule_issue`<br>
+> 種別: 関数
+
+手順書 / 規約 / テンプレートに起因する指摘を ai-monitor へルール改修 Issue として起票する。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| タイトル | `title` | `str` | ✅ | - | ルール改修の要約 | - |
+| 本文 | `body` | `str` | ✅ | - | 指摘内容と経緯 | 定型セクションは本関数が組み立てる |
+| ルールページ | `rule_page` | `str` | ✅ | - | 対象ルールのページパス | 起票先リポジトリ内の相対パス |
+| ルール引用 | `rule_excerpt` | `str` | ✅ | - | 指摘の元になったルールの記述 | 記述が無い場合はその旨を書く |
+| エージェント名 | `agent_name` | `str` | ✅ | - | 報告元のエージェント名 | - |
+| 番号 | `number` | `int` | ✅ | - | 報告元の Issue / PR 番号 | - |
+
+引数例:
+
+```python
+create_monitor_rule_issue(
+    title="PR 本文テンプレート（エピック）に変更種別の記入例が無い",
+    body="テンプレートに記入例が無く、列の要否を読み取れなかった。",
+    rule_page="docs/wiki/テンプレート/PR本文/エピック.md",
+    rule_excerpt="（`## ユースケース一覧` の記述例に変更種別の列が無い）",
+    agent_name="epic-conductor",
+    number=90,
+)
+```
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`CreatedIssueResult`](#issue-作成結果) | 作成した Issue の番号と URL | `parent_issue_number` は `None` |
+
+戻り値例:
+
+```python
+CreatedIssueResult(issue_number=214, url="https://github.com/shuhei1101/ai-monitor/issues/214")
+```
+
+#### 処理
+
+1. 設定の `ai_monitor_repo` を起票先として[ルール改修Issue起票実体](#ルール改修issue起票実体)へ委譲する
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `ValueError` | 全体設定に `ai_monitor_repo` が無い | 必要な設定キー名 | Issue の作成 API は呼ばない |
+| `RequestFailed` | API 応答が 4xx / 5xx（認証エラー 等） | HTTP ステータスと本文 | MCP がツールエラーとして呼び出し元エージェントに返す |
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_create_monitor_rule_issue` | 正常 | 起票先の切り替え | `ai_monitor_repo` 設定あり | githubkit | `ai_monitor_repo` の owner / repo で起票され、ラベルが `AI不具合報告` 1 件 | プラグイン側との違いは起票先だけ |
+| `test_create_monitor_rule_issue_when_repo_unset` | 異常 | 起票先の未設定 | `ai_monitor_repo` を設定しない | githubkit | `ValueError` が送出され、Issue 作成 API が呼ばれない | 例外表「`ai_monitor_repo` が無い」に対応 |
+
+#### 疎通テスト
+
+| テスト名 | 対象 API | 概要 | 確認内容 | 補足 |
+| --- | --- | --- | --- | --- |
+| `test_ext_create_monitor_rule_issue` | GitHub | assignee + ラベル付きの起票 | Issue 作成 API / assignee とラベルの設定 | 副作用: sandbox に Issue 作成（テスト後クローズ） |
+
+---
+
+### ルール改修Issue起票実体
+> 物理名: `_create_rule_issue`<br>
+> 種別: 関数
+
+起票先を受け取ってルール改修 Issue を作成する。
+起票先ごとのツールはこの関数に起票先と設定キー名を渡すだけで、以降の処理を共通にする。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 起票先 | `target_repo` | `str \| None` | ✅ | - | 起票先リポジトリ（`owner/name`） | `None` なら `ValueError` |
+| 設定キー名 | `setting_name` | `str` | ✅ | - | 起票先を持つ設定キーの名前 | 未設定時のメッセージに入れる |
+| タイトル | `title` | `str` | ✅ | - | ルール改修の要約 | - |
+| 本文 | `body` | `str` | ✅ | - | 指摘内容と経緯 | - |
+| ルールページ | `rule_page` | `str` | ✅ | - | 対象ルールのページパス | - |
+| ルール引用 | `rule_excerpt` | `str` | ✅ | - | 指摘の元になったルールの記述 | - |
+| エージェント名 | `agent_name` | `str` | ✅ | - | 報告元のエージェント名 | - |
+| 番号 | `number` | `int` | ✅ | - | 報告元の Issue / PR 番号 | - |
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| [`CreatedIssueResult`](#issue-作成結果) | 作成した Issue の番号と URL | - |
+
+#### 処理
+
+1. 起票先が未設定なら設定キー名を添えて `ValueError` を投げる（GitHub は呼ばない）
+2. ヘッダから呼び出し元のプロジェクトを解決する（[プロジェクト解決](#プロジェクト解決)）
+3. 認証ユーザーのログイン名を取得する（[認証ユーザー取得](#認証ユーザー取得)。承認する相手が常にユーザーなので assignee は 1 名で固定）
+4. 報告元・対象ルール・指摘の内容を定型セクションに組み立てる（[ルール改修本文組立](#ルール改修本文組立)）
+5. `AI不具合報告` ラベルと assignee を付けて Issue を作成する（確認ラベルは付けない = ユーザーが承認するまで改修フローに乗せない）
+   - `[WARNING]` ルール改修が報告された（`project` / `agent_name` / `number` / `target_repo` / `issue_number` / `rule_page`）
+6. 作成した番号と URL を返す
+
+#### 例外
+
+| 例外名 | 発生条件 | メッセージ | 補足 |
+| --- | --- | --- | --- |
+| `ValueError` | `target_repo` が `None` | 必要な設定キー名 | Issue の作成 API は呼ばない |
+| `RequestFailed` | API 応答が 4xx / 5xx | HTTP ステータスと本文 | githubkit から伝播 |
+
+#### 単体テスト
+
+なし（同一ファイルの[ルール改修Issue起票（プラグイン）](#ルール改修issue起票プラグイン) / [（モニター）](#ルール改修issue起票モニター)の単体テストで実物のまま検証する）
+
+---
+
+### ルール改修本文組立
+> 物理名: `_build_rule_issue_body`<br>
+> 種別: 関数
+
+ルール改修 Issue の本文を定型セクションに組み立てる。
+
+#### 引数
+
+| 論理名 | 引数名 | 型 | 必須 | デフォルト | 説明 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| プロジェクト名 | `project_name` | `str` | ✅ | - | 報告元のプロジェクト名 | 呼び出し元セッションのプロジェクト |
+| リポジトリ | `repo` | `str` | ✅ | - | 報告元のリポジトリ（`owner/name`） | 対象行のリンク表記に使う |
+| エージェント名 | `agent_name` | `str` | ✅ | - | 報告元のエージェント名 | - |
+| 番号 | `number` | `int` | ✅ | - | 報告元の Issue / PR 番号 | - |
+| 本文 | `body` | `str` | ✅ | - | 指摘内容と経緯 | そのまま指摘の内容のセクションに入る |
+| ルールページ | `rule_page` | `str` | ✅ | - | 対象ルールのページパス | - |
+| ルール引用 | `rule_excerpt` | `str` | ✅ | - | 指摘の元になったルールの記述 | 引用行として出す |
+
+#### 戻り値
+
+| 型 | 説明 | 補足 |
+| --- | --- | --- |
+| `str` | 定型セクションに整形した本文 | 末尾に改行を 1 つ付ける |
+
+#### 処理
+
+1. 報告元（プロジェクト名 / エージェント名 / 対象）の表を組み立てる
+2. 対象ルール（ページパスの箇条書き + 記述の引用）を組み立てる
+3. 指摘の内容に `body` をそのまま入れる
+4. 3 セクションを空行 2 つで連結して返す
+
+#### 例外
+
+なし
+
+#### 単体テスト
+
+| テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test_build_rule_issue_body` | 正常 | 定型セクションの組み立て | 全引数を指定 | なし | 報告元・対象ルール・指摘の内容の 3 セクションが揃い、ルールの記述が引用行になる | - |
+
+---
+
 ### 不具合本文組立
 > 物理名: `_build_defect_body`<br>
 > 種別: 関数
@@ -2683,7 +2938,8 @@ WorktreeCreateResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 1. 対象プロジェクトを解決する（[プロジェクト解決](#プロジェクト解決)）
 2. 配置先の worktree パスを求める（[worktree パス解決](#worktree-パス解決)）。
    `.claude/worktrees/` が無ければパスごと作成する
-3. `base_ref` からブランチと worktree を作成し、`WorktreeCreateResult` を返す（[git 実行入口](#git-実行入口)）
+3. 実体の消えた worktree の登録を掃除する（[git 実行入口](#git-実行入口)。残骸が溜まると worktree の追加が遅くなる）
+4. `base_ref` からブランチと worktree を作成し、`WorktreeCreateResult` を返す（[git 実行入口](#git-実行入口)）
 
 #### 例外
 
@@ -2691,6 +2947,7 @@ WorktreeCreateResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 | --- | --- | --- | --- |
 | `ProjectNotFoundError` | ヘッダのプロジェクトが設定に無い | プロジェクト名 | git を実行する前に落とす |
 | `CalledProcessError` | git が非 0 で終了（既存ブランチ名 / base ref 不存在 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す |
+| `TimeoutExpired` | git が設定の上限秒を超えても終わらない | 実行したコマンド | push のネットワーク待ちが代表（[git 実行入口](#git-実行入口)） |
 
 #### 単体テスト
 
@@ -2705,6 +2962,7 @@ WorktreeCreateResult(branch="feat/backend/profile/edit/edit-api", worktree_path=
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_worktree_create` | 正常 | ブランチ + worktree の作成 | 未使用のフルブランチ名 | なし | ブランチと `.claude/worktrees/` 配下の worktree が作られ、戻り値が実体と一致 | - |
 | `test_worktree_create_when_dirs_missing` | 正常 | worktree フォルダ未作成時のパス作成 | `.claude/worktrees/` が存在しない | なし | パスが作成されてから worktree が作られる | - |
+| `test_worktree_create_when_stale_worktree` | 正常 | 残骸の掃除 | 実体を消した worktree の登録が残っている | なし | 作成後に残骸の登録が消えている | 溜まると worktree の追加が遅くなる |
 | `test_worktree_create_when_project_repo_differs` | 正常 | 対象リポジトリの選択 | プロセスの作業ディレクトリとは別の `local_path` を持つプロジェクト | なし | `local_path` 側にブランチと worktree が作られ、作業ディレクトリ側には作られない | 常駐プロセス化で壊れた前提の回帰確認 |
 | `test_worktree_create_when_branch_exists` | 異常 | 既存ブランチ名 | 既存のブランチ名を指定 | なし | `CalledProcessError` | 例外表「git が非 0 で終了」に対応 |
 | `test_worktree_create_when_project_unknown` | 異常 | プロジェクト不明 | 設定に無いプロジェクト名をヘッダに指定 | なし | `ProjectNotFoundError`・git 実行なし | 例外表「ヘッダのプロジェクトが設定に無い」に対応 |
@@ -2965,6 +3223,7 @@ _to_thread(_bind(get_issue_or_pr, settings=settings))
 
 1. 受け取った引数のまま `tool` を呼ぶ非同期の包みを定義する
    - 呼び出しは `anyio.to_thread.run_sync` へ渡してワーカースレッドで実行する
+   - `abandon_on_cancel` を有効にし、キャンセル時はスレッドの完了を待たずに戻す（待つと、クライアントが切断して置き去りになった呼び出し 1 件が、同じセッションの後続ツール呼び出しまで巻き込んで止める）
 2. `tool` の名前・docstring・公開シグネチャを包みへ引き継いで返す（MCP は引き継いだシグネチャから引数スキーマを作る）
 
 #### 例外
@@ -2976,6 +3235,7 @@ _to_thread(_bind(get_issue_or_pr, settings=settings))
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_to_thread` | 正常 | 別スレッドでの実行 | 実行スレッドを記録する同期関数を包む | なし | 戻り値が素通しされ、呼び出し元と別のスレッドで実行される | - |
+| `test_to_thread_when_cancelled` | 正常 | キャンセル時の指定 | `anyio.to_thread.run_sync` を差し替えて引数を記録 | anyio | `abandon_on_cancel` が有効で渡る | 切断した呼び出しが後続を止めない |
 | `test_to_thread_when_signature` | 正常 | シグネチャの引き継ぎ | 公開シグネチャを差し替えた関数を包む | なし | 名前と公開シグネチャが元のまま | MCP のスキーマ生成に効く |
 
 ---
@@ -3667,11 +3927,12 @@ MCP はモニターと同一プロセスに常駐するため、プロセスの�
 | --- | --- | --- | --- | --- | --- | --- |
 | コマンド引数 | `args` | `list[str]` | ✅ | - | git に渡す引数列 | - |
 | 対象リポジトリ | `cwd` | `str` | ✅ | - | git を実行するリポジトリの絶対パス | 監視対象プロジェクトの `local_path` |
+| 上限秒 | `timeout` | `int` | ✅ | - | 1 回の実行を打ち切るまでの秒数 | キーワード引数。設定の `git_timeout_sec` |
 
 引数例:
 
 ```python
-_run_git(["branch", "-D", "feat/backend/profile/edit/edit-api"], cwd="/home/user/repo/monitored-project")
+_run_git(["branch", "-D", "feat/backend/profile/edit/edit-api"], cwd="/home/user/repo/monitored-project", timeout=120)
 ```
 
 #### 戻り値
@@ -3689,12 +3950,15 @@ CompletedProcess(returncode=0, stdout="")
 #### 処理
 
 1. `cwd` のリポジトリを対象に `git -C` を `check=True` で実行し、`CompletedProcess` を返す
+   - stdin を塞ぎ、`GIT_TERMINAL_PROMPT=0` を渡して非対話で走らせる（常駐プロセスには認証情報を答えられる人が居ないため、聞かれると stdin を読んだまま戻らない）
+   - `timeout` を必ず付ける（push / fetch のネットワーク待ちで戻らない呼び出しを作らない）
 
 #### 例外
 
 | 例外名 | 発生条件 | メッセージ | 補足 |
 | --- | --- | --- | --- |
-| `CalledProcessError` | git が非 0 で終了（既存ブランチ名 / worktree 不存在 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す |
+| `CalledProcessError` | git が非 0 で終了（既存ブランチ名 / worktree 不存在 / 認証不可 等） | git の stderr | MCP がツールエラーとして呼び出し元エージェントに返す |
+| `TimeoutExpired` | `timeout` 秒を超えても終わらない | 実行したコマンド | 同上。呼び出しを永久に残さないための打ち切り |
 
 #### 単体テスト
 
@@ -3707,6 +3971,8 @@ CompletedProcess(returncode=0, stdout="")
 | テスト名 | 正常/異常 | 概要 | 条件 | Mock | 期待値 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `test_run_git` | 正常 | git の実行 | tmp の git リポジトリを `cwd` に指定 | なし | 正常終了の `CompletedProcess` が返る | - |
+| `test_run_git_when_timeout` | 異常 | 上限超過の打ち切り | 上限 0 秒で終わらないコマンドを実行 | なし | `TimeoutExpired` が送出される | 例外表「`timeout` 秒を超えても終わらない」に対応 |
+| `test_run_git_when_non_interactive` | 正常 | 非対話の指定 | subprocess を差し替えて引数を記録 | subprocess | stdin が `DEVNULL`・`GIT_TERMINAL_PROMPT=0`・`timeout` が渡る | 対話待ちで戻らない呼び出しを作らない |
 | `test_run_git_when_cwd_differs_from_process` | 正常 | プロセスの作業ディレクトリからの独立 | プロセスの作業ディレクトリとは別の git リポジトリを `cwd` に指定 | なし | `cwd` 側のリポジトリの状態が返る | 常駐プロセス化で壊れた前提の回帰確認 |
 
 ---

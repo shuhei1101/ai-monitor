@@ -69,6 +69,7 @@ def _cycle(mon_settings, label_settings, agent_settings, mon_registry, prev, cur
         last_heartbeat_at=FUTURE,
         labels=label_settings,
         gate=RateLimitGate(),
+        notified_gates={},
      notify=notify)
 
 

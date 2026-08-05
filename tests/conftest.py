@@ -247,11 +247,13 @@ def mon_settings(mon_project):
         heartbeat_interval_sec=60,
         session_timeout_min=30,
         rate_limit_fallback_min=60,
+        git_timeout_sec=120,
         port=8765,
         telemetry=None,
         notifies=[],
         ai_monitor_wiki_base="https://example.com/ai-monitor-wiki",
         ai_monitor_repo="shuhei1101/ai-monitor",
+        my_plugins_repo="shuhei1101/my-plugins",
     )
 
 

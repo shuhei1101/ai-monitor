@@ -33,7 +33,7 @@ PR タイトルは `PoC: {ライブラリ名}（#{subsystem issue 番号}）`（
 
 ### 補足
 
-- 親 subsystem Issue 番号を書く（1 件のみ）
+- 発注元の subsystem PR と同じ起点の Issue 番号を書く（1 件のみ。親 subsystem PR の番号は base とスタック表示から辿れるため書かない）
 
 ## `## 発注元 PR`
 

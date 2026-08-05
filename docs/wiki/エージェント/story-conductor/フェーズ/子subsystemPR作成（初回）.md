@@ -1,9 +1,9 @@
-# 子subsystem起票（初回）
+# 子subsystemPR作成（初回）
 
-single-scenario-writer の完了報告を受けて、単一シナリオを元に subsystem 分担を洗い出し、依存順の先頭グループのみを起票する。
+single-scenario-writer の完了報告を受けて、単一シナリオを元に subsystem 分担を洗い出し、依存順の先頭グループのみを作成する。
 
 単一ユースケースへの影響なしと確定した story では、シナリオ設計を挟まずに要件確定の次のターンで本フェーズへ入る。
-この場合は完了報告コメントが無いため「完了報告の Resolve と起票結果の記録」の Resolve は行わない。
+この場合は完了報告コメントが無いため「完了報告の Resolve と作成結果の記録」の Resolve は行わない。
 
 ## 手順
 
@@ -20,7 +20,7 @@ epic ブランチ配下の worktree に切り替えて（成果物ブランチ�
 ### scope ラベルの用意
 
 `scope:*` はプロジェクトごとに値が違うため `constants.env` に無く、リポジトリに未作成のことがある。
-Issue へのラベル付与 API は未作成のラベルをランダムな色で作ってしまうので、起票の前に用意する。
+ラベル付与 API は未作成のラベルをランダムな色で作ってしまうので、PR の作成前に用意する。
 
 洗い出した subsystem の `scope` 1 件ごとに MCP `create_label` を呼ぶ:
 - `name`: `scope:{識別子}`（識別子は親 system PR の `## 構成要件` で割り当てられたもの）
@@ -32,7 +32,7 @@ Issue へのラベル付与 API は未作成のラベルをランダムな色で
 ### 先頭グループのブランチ作成
 
 依存のない先頭グループの subsystem について、1 件ごとに MCP `worktree_create` を呼ぶ:
-- `branch`: `{type}/{scope}/{ドメイン}/{UC名}`（規約『ブランチ戦略』の命名形式）
+- `branch`: `{type}/{scope}/{ドメイン}/{UC名}/base`（規約『ブランチ戦略』の命名形式）
 - `base_ref`: `origin/{自分の story ブランチ}`
 
 ### 先頭グループの PR 作成
@@ -68,14 +68,14 @@ MCP `link_stack` を呼ぶ:
 ### サブシステム一覧の記入
 
 洗い出した subsystem を story PR 本文の `## サブシステム一覧` に全件記入する（書式は PR 本文テンプレート「ストーリー」。テンプレート定義順の位置に挿入する）。
-起票した先頭グループの行は `対応 subsystem` 列に `#番号` を入れ、残りは `未作成` のままにする。
+作成した先頭グループの行は `対応 subsystem` 列に `#番号` を入れ、残りは `未作成` のままにする。
 
 MCP `update_body` を呼ぶ:
 - `number`: $number
 - `is_pr`: true
 - `body`: 更新後本文
 
-### 完了報告の Resolve と起票結果の記録
+### 完了報告の Resolve と作成結果の記録
 
 single-scenario-writer の完了報告コメントがある場合、MCP `resolve_comments` で Resolve する（単一 UC 影響なしの経路では省略する）。
 
@@ -86,7 +86,7 @@ single-scenario-writer の完了報告コメントがある場合、MCP `resolve
 - `receiver`: ユーザーログイン名
 - `format`:
   - `type`: `plain`
-  - `body`: 起票結果（先頭グループの subsystem PR リンク一覧 + 依存順の要点）
+  - `body`: 作成結果（先頭グループの subsystem PR リンク一覧 + 依存順の要点）
 
 ### ラベル除去
 

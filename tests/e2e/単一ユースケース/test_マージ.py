@@ -12,7 +12,8 @@ from tests.e2e.エスカレーション import comments, comments_from, issue, l
 from tests.e2e.システム import (
     BUILD_DONE_REPORT,
     FOUNDATION_FILES,
-    SYSTEM_ISSUE_BODY,
+    SYSTEM_BODY,
+    SYSTEM_REQUIREMENTS,
     SYSTEM_PR_BODY_DONE,
     SYSTEM_TITLE,
     system_branch,
@@ -361,7 +362,7 @@ def test_normal_when_epic_with_parent(
         gh_live, owner, repo, epic_issue_factory, epic_pr_factory, commit_file,
         pr_body=EPIC_PR_BODY_ALL_PASSED,
         files=epic_branch_files(complex_e2e_test=COMPLEX_E2E_TEST_PY),
-        parent_title=SYSTEM_TITLE, parent_body=SYSTEM_ISSUE_BODY,
+        parent_title=SYSTEM_TITLE, parent_body=SYSTEM_REQUIREMENTS,
         parent_labels=["layer:system", "type:feat"],
     )
     # parent_labels を layer:system にしているので intake キーの実体は system Issue
@@ -451,7 +452,7 @@ def test_normal_when_system(
     owner, repo = repo_ctx
     login = gh_live.rest.users.get_authenticated().parsed_data.login
     system = system_issue_factory(
-        SYSTEM_TITLE, SYSTEM_ISSUE_BODY, labels=["layer:system", "type:feat"],
+        SYSTEM_TITLE, SYSTEM_BODY, labels=["layer:system", "type:feat"],
     )
     branch = system_branch(system.number)
     pr = draft_pr_factory(

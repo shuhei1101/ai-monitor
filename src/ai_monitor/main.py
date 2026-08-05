@@ -71,6 +71,7 @@ def run_cycle(
     last_heartbeat_at: str,
     labels: LabelSettings,
     gate: RateLimitGate,
+    notified_gates: dict[str, set[int]],
     notify: NotifyFn,
 ) -> tuple[dict[str, list[MonitorTarget]], str]:
     """ポーリング + クリーンアップ検知 + heartbeat 判定の 1 周期を実行する。"""
@@ -102,8 +103,10 @@ def run_cycle(
             # ユーザーの番になった対象を通知する（開いたゲートごとに 1 度だけ）
             notify_open_gates(
                 targets,
-                [s for s in registry.sessions if s.project == project.name],
+                notified=notified_gates.setdefault(project.name, set()),
+                project=project.name,
                 discussion_label=labels.in_discussion,
+                confirm_prefix=labels.confirm_prefix,
                 repo=project.repo,
                 notify=notify,
             )

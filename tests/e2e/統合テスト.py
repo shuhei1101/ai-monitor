@@ -535,13 +535,13 @@ def setup_story(
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     story = story_issue_factory(
         epic.number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number), labels=["layer:story", "type:feat"],
     )
-    story_branch = f"feat/story/task-edit-{story.number}"
+    story_branch = f"feat/story/task-edit-{story.number}/base"
     pr = draft_pr_factory(
         story_branch, STORY_TITLE, pr_body.format(story_number=story.number), base_branch=epic_branch
     )
@@ -640,7 +640,7 @@ def setup_epic(
         parent_title or INTAKE_TITLE, parent_body or INTAKE_BODY, EPIC_TITLE,
         epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"], parent_labels=parent_labels,
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     pr = epic_pr_factory(
         branch=epic_branch, title=EPIC_TITLE, body=pr_body.format(epic_number=epic.number)
     )

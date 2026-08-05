@@ -35,7 +35,7 @@ MCP `resolve_comments` で自分宛コメント（完了報告含む）を一括
 
 ### epic Draft PR の作成
 
-MCP `worktree_create`（`branch`: `{type}/epic/{ドメイン}`・`base_ref`: `origin/{自分の epic ブランチ}`）→ MCP `create_draft_pr`（`base_branch`: 自分の epic ブランチ・`body`: `## 紐づく Issue` と `## タスク一覧`・`labels`: `$AI_MONITOR_LABEL_LAYER_EPIC` の値）→ MCP `add_watch_targets`（作成した PR の番号）の順に呼ぶ。
+MCP `worktree_create`（`branch`: `{type}/epic/{ドメイン}/base`・`base_ref`: `origin/{自分の epic ブランチ}`）→ MCP `create_draft_pr`（`base_branch`: 自分の epic ブランチ・`body`: `## 紐づく Issue` と `## タスク一覧`・`labels`: `$AI_MONITOR_LABEL_LAYER_EPIC` の値）→ MCP `add_watch_targets`（作成した PR の番号）の順に呼ぶ。
 
 `## タスク一覧` の作り方は「要件確定（完了処理）」と同じ（モック作成・複合 UC シナリオ・シナリオ索引・複合 UC E2E テストの作成 / 実行を全行未チェックで列挙する）。
 

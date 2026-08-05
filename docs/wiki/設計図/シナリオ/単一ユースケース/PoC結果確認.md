@@ -42,7 +42,7 @@ sequenceDiagram
     MON->>GH: epic PR の自分宛コメント一括 Resolve<br>（epic-poc-runner の完了報告コメント含む）
     MON->>GH: PoC PR close（マージなし・恒久記録）
     MON->>REPO: PoC ブランチ / worktree 削除
-    MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}）+ 空 commit push
+    MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}/base）+ 空 commit push
     MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
     MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
     MON->>GH: epic PR に 確認:complex-scenario-writer 付与
@@ -82,7 +82,7 @@ sequenceDiagram
   participant REPO as リポジトリ
 
   Note over MON: 起動〜PoC PR close・ブランチ削除までは<br>正常シナリオ（画面変更なし）と同一
-  MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}）+ 空 commit push
+  MON->>REPO: worktree + epic ブランチ作成<br>（{type}/epic/{ドメイン}/base）+ 空 commit push
   MON->>GH: epic Draft PR 作成（base=master・<br>本文は 紐づく Issue のみ）
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
   MON->>GH: epic PR に 指示コメント投稿（@mock-designer 宛・<br>画面方針の要点） +<br>確認:mock-designer 付与

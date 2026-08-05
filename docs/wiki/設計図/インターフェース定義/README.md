@@ -39,6 +39,8 @@ template_version: 2.1.0
 | バックエンド | Issue / PR 作成・マージ | [スタック解除](./バックエンド/スタック解除.py.md) | マージ前に PR をスタックから外し、残りを組み直す |
 | バックエンド | Issue / PR 作成・マージ | [新規Issue起票](./バックエンド/新規Issue起票.py.md) | 親を持たない intake Issue の作成（会話から派生した要望の受け口） |
 | バックエンド | Issue / PR 作成・マージ | [不具合Issue起票](./バックエンド/不具合Issue起票.py.md) | ai-monitor 自身のリポジトリへ 1 事象 = 1 件の不具合 Issue を起票（assignee = ユーザー・ラベルなしで承認待ち） |
+| バックエンド | Issue / PR 作成・マージ | [ルール改修Issue起票（プラグイン）](./バックエンド/ルール改修Issue起票（プラグイン）.py.md) | 言語 / フレームワークの規約に起因する指摘を my-plugins へ起票 |
+| バックエンド | Issue / PR 作成・マージ | [ルール改修Issue起票（モニター）](./バックエンド/ルール改修Issue起票（モニター）.py.md) | 手順書 / 規約 / テンプレートに起因する指摘を ai-monitor へ起票 |
 | バックエンド | Issue / PR 作成・マージ | [DraftPR作成](./バックエンド/DraftPR作成.py.md) | Draft PR 作成（Stacked PR の base 明示） |
 | バックエンド | Issue / PR 作成・マージ | [PRマージ](./バックエンド/PRマージ.py.md) | PR マージ（既定 squash + ブランチ削除） |
 | バックエンド | worktree | [worktree作成](./バックエンド/worktree作成.py.md) | ブランチ + worktree 作成 |

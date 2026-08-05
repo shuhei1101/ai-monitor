@@ -275,9 +275,9 @@ def test_error_when_design_decision_needed(
     )
 
     # 準備: architect の実装の割り当て → 確認:implementer 付与（起動トリガー）
-    assign = gh_live.rest.issues.create_comment(
+    gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, body=ASSIGN_COMMENT
-    ).parsed_data
+    )
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:implementer"]
     )

@@ -11,7 +11,7 @@ from tests.e2e.epic起動 import (
 )
 from tests.e2e.ゲート応答 import open_prs_for
 from tests.e2e.システム import watch_numbers
-from tests.e2e.システム import SYSTEM_ISSUE_BODY, SYSTEM_TITLE
+from tests.e2e.システム import SYSTEM_REQUIREMENTS, SYSTEM_TITLE
 from tests.e2e.エスカレーション import comments
 
 INTAKE_TITLE = "タスク期限のメール通知機能"
@@ -24,11 +24,11 @@ EPIC_TITLE = "タスク期限のメール通知機能"
 
 
 def _assert_requirements(gh_live, owner, repo, epic_number: int, first) -> None:
-    """初回ターンの成果（本文 5 セクション・対応 story 未起票・確認質問コメント）を検証する。"""
+    """初回ターンの成果（本文 5 セクション・対応 story 未作成・確認質問コメント）を検証する。"""
     body = (first.body or "").replace("\r\n", "\n")
     for section in EPIC_SECTIONS:
         assert section in body, f"本文に {section} がない"
-    assert "未起票" in body
+    assert "未作成" in body
     assert comments(gh_live, owner, repo, epic_number), "完了報告・確認質問コメントが投稿されていない"
 
 
@@ -137,7 +137,7 @@ RE_EPIC_BODY = """## 前提条件
 
 | UC 名 | 概要 | 対応 story |
 | --- | --- | --- |
-| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 未起票 |
+| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 未作成 |
 """
 
 # master にある現状の複合 UC シナリオ（RE PR がマージ済みの状態）
@@ -166,7 +166,7 @@ def test_normal_when_reverse(
     owner, repo = repo_ctx
     # 準備: エピック一覧 確定済みの親 system Issue + RE 経路の epic Issue
     system, epic = epic_issue_factory(
-        SYSTEM_TITLE, SYSTEM_ISSUE_BODY, EPIC_TITLE,
+        SYSTEM_TITLE, SYSTEM_REQUIREMENTS, EPIC_TITLE,
         epic_body=RE_EPIC_BODY,
         epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング", "確認:epic-conductor"],
         parent_labels=["layer:system", "type:docs", "リバースエンジニアリング"],

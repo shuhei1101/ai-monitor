@@ -60,7 +60,7 @@ def test_normal(
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     story = story_issue_factory(epic.number, STORY_TITLE)
 
@@ -162,7 +162,7 @@ def test_normal_when_reverse(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
         epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     commit_file(epic_branch, CURRENT_SCENARIO_PATH, CURRENT_SCENARIO_MD, "docs: 現状の単一UC シナリオを追加")
     story = story_issue_factory(

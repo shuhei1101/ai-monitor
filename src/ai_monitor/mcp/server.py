@@ -4,6 +4,7 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
+import os
 import re
 import subprocess
 import time
@@ -209,9 +210,13 @@ def _to_thread(tool: Callable[..., Any]) -> Callable[..., Any]:
     """同期のツール関数をワーカースレッドで実行する非同期関数に包む。"""
 
     # 受け取った引数のまま tool を呼ぶ包みを定義する（イベントループを塞がないよう別スレッドで走らせる）
+    # abandon_on_cancel でクライアント切断時にスレッドの完了を待たずキャンセルを通す
+    # （待つと、居なくなった呼び出し 1 件が同じセッションの後続ツール呼び出しまで巻き込んで止める）
     @functools.wraps(tool)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        return await to_thread.run_sync(functools.partial(tool, *args, **kwargs))
+        return await to_thread.run_sync(
+            functools.partial(tool, *args, **kwargs), abandon_on_cancel=True
+        )
 
     # 名前・docstring・公開シグネチャは functools.wraps が引き継ぐ（MCP がスキーマ生成に使う）
     return wrapper
@@ -400,33 +405,56 @@ def _ensure_at(name: str) -> str:
     return name if name.startswith("@") else f"@{name}"
 
 
-def _run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str]:
+def _git_env() -> dict[str, str]:
+    """git を非対話で走らせる環境変数を返す。"""
+    # 常駐プロセスには応答できる人が居ないため、認証情報を対話で聞かせず即失敗させる
+    # （聞かれると stdin を読んだまま戻らず、そのツール呼び出しが永久に終わらない）
+    return {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+
+def _run_git(args: list[str], *, cwd: str, timeout: int) -> subprocess.CompletedProcess[str]:
     """指定リポジトリで git CLI を実行する単一入口。"""
     # MCP は常駐プロセスでプロセスの CWD が対象と一致しないため、-C で対象リポジトリを明示する
-    return subprocess.run(["git", "-C", cwd, *args], check=True, capture_output=True, text=True)
+    # stdin を塞いで timeout を必ず付ける（ネットワーク待ちや対話待ちで戻らない呼び出しを作らない）
+    return subprocess.run(
+        ["git", "-C", cwd, *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_git_env(),
+        timeout=timeout,
+    )
 
 
-def _repo_root(*, cwd: str) -> Path:
+def _repo_root(*, cwd: str, timeout: int) -> Path:
     """対象リポジトリの共通 .git からメインリポジトリのルートを解決する。"""
     # 共通 .git の場所を取得し、その親をメインリポジトリのルートとして返す
-    common = _run_git(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=cwd).stdout.strip()
+    common = _run_git(
+        ["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=cwd, timeout=timeout
+    ).stdout.strip()
     return Path(common).parent
 
 
-def _worktree_path(branch: str, *, cwd: str) -> Path:
+def _worktree_path(branch: str, *, cwd: str, timeout: int) -> Path:
     """ブランチ名から .claude/worktrees/ 配下の絶対パスを求める。"""
     # メインリポジトリのルートを求める
-    root = _repo_root(cwd=cwd)
+    root = _repo_root(cwd=cwd, timeout=timeout)
     # ブランチ名の / を - に置換した絶対パスを返す
     return root / ".claude" / "worktrees" / branch.replace("/", "-")
 
 
-def _branch_exists(branch: str, *, cwd: str) -> bool:
+def _branch_exists(branch: str, *, cwd: str, timeout: int) -> bool:
     """指定リポジトリにローカルブランチがあるかを返す。"""
     # 後片付けの判定に使うので、無いこと（非 0 終了）は失敗ではなく結果として扱う
     found = subprocess.run(
         ["git", "-C", cwd, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
-        check=False, capture_output=True, text=True,
+        check=False,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_git_env(),
+        timeout=timeout,
     )
     return found.returncode == 0
 
@@ -1203,6 +1231,138 @@ def create_defect_issue(
     return CreatedIssueResult(issue_number=created.number, url=created.html_url)
 
 
+def _build_rule_issue_body(
+    project_name: str,
+    repo: str,
+    agent_name: str,
+    number: int,
+    body: str,
+    rule_page: str,
+    rule_excerpt: str,
+) -> str:
+    """ルール改修 Issue の本文を定型セクションに組み立てる。"""
+    # 報告元（どのプロジェクトのどの対象で踏んだか）
+    sections = [
+        "## 報告元\n\n"
+        "| 項目 | 値 |\n| --- | --- |\n"
+        f"| プロジェクト | {project_name} |\n"
+        f"| エージェント | {agent_name} |\n"
+        f"| 対象 | {repo}#{number} |"
+    ]
+    # 直す場所と、その場所の今の記述（引用で示して差分を読めるようにする）
+    sections.append(f"## 対象ルール\n\n- `{rule_page}`\n\n> {rule_excerpt}")
+    sections.append(f"## 指摘の内容\n\n{body}")
+    return "\n\n".join(sections) + "\n"
+
+
+def _create_rule_issue(
+    target_repo: str | None,
+    setting_name: str,
+    title: str,
+    body: str,
+    rule_page: str,
+    rule_excerpt: str,
+    agent_name: str,
+    number: int,
+    *,
+    ctx: Context,
+    settings: Settings,
+    label_settings: LabelSettings,
+) -> CreatedIssueResult:
+    """指定リポジトリへルール改修 Issue を作成する（起票先ごとのツールの共通処理）。"""
+    # 起票先は呼び出し元セッションのプロジェクトではなく設定で決まる
+    if not target_repo:
+        raise ValueError(
+            f"ルール改修 Issue の起票先が未設定です: settings.yaml の {setting_name} を設定してください"
+        )
+    owner, repo = target_repo.split("/", 1)
+    project = _resolve_project(ctx, projects=settings.projects)
+    # 承認する相手が常にユーザーなので assignee は認証ユーザーで固定する
+    login = _get_current_login()
+    text = _build_rule_issue_body(
+        project.name, project.repo, agent_name, number, body, rule_page, rule_excerpt
+    )
+    # AI の報告であることを示すラベルだけを付ける
+    # （確認ラベルはユーザーが付けるまで付けない = 改修フローに乗せない）
+    created = _get_client().rest.issues.create(
+        owner=owner,
+        repo=repo,
+        title=title,
+        body=text,
+        assignees=[login],
+        labels=[label_settings.ai_defect_report],
+    ).parsed_data
+    logger.warning(
+        "ルール改修が報告されました: project=%s agent_name=%s number=%s"
+        " target_repo=%s issue_number=%s rule_page=%s",
+        project.name,
+        agent_name,
+        number,
+        target_repo,
+        created.number,
+        rule_page,
+    )
+    return CreatedIssueResult(issue_number=created.number, url=created.html_url)
+
+
+@_log_tool_call
+def create_plugin_rule_issue(
+    title: str,
+    body: str,
+    rule_page: str,
+    rule_excerpt: str,
+    agent_name: str,
+    number: int,
+    *,
+    ctx: Context,
+    settings: Settings,
+    label_settings: LabelSettings,
+) -> CreatedIssueResult:
+    """言語 / フレームワークの規約に起因する指摘を my-plugins へルール改修 Issue として起票する。"""
+    return _create_rule_issue(
+        settings.my_plugins_repo,
+        "my_plugins_repo",
+        title,
+        body,
+        rule_page,
+        rule_excerpt,
+        agent_name,
+        number,
+        ctx=ctx,
+        settings=settings,
+        label_settings=label_settings,
+    )
+
+
+@_log_tool_call
+def create_monitor_rule_issue(
+    title: str,
+    body: str,
+    rule_page: str,
+    rule_excerpt: str,
+    agent_name: str,
+    number: int,
+    *,
+    ctx: Context,
+    settings: Settings,
+    label_settings: LabelSettings,
+) -> CreatedIssueResult:
+    """手順書 / 規約 / テンプレートに起因する指摘を ai-monitor へルール改修 Issue として起票する。"""
+    return _create_rule_issue(
+        settings.ai_monitor_repo,
+        "ai_monitor_repo",
+        title,
+        body,
+        rule_page,
+        rule_excerpt,
+        agent_name,
+        number,
+        ctx=ctx,
+        settings=settings,
+        label_settings=label_settings,
+    )
+
+
 @_log_tool_call
 def create_intake_issue(
     title: str,
@@ -1296,14 +1456,21 @@ def worktree_create(
     """ブランチと worktree を .claude/worktrees/ 配下に作成し、Draft PR 用の空 commit を push する。"""
     # 対象プロジェクトを解決する
     project = _resolve_project(ctx, projects=settings.projects)
+    timeout = settings.git_timeout_sec
+    # 実体の消えた worktree の登録を先に掃除する（残骸があると同名パスの再作成が失敗する）
+    _run_git(["worktree", "prune"], cwd=project.local_path, timeout=timeout)
     # 配置先の worktree パスを求める（.claude/worktrees/ が無ければパスごと作成する）
-    path = _worktree_path(branch, cwd=project.local_path)
+    path = _worktree_path(branch, cwd=project.local_path, timeout=timeout)
     path.parent.mkdir(parents=True, exist_ok=True)
     # base_ref からブランチと worktree を作成する
-    _run_git(["worktree", "add", "-b", branch, str(path), base_ref], cwd=project.local_path)
+    _run_git(
+        ["worktree", "add", "-b", branch, str(path), base_ref], cwd=project.local_path, timeout=timeout
+    )
     # Draft PR は head と base が同一 commit だと 422 になるため、空 commit を作って push する
-    _run_git(["commit", "--allow-empty", "-m", "chore: Draft PR 用の空 commit"], cwd=str(path))
-    _run_git(["push", "-u", "origin", branch], cwd=str(path))
+    _run_git(
+        ["commit", "--allow-empty", "-m", "chore: Draft PR 用の空 commit"], cwd=str(path), timeout=timeout
+    )
+    _run_git(["push", "-u", "origin", branch], cwd=str(path), timeout=timeout)
     return WorktreeCreateResult(branch=branch, worktree_path=str(path), base_ref=base_ref)
 
 
@@ -1312,13 +1479,16 @@ def worktree_remove(branch: str, *, ctx: Context, settings: Settings) -> Worktre
     """worktree とローカルブランチを削除する。"""
     # 対象プロジェクトを解決する
     project = _resolve_project(ctx, projects=settings.projects)
+    timeout = settings.git_timeout_sec
     # 対象の worktree パスを求める
-    path = _worktree_path(branch, cwd=project.local_path)
+    path = _worktree_path(branch, cwd=project.local_path, timeout=timeout)
     # 残っているものだけ消す（worktree を作らずに終わったブランチ・片付け済みのブランチにも呼ばれる）
     if path.exists():
-        _run_git(["worktree", "remove", "--force", str(path)], cwd=project.local_path)
-    if _branch_exists(branch, cwd=project.local_path):
-        _run_git(["branch", "-D", branch], cwd=project.local_path)
+        _run_git(["worktree", "remove", "--force", str(path)], cwd=project.local_path, timeout=timeout)
+    if _branch_exists(branch, cwd=project.local_path, timeout=timeout):
+        _run_git(["branch", "-D", branch], cwd=project.local_path, timeout=timeout)
+    # 削除後に登録も掃除する（次回の同名 worktree 作成が残骸で失敗しないようにする）
+    _run_git(["worktree", "prune"], cwd=project.local_path, timeout=timeout)
     # WorktreeRemoveResult を返す
     return WorktreeRemoveResult(branch=branch, worktree_path=str(path))
 
@@ -1491,6 +1661,8 @@ def build_mcp_app(
         (unlink_stack, "スタック解除", None),
         (create_intake_issue, "新規Issue起票", None),
         (create_defect_issue, "不具合Issue起票", None),
+        (create_plugin_rule_issue, "ルール改修Issue起票（プラグイン）", None),
+        (create_monitor_rule_issue, "ルール改修Issue起票（モニター）", None),
         (create_draft_pr, "DraftPR作成", None),
         (mark_pr_ready, "PR_Ready化", None),
         (merge_pr, "PRマージ", _DESTRUCTIVE),

@@ -5,7 +5,7 @@ import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import comments_from, issue, label_names
 from tests.e2e.実装対象 import SUBSYSTEM_PR_BODY, setup_subsystem
 
-# 依存順の後続 subsystem が 未起票 で残っている story 本文
+# 依存順の後続 subsystem が 未作成 で残っている story 本文
 STORY_BODY_TEMPLATE = """## 前提条件
 
 なし
@@ -30,7 +30,7 @@ STORY_BODY_TEMPLATE = """## 前提条件
 | scope | 概要 | 依存 | 対応 subsystem |
 | --- | --- | --- | --- |
 | backend | `update_task` の実装 | なし | 起票済み |
-| frontend | 編集画面と保存導線 | backend | 未起票 |
+| frontend | 編集画面と保存導線 | backend | 未作成 |
 """
 
 # SA 確定済みの subsystem 本文（未記入だと索引が要件確定（初回）にマッチしてしまう）
@@ -98,7 +98,7 @@ def test_normal(
         story_issue_factory, subsystem_issue_factory, commit_file,
         pr_body=SUBSYSTEM_PR_BODY,
     )
-    # 準備: 後続 subsystem が 未起票 で残っている story 本文にする
+    # 準備: 後続 subsystem が 未作成 で残っている story 本文にする
     gh_live.rest.issues.update(
         owner=owner, repo=repo, issue_number=ctx["story"].number,
         body=STORY_BODY_TEMPLATE.format(epic_number=ctx["epic"].number),

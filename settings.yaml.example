@@ -21,6 +21,9 @@ heartbeat_interval_sec: 60
 # 会話ログからリセット時刻を読めなかった場合に待つ時間（分）
 rate_limit_fallback_min: 60
 
+# git CLI 1 回あたりの上限（秒）。超えたら打ち切ってツールエラーにする
+git_timeout_sec: 120
+
 # セッション台帳の永続化先
 state_path: data/state.yaml
 
@@ -84,6 +87,9 @@ ai_monitor_wiki_base: /mnt/c/Users/shuhe/repo/ai-monitor/docs/wiki
 
 # ai-monitor 自身の GitHub リポジトリ
 ai_monitor_repo: shuhei1101/ai-monitor
+
+# 言語・フレームワークの規約を持つリポジトリ（ルール改修 Issue の起票先）
+my_plugins_repo: shuhei1101/my-plugins
 
 # 監視対象プロジェクト（複数可）
 # wiki_base は ai_monitor_wiki_base と同じく raw URL / ローカル絶対パスの両対応

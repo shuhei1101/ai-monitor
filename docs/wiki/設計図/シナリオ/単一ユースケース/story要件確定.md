@@ -37,7 +37,7 @@ sequenceDiagram
   activate MON
   MON-->>GH: base を辿って親 epic PR の<br>UC 一覧から担当 UC を特定
   MON->>GH: 要件 3 セクション + UC<br>タイプ別観点の要件草案を<br>story PR 本文に反映
-  MON->>GH: story PR に完了報告コメントを投稿し、<br>該当する確認事項があれば追加で投稿
+  MON->>GH: story PR に確認事項コメントを投稿
   MON->>GH: story PR に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 
@@ -103,7 +103,7 @@ sequenceDiagram
   MON->>GH: 親 epic の UC を特定・<br>要件草案を story PR 本文に反映
   MON-->>REPO: 既存の単一 UC シナリオと<br>照合して修正箇所の有無を判定
   MON->>MON: 判断が分かれる論点が無く<br>単一 UC の修正も不要と確定
-  MON->>GH: story PR に完了報告コメントを投稿<br>（質問せずに置いた前提を明示・議論中 は付けない）
+  MON->>GH: story PR に確認事項コメントを投稿<br>（質問せずに置いた前提を明示・議論中 は付けない）
   deactivate MON
 
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
@@ -121,7 +121,7 @@ sequenceDiagram
 - 確認事項コメントが 1 件も投稿されていない
 - 担当 UC の `変更種別` が `変更` のため、既存の単一 UC シナリオと照合したうえで修正不要と判断している
 - `議論中` が付与されず assignee も設定されていない（ユーザーを止めずに通り抜けている）
-- 完了報告コメントに、質問せずに前提として置いた判断とその根拠が書かれている
+- 確認事項コメントに、質問せずに前提として置いた判断とその根拠が書かれている
 - 単一UCシナリオの成果物ブランチと PR が作られていない（story ブランチ上で作業する担当が居ないため）
 - story PR の本文に `## タスク一覧` が無い
 - subsystem ブランチと Draft PR が作成され `確認:subsystem-conductor` が付与されている
@@ -159,7 +159,7 @@ sequenceDiagram
   MON-->>GH: 親 epic の UC 一覧から担当 UC を特定し<br>複合シナリオ上の位置づけを読む
   MON-->>REPO: story ブランチの現状のシナリオから<br>現在の振る舞いを把握
   MON->>GH: 要件 3 セクション + UC タイプ別観点の要件を<br>現状のシナリオから逆算して story PR 本文に反映
-  MON->>GH: story PR に完了報告コメントと<br>確認事項コメント（実装にある挙動のうち<br>意図が不明なもの・あるべき姿との差分）を投稿
+  MON->>GH: story PR に確認事項コメント<br>（実装にある挙動のうち意図が不明なもの・<br>あるべき姿との差分）を投稿
   MON->>GH: story PR に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 

@@ -3,91 +3,117 @@ from __future__ import annotations
 
 import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import comments_from, issue, label_names
-from tests.e2e.システム import SYSTEM_ISSUE_BODY, SYSTEM_TITLE
+from tests.e2e.システム import setup_system_with_foundation
 
-# SYSTEM_ISSUE_BODY の `## エピック一覧` に並べた epic の件数
+# SYSTEM_PR_BODY_CONFIRMED の `## エピック一覧` に並べた epic の件数
 EPIC_COUNT = 2
 
+# ユースケース一覧の 変更種別 列に入りうる値
+CHANGE_KINDS = ("新規", "変更", "削除")
 
-def _epic_rows(body: str) -> list[str]:
-    """system Issue 本文のエピック一覧のデータ行を返す。"""
-    section = (body or "").replace("\r\n", "\n").split("## エピック一覧", 1)[1]
+
+def _section(body: str, heading: str) -> str:
+    """本文から指定見出しのセクションを取り出す。"""
+    return (body or "").replace("\r\n", "\n").split(heading, 1)[1].split("\n## ", 1)[0]
+
+
+def _data_rows(section: str, header_word: str) -> list[str]:
+    """表のデータ行（ヘッダーと区切りを除いた行）を返す。"""
     return [
         line for line in section.splitlines()
-        if line.startswith("|") and "---" not in line and "エピック名" not in line
+        if line.startswith("|") and "---" not in line and header_word not in line
     ]
 
 
-def _wait_issued(gh_live, owner, repo, number, wait_until, *, message):
-    """子 epic の起票と system Issue の確認ラベル除去が終わるまで待つ。"""
+def _open_children(gh_live, owner: str, repo: str, base_branch: str) -> list:
+    """指定ブランチを base にした open PR を返す。"""
+    return list(
+        gh_live.rest.pulls.list(
+            owner=owner, repo=repo, state="open", base=base_branch, per_page=100
+        ).parsed_data
+    )
 
+
+def test_normal(
+    monitor, gh_live, repo_ctx, system_issue_factory, layer_pr_factory, commit_file,
+    stack_of, wait_until,
+):
+    """エピック一覧からの子 epic PR 一括作成と先頭 epic だけの起動を実環境で確認する（正常系）。"""
+    owner, repo = repo_ctx
+
+    # 準備: 要件確定済みの system PR + マージ済みの土台生成成果物 PR
+    ctx = setup_system_with_foundation(
+        gh_live, owner, repo, system_issue_factory, layer_pr_factory, commit_file,
+        pr_labels=["layer:system", "type:feat", "確認:system-conductor"],
+    )
+    system_pr = ctx["system_pr"]
+    branch = ctx["branch"]
+
+    # 実行: 子 epic PR の一括作成と system PR の確認ラベル除去を待つ
     def _done():
-        data = issue(gh_live, owner, repo, number)
+        data = issue(gh_live, owner, repo, system_pr.number)
         if [name for name in label_names(data) if name.startswith("確認:")]:
             return None
-        subs = gh_live.rest.issues.list_sub_issues(
-            owner=owner, repo=repo, issue_number=number
-        ).parsed_data
-        return (data, subs) if len(subs) >= EPIC_COUNT else None
+        children = _open_children(gh_live, owner, repo, branch)
+        return (data, children) if len(children) >= EPIC_COUNT else None
 
-    return wait_until(_done, timeout_sec=2400, message=message)
+    data, children = wait_until(_done, timeout_sec=2400, message="子 epic PR の一括作成")
 
+    # 検証: エピック一覧と同数の epic PR が system ブランチの上に作られている
+    assert len(children) == EPIC_COUNT, f"epic PR の件数がエピック一覧と一致しない: {len(children)}"
+    for pr in children:
+        assert pr.base.ref == branch, f"#{pr.number} の base が system ブランチでない: {pr.base.ref}"
+        assert pr.draft, f"#{pr.number} が Draft でない"
 
-def test_normal(monitor, gh_live, repo_ctx, system_issue_factory, wait_until, sandbox):
-    """エピック一覧からの子 epic 一括起票と先頭 epic だけの起動を実環境で確認する（正常系）。"""
-    owner, repo = repo_ctx
-    system = system_issue_factory(
-        SYSTEM_TITLE, SYSTEM_ISSUE_BODY,
-        labels=["layer:system", "type:feat", "確認:system-conductor"],
-    )
-
-    # 実行: 子 epic の一括起票を待つ
-    data, subs = _wait_issued(
-        gh_live, owner, repo, system.number, wait_until, message="子 epic の一括起票",
-    )
-
-    # 検証: エピック一覧と同数の epic が紐づいている
-    assert len(subs) == EPIC_COUNT, f"epic の件数がエピック一覧と一致しない: {len(subs)}"
-
-    # 検証: 全 epic に layer / type が付き、親に無い リバースエンジニアリング は引き継がれない
+    # 検証: ラベル・ユースケース一覧・変更種別
     started = []
-    for sub in subs:
-        sub_now = issue(gh_live, owner, repo, sub.number)
-        sub_labels = label_names(sub_now)
-        assert "layer:epic" in sub_labels, f"#{sub.number} に layer:epic がない: {sorted(sub_labels)}"
-        assert "type:feat" in sub_labels, f"#{sub.number} に type:feat がない: {sorted(sub_labels)}"
-        assert "リバースエンジニアリング" not in sub_labels, (
-            f"#{sub.number} に親に無い リバースエンジニアリング が付いている"
+    for pr in children:
+        pr_now = issue(gh_live, owner, repo, pr.number)
+        labels = label_names(pr_now)
+        assert "layer:epic" in labels, f"#{pr.number} に layer:epic がない: {sorted(labels)}"
+        assert "type:feat" in labels, f"#{pr.number} に type:feat がない: {sorted(labels)}"
+        assert "リバースエンジニアリング" not in labels, (
+            f"#{pr.number} に親に無い リバースエンジニアリング が付いている"
         )
-        # ユースケース一覧が埋まり、対応 story 列は全行 未起票
-        sub_body = (sub_now.body or "").replace("\r\n", "\n")
-        assert "## ユースケース一覧" in sub_body, f"#{sub.number} に ## ユースケース一覧 がない"
-        uc_section = sub_body.split("## ユースケース一覧", 1)[1].split("\n## ", 1)[0]
-        uc_rows = [
-            line for line in uc_section.splitlines()
-            if line.startswith("|") and "---" not in line and "UC" not in line
-        ]
-        assert uc_rows, f"#{sub.number} のユースケース一覧が空"
-        assert all("未起票" in row for row in uc_rows), f"#{sub.number} の対応 story 列が未起票でない"
-        if "確認:epic-conductor" in sub_labels:
-            started.append(sub.number)
+        body = (pr_now.body or "").replace("\r\n", "\n")
+        assert "## ユースケース一覧" in body, f"#{pr.number} に ## ユースケース一覧 がない"
+        uc_rows = _data_rows(_section(body, "## ユースケース一覧"), "ユースケース")
+        assert uc_rows, f"#{pr.number} のユースケース一覧が空"
+        for row in uc_rows:
+            assert "未作成" in row, f"#{pr.number} の 対応 story 列が 未作成 でない: {row}"
+            assert any(kind in row for kind in CHANGE_KINDS), (
+                f"#{pr.number} の 変更種別 列が埋まっていない: {row}"
+            )
+        if "確認:epic-conductor" in labels:
+            started.append(pr.number)
 
-    # 検証: 着手は直列なので確認ラベルは 1 つだけ
+    # 検証: 着手は直列なので確認ラベルは先頭 1 件だけ
     assert len(started) == 1, f"確認:epic-conductor が先頭 1 件に絞られていない: {started}"
 
-    # 検証: 後続 epic の前提条件に先行 epic が未完了として載っている
-    others = [s.number for s in subs if s.number not in started]
+    # 検証: 着手順 2 番目が先行 epic PR の上に積まれ、下に open が残る間は着手されていない
+    others = [pr.number for pr in children if pr.number not in started]
     for number in others:
-        body = (issue(gh_live, owner, repo, number).body or "").replace("\r\n", "\n")
-        premise = body.split("## 前提条件", 1)[1].split("\n## ", 1)[0]
-        assert "未完了" in premise, f"#{number} の前提条件に先行 epic の未完了が書かれていない: {premise[:120]}"
+        stack = stack_of(number)
+        assert stack is not None, f"#{number} がスタックに接続されていない"
+        assert stack.below_open, f"#{number} の下に open な先行 PR がない: {stack.pull_requests}"
+        assert started[0] in stack.below_open, (
+            f"#{number} の下に先頭 epic #{started[0]} が居ない: {stack.below_open}"
+        )
+        follower = issue(gh_live, owner, repo, number)
+        follower_labels = label_names(follower)
+        assert "議論中" not in follower_labels, f"#{number} に着手の痕跡（議論中）がある"
+        assert not follower.assignees, f"#{number} に着手の痕跡（assignee）がある"
+        assert not comments_from(gh_live, owner, repo, number, "epic-conductor"), (
+            f"#{number} に epic-conductor の投稿がある"
+        )
 
-    # 検証: エピック一覧の 対応 Issue 列が全行 #N に更新されている
-    rows = _epic_rows(data.body or "")
+    # 検証: エピック一覧の 対応 PR 列が全行 #N に更新されている
+    rows = _data_rows(_section(data.body or "", "## エピック一覧"), "エピック")
     assert rows, "エピック一覧の行がない"
-    assert all("#" in row for row in rows), f"対応 Issue 列が未起票のまま: {rows}"
-    assert not any("未起票" in row for row in rows), f"未起票 が残っている: {rows}"
+    assert not any("未作成" in row for row in rows), f"未作成 が残っている: {rows}"
+    for number in [pr.number for pr in children]:
+        assert any(f"#{number}" in row for row in rows), f"対応 PR 列に #{number} がない: {rows}"
 
     # 検証: 自分宛コメントが全て Resolve 済み
-    for comment in comments_from(gh_live, owner, repo, system.number, "system-conductor"):
+    for comment in comments_from(gh_live, owner, repo, system_pr.number, "system-conductor"):
         assert server._is_minimized(comment.node_id), f"自分宛コメントが未 Resolve: {comment.html_url}"

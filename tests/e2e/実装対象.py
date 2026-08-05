@@ -980,7 +980,7 @@ def setup_subsystem(
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     epic_pr = epic_pr_factory(
         branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
     )
@@ -988,7 +988,7 @@ def setup_subsystem(
         epic.number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number), labels=["layer:story", "type:feat"],
     )
-    story_branch = f"feat/story/task-edit-{story.number}"
+    story_branch = f"feat/story/task-edit-{story.number}/base"
     story_pr = draft_pr_factory(
         story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
     )
@@ -997,7 +997,7 @@ def setup_subsystem(
     subsystem = subsystem_issue_factory(
         story.number, SUBSYSTEM_TITLE, labels=["layer:subsystem", "scope:backend"]
     )
-    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/update-api"
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
     pr = draft_pr_factory(
         subsystem_branch, SUBSYSTEM_TITLE,
         pr_body.format(subsystem_number=subsystem.number), base_branch=story_branch,

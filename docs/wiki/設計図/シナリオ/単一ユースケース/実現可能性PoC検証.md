@@ -36,7 +36,7 @@ sequenceDiagram
   participant REPO as リポジトリ
   activate MON
   MON->>GH: 指示コメント + 親 epic PR 本文を確認して<br>PoC PR 本文を仮埋め<br>（リスク仮説 / 検証構成 / 成功条件の草案）
-  MON->>GH: PoC PR に完了報告コメント +<br>確認質問コメント +<br>議論中 付与 + assignee=ユーザー 設定
+  MON->>GH: PoC PR に確認質問コメント +<br>議論中 付与 + assignee=ユーザー 設定
   deactivate MON
 
   loop 方針固めの応答ループ<br>（本文への修正依頼・質問回答がある間）

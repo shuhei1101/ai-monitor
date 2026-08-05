@@ -28,7 +28,7 @@ EPIC_BODY = """## 前提条件
 
 | UC 名 | 概要 | 対応 story |
 | --- | --- | --- |
-| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 未起票 |
+| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 未作成 |
 
 ## 横断要件
 
@@ -86,7 +86,7 @@ def test_normal(
         epic.number, STORY_TITLE, body=story_body, labels=["layer:story"]
     )
     # 準備: story Draft PR（本文は `## 紐づく Issue` のみ）
-    branch = f"feat/story/task-edit-{story.number}"
+    branch = f"feat/story/task-edit-{story.number}/base"
     pr = epic_pr_factory(
         branch=branch, title=STORY_TITLE, body=f"## 紐づく Issue\n\n- #{story.number}\n"
     )
@@ -227,7 +227,7 @@ def test_normal_when_scenario_fix(
         epic.number, STORY_TITLE, body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
         labels=["layer:story"],
     )
-    branch = f"feat/story/task-edit-{story.number}"
+    branch = f"feat/story/task-edit-{story.number}/base"
     pr = epic_pr_factory(branch=branch, title=STORY_TITLE, body=f"## 紐づく Issue\n\n- #{story.number}\n")
     commit_file(branch, CURRENT_SCENARIO_PATH, CURRENT_SCENARIO_MD, "docs: 単一UC シナリオを追加")
     _worktree(sandbox["local_path"], branch)
@@ -297,7 +297,7 @@ def test_normal_when_reverse(
         epic.number, STORY_TITLE, body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
         labels=["layer:story", "type:docs", "リバースエンジニアリング"],
     )
-    branch = f"feat/story/task-edit-{story.number}"
+    branch = f"feat/story/task-edit-{story.number}/base"
     pr = epic_pr_factory(branch=branch, title=STORY_TITLE, body=f"## 紐づく Issue\n\n- #{story.number}\n")
     commit_file(branch, CURRENT_SCENARIO_PATH, CURRENT_SCENARIO_MD, "docs: 現状の単一UC シナリオを追加")
     _worktree(sandbox["local_path"], branch)

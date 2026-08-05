@@ -85,7 +85,7 @@ def test_run_cycle(cycle_mocks, cycle_env, label_settings, rate_limit_gate, noti
     settings, agents, registry = cycle_env
     # 実行
     targets_by_project, _ = main_mod.run_cycle(
-        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
+        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate, notified_gates={}
     , notify=notify)
     # 検証
     assert cycle_mocks.list_open_targets.call_count == 1
@@ -102,7 +102,7 @@ def test_run_cycle_when_heartbeat_elapsed(cycle_mocks, cycle_env, label_settings
     settings, agents, registry = cycle_env
     # 実行
     _, heartbeat_at = main_mod.run_cycle(
-        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2000-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
+        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2000-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate, notified_gates={}
     , notify=notify)
     # 検証
     cycle_mocks.reap_timed_out_sessions.assert_called_once()
@@ -117,7 +117,7 @@ def test_run_cycle_when_heartbeat_not_elapsed(cycle_mocks, cycle_env, label_sett
     # 実行
     _, heartbeat_at = main_mod.run_cycle(
         settings, agents, registry=registry, prev_targets={}, last_heartbeat_at=now,
-        labels=label_settings, gate=rate_limit_gate,
+        labels=label_settings, gate=rate_limit_gate, notified_gates={},
      notify=notify)
     # 検証
     cycle_mocks.reap_timed_out_sessions.assert_not_called()
@@ -133,7 +133,7 @@ def test_run_cycle_when_list_error(cycle_mocks, cycle_env, label_settings, rate_
     cycle_mocks.list_open_targets.side_effect = RequestFailed(response)
     # 実行
     targets_by_project, _ = main_mod.run_cycle(
-        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate
+        settings, agents, registry=registry, prev_targets={}, last_heartbeat_at="2100-01-01T00:00:00+00:00", labels=label_settings, gate=rate_limit_gate, notified_gates={}
     , notify=notify)
     # 検証
     cycle_mocks.poll.assert_not_called()

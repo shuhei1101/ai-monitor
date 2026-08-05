@@ -48,7 +48,7 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=epic_body, epic_labels=["layer:epic"]
     )
     pr = epic_pr_factory(
-        branch=f"feat/epic/mock-kanryo-{epic.number}",
+        branch=f"feat/epic/mock-kanryo-{epic.number}/base",
         title=EPIC_TITLE,
         body=PR_BODY.format(epic_number=epic.number),
     )

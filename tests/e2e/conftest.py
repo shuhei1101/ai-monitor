@@ -477,6 +477,58 @@ def epic_pr_factory(draft_pr_factory):
 
 
 @pytest.fixture
+def layer_pr_factory(gh_live, repo_ctx, draft_pr_factory):
+    """レイヤーの面になる Draft PR（ブランチ + PR + ラベル）を作る factory。
+
+    面が Issue から PR へ移ったため、system / epic / story / subsystem の seed はこれで作る。
+    後片付けは起点 Issue から辿る掃除に委ねるので、body の `## 紐づく Issue` に必ず番号を書く。
+    """
+    owner, repo = repo_ctx
+
+    def _create(
+        branch: str,
+        title: str,
+        body: str,
+        *,
+        base_branch: str = "master",
+        labels: list[str] | None = None,
+    ) -> object:
+        pr = draft_pr_factory(branch, title, body, base_branch=base_branch)
+        if labels:
+            gh_live.rest.issues.add_labels(
+                owner=owner, repo=repo, issue_number=pr.number, labels=labels
+            )
+        return pr
+
+    return _create
+
+
+@pytest.fixture
+def stack_of(sandbox, e2e_settings_path):
+    """PR のスタック所属を返すヘルパ（未所属は None）。
+
+    着手順の依存はスタックの並びで表すため、期待値の検証に使う。
+    """
+    from ai_monitor.integrations.github import client as gh_client
+    from ai_monitor.integrations.github.stacks import get_stack
+    from ai_monitor.shared.settings import MonitoredProject, Settings
+
+    # stacks.py は integrations 側の共有クライアントを使うので、テストプロセスでも初期化しておく
+    gh_client.get_client(Settings(**yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8"))))
+    project = MonitoredProject(
+        name=sandbox["name"],
+        repo=sandbox["repo"],
+        local_path=sandbox["local_path"],
+        wiki_base=sandbox["wiki_base"],
+    )
+
+    def _get(pr_number: int):
+        return get_stack(project, pr_number)
+
+    return _get
+
+
+@pytest.fixture
 def commit_file(gh_live, repo_ctx):
     """指定ブランチにファイルを 1 件 commit する function fixture。"""
     owner, repo = repo_ctx
@@ -571,7 +623,7 @@ def epic_body() -> str:
 
 | UC 名 | 概要 | 対応 story |
 | --- | --- | --- |
-| 期限通知メールの受信 | 期限が近いタスクをメールで通知する | 未起票 |
+| 期限通知メールの受信 | 期限が近いタスクをメールで通知する | 未作成 |
 
 ## 横断要件
 

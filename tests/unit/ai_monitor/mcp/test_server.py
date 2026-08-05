@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import shutil
 import subprocess
 import threading
 from pathlib import Path
 from types import SimpleNamespace as NS
+from unittest import mock
 from unittest.mock import MagicMock
 
 import pytest
@@ -38,6 +40,8 @@ from ai_monitor.mcp.models import (
     WorktreeRemoveResult,
 )
 
+GIT_TIMEOUT = 120
+
 EXPECTED_TOOLS = {
     "get_issue_or_pr",
     "list_comments",
@@ -67,6 +71,8 @@ EXPECTED_TOOLS = {
     "unlink_stack",
     "create_intake_issue",
     "create_defect_issue",
+    "create_plugin_rule_issue",
+    "create_monitor_rule_issue",
     "create_draft_pr",
     "merge_pr",
     "worktree_create",
@@ -1202,6 +1208,93 @@ def test_unlink_stack_when_dissolved(stack_ops, api, request_failed):
     stack_ops.create_stack.assert_not_called()
 
 
+# ---- ルール改修Issue起票 ----
+
+
+def _rule_args(**over):
+    args = dict(
+        title="Python の関数ファースト規約が DTO のファクトリ関数を禁止しているように読める",
+        body="規約どおりに書いた箇所を、その記述と反対の内容へ直すよう指摘を受けた。",
+        rule_page="docs/rules/python/architecture/TypeScriptスタイル適用.md",
+        rule_excerpt="クラスを書いてよいのは: DTO / ライブラリ要求 / 長期保持のランタイム状態 のみ",
+        agent_name="architect",
+        number=152,
+    )
+    args.update(over)
+    return args
+
+
+def test_create_plugin_rule_issue(gh, api):
+    """my-plugins への起票と assignee / ラベルを確認する（正常系）。"""
+    # 準備: 呼び出し元は sandbox・起票先は my_plugins_repo
+    gh.rest.users.get_authenticated.return_value = _resp(NS(login="shuhei1101"))
+    gh.rest.issues.create.return_value = _resp(NS(number=87, html_url="http://i/87"))
+    # 実行
+    res = api.create_plugin_rule_issue(**_rule_args())
+    # 検証: 起票先が呼び出し元セッションのプロジェクトではなく my_plugins_repo
+    kwargs = gh.rest.issues.create.call_args.kwargs
+    assert (kwargs["owner"], kwargs["repo"]) == ("shuhei1101", "my-plugins")
+    # 承認する相手が常にユーザーなので assignee は認証ユーザー 1 名で固定
+    assert kwargs["assignees"] == ["shuhei1101"]
+    # AI の報告であることを示すラベルだけを付ける（確認ラベルはユーザーが付けるまで付けない）
+    assert kwargs["labels"] == ["AI不具合報告"]
+    assert res == CreatedIssueResult(issue_number=87, url="http://i/87", parent_issue_number=None)
+
+
+def test_create_plugin_rule_issue_when_repo_unset(gh, api, mon_settings):
+    """起票先が未設定のときのエラーを確認する（異常系）。"""
+    # 準備
+    mon_settings.my_plugins_repo = None
+    # 実行・検証
+    with pytest.raises(ValueError, match="my_plugins_repo"):
+        api.create_plugin_rule_issue(**_rule_args())
+    gh.rest.issues.create.assert_not_called()
+
+
+def test_create_monitor_rule_issue(gh, api):
+    """ai-monitor への起票を確認する（正常系）。"""
+    # 準備
+    gh.rest.users.get_authenticated.return_value = _resp(NS(login="shuhei1101"))
+    gh.rest.issues.create.return_value = _resp(NS(number=214, html_url="http://i/214"))
+    # 実行
+    res = api.create_monitor_rule_issue(
+        **_rule_args(rule_page="docs/wiki/テンプレート/PR本文/エピック.md", agent_name="epic-conductor")
+    )
+    # 検証: 起票先だけがプラグイン側と異なる
+    kwargs = gh.rest.issues.create.call_args.kwargs
+    assert (kwargs["owner"], kwargs["repo"]) == ("shuhei1101", "ai-monitor")
+    assert kwargs["labels"] == ["AI不具合報告"]
+    assert res == CreatedIssueResult(issue_number=214, url="http://i/214", parent_issue_number=None)
+
+
+def test_create_monitor_rule_issue_when_repo_unset(gh, api, mon_settings):
+    """起票先が未設定のときのエラーを確認する（異常系）。"""
+    # 準備
+    mon_settings.ai_monitor_repo = None
+    # 実行・検証
+    with pytest.raises(ValueError, match="ai_monitor_repo"):
+        api.create_monitor_rule_issue(**_rule_args())
+    gh.rest.issues.create.assert_not_called()
+
+
+def test_build_rule_issue_body():
+    """定型セクションの組み立てを確認する（正常系）。"""
+    # 実行
+    text = server._build_rule_issue_body(
+        "sandbox", "shuhei1101/ai-monitor-e2e", "architect", 152,
+        "規約どおりに書いた箇所への指摘。",
+        "docs/rules/python/architecture/TypeScriptスタイル適用.md",
+        "クラスを書いてよいのは: DTO のみ",
+    )
+    # 検証: 報告元・対象ルール・指摘の内容の 3 セクションが揃う
+    assert "## 報告元" in text and "| プロジェクト | sandbox |" in text
+    assert "| 対象 | shuhei1101/ai-monitor-e2e#152 |" in text
+    assert "## 対象ルール" in text
+    assert "`docs/rules/python/architecture/TypeScriptスタイル適用.md`" in text
+    assert "> クラスを書いてよいのは: DTO のみ" in text
+    assert "## 指摘の内容" in text and "規約どおりに書いた箇所への指摘。" in text
+
+
 # ---- 不具合Issue起票 ----
 
 
@@ -1475,6 +1568,24 @@ def test_worktree_create(tmp_git_repo, api):
     assert res.branch in branches
 
 
+def _worktree_list(cwd) -> str:
+    return subprocess.run(
+        ["git", "worktree", "list"], cwd=cwd, capture_output=True, text=True, check=True
+    ).stdout
+
+
+def test_worktree_create_when_stale_worktree(tmp_git_repo, api):
+    """実体の消えた worktree の登録を掃除してから作成することを確認する（正常系）。"""
+    # 準備: worktree を作ってからディレクトリだけ消し、登録だけが残った状態を作る
+    stale = Path(api.worktree_create("feat/backend/profile/stale", "origin/master").worktree_path)
+    shutil.rmtree(stale)
+    assert str(stale) in _worktree_list(tmp_git_repo)
+    # 実行
+    api.worktree_create("feat/backend/profile/edit/edit-api", "origin/master")
+    # 検証: 残骸が登録から消えている（溜まると worktree 追加が遅くなる）
+    assert str(stale) not in _worktree_list(tmp_git_repo)
+
+
 def test_worktree_create_when_dirs_missing(tmp_git_repo, api):
     """worktree フォルダ未作成時のパス作成を確認する（正常系）。"""
     # 準備
@@ -1562,7 +1673,7 @@ def test_worktree_remove_when_worktree_missing(tmp_git_repo, api):
 def test_worktree_remove_when_branch_missing(tmp_git_repo, api):
     """ローカルブランチだけ無い場合に worktree だけ削除されることを確認する（正常系）。"""
     # 準備: ブランチを持たない（detached）worktree を対象パスに作る
-    path = server._worktree_path("feat/detached", cwd=str(tmp_git_repo))
+    path = server._worktree_path("feat/detached", cwd=str(tmp_git_repo), timeout=GIT_TIMEOUT)
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["git", "-C", str(tmp_git_repo), "worktree", "add", "--detach", str(path), "origin/master"],
@@ -1880,7 +1991,7 @@ def test_ensure_at_when_already_prefixed():
 def test_run_git(tmp_git_repo):
     """git コマンドの実行を確認する（正常系）。"""
     # 実行
-    res = server._run_git(["status", "--short"], cwd=str(tmp_git_repo))
+    res = server._run_git(["status", "--short"], cwd=str(tmp_git_repo), timeout=GIT_TIMEOUT)
     # 検証
     assert res.returncode == 0
 
@@ -1890,9 +2001,35 @@ def test_run_git_when_cwd_differs_from_process(tmp_git_repo, tmp_path):
     # 準備: プロセスの CWD はリポジトリ外（tmp_git_repo fixture が設定済み）
     assert Path.cwd() == tmp_path
     # 実行
-    res = server._run_git(["rev-parse", "--show-toplevel"], cwd=str(tmp_git_repo))
+    res = server._run_git(["rev-parse", "--show-toplevel"], cwd=str(tmp_git_repo), timeout=GIT_TIMEOUT)
     # 検証
     assert Path(res.stdout.strip()).resolve() == tmp_git_repo.resolve()
+
+
+def test_run_git_when_timeout(tmp_git_repo):
+    """上限を超えた git を打ち切ることを確認する（異常系）。"""
+    # 準備: 確実に上限を超えるコマンドを 0 秒の上限で実行する
+    # 実行・検証
+    with pytest.raises(subprocess.TimeoutExpired):
+        server._run_git(["-c", "core.pager=cat", "gc"], cwd=str(tmp_git_repo), timeout=0)
+
+
+def test_run_git_when_non_interactive(tmp_git_repo):
+    """認証の対話を無効にして stdin を塞いで実行することを確認する（正常系）。"""
+    # 準備: 実行時の引数を記録する
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    # 実行
+    with mock.patch.object(subprocess, "run", fake_run):
+        server._run_git(["status"], cwd=str(tmp_git_repo), timeout=30)
+    # 検証: 応答できる人が居ないため、聞かれる前に失敗させる
+    assert captured["stdin"] is subprocess.DEVNULL
+    assert captured["env"]["GIT_TERMINAL_PROMPT"] == "0"
+    assert captured["timeout"] == 30
 
 
 def test_repo_root_when_in_worktree(tmp_git_repo):
@@ -1906,7 +2043,7 @@ def test_repo_root_when_in_worktree(tmp_git_repo):
         capture_output=True,
     )
     # 実行・検証
-    assert server._repo_root(cwd=str(worktree)) == tmp_git_repo
+    assert server._repo_root(cwd=str(worktree), timeout=GIT_TIMEOUT) == tmp_git_repo
 
 
 def test_branch_exists(tmp_git_repo):
@@ -1914,7 +2051,7 @@ def test_branch_exists(tmp_git_repo):
     # 準備
     subprocess.run(["git", "branch", "feat/exists"], cwd=tmp_git_repo, check=True, capture_output=True)
     # 実行
-    result = server._branch_exists("feat/exists", cwd=str(tmp_git_repo))
+    result = server._branch_exists("feat/exists", cwd=str(tmp_git_repo), timeout=GIT_TIMEOUT)
     # 検証
     assert result is True
 
@@ -1922,7 +2059,7 @@ def test_branch_exists(tmp_git_repo):
 def test_branch_exists_when_missing(tmp_git_repo):
     """存在しないローカルブランチで例外にならず False が返ることを確認する（正常系）。"""
     # 実行
-    result = server._branch_exists("feat/missing", cwd=str(tmp_git_repo))
+    result = server._branch_exists("feat/missing", cwd=str(tmp_git_repo), timeout=GIT_TIMEOUT)
     # 検証
     assert result is False
 
@@ -1931,7 +2068,7 @@ def test_worktree_path(tmp_git_repo):
     """ブランチ名のスラッシュ置換によるパス変換を確認する（正常系）。"""
     # 実行・検証
     assert (
-        server._worktree_path("feat/a/b", cwd=str(tmp_git_repo))
+        server._worktree_path("feat/a/b", cwd=str(tmp_git_repo), timeout=GIT_TIMEOUT)
         == tmp_git_repo / ".claude" / "worktrees" / "feat-a-b"
     )
 
@@ -2121,6 +2258,23 @@ def test_to_thread():
     # 検証
     assert result == 42
     assert executed != [threading.get_ident()]
+
+
+def test_to_thread_when_cancelled(monkeypatch):
+    """キャンセル時にスレッドの完了を待たない指定で実行されることを確認する（正常系）。"""
+    # 準備: anyio への委譲引数を記録する
+    captured = {}
+
+    async def fake_run_sync(func, **kwargs):
+        captured.update(kwargs)
+        return func()
+
+    monkeypatch.setattr(server.to_thread, "run_sync", fake_run_sync)
+    # 実行
+    result = asyncio.run(server._to_thread(lambda: 42)())
+    # 検証: 待つと、居なくなった呼び出し 1 件が同じセッションの後続呼び出しまで止める
+    assert result == 42
+    assert captured["abandon_on_cancel"] is True
 
 
 def test_to_thread_when_signature():

@@ -236,14 +236,14 @@ def test_normal_when_no_er(
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     # 準備: 要件確定済みの story Issue と story Draft PR（base=epic ブランチ）+ 単一 UC シナリオ
     story = story_issue_factory(
         epic.number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number), labels=["layer:story"],
     )
-    story_branch = f"feat/story/task-edit-{story.number}"
+    story_branch = f"feat/story/task-edit-{story.number}/base"
     draft_pr_factory(
         story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
     )
@@ -255,7 +255,7 @@ def test_normal_when_no_er(
         labels=["layer:subsystem", "scope:backend"],
     )
     # 準備: タスク一覧承認済みの subsystem Draft PR（base=story ブランチ）+ worktree + 確認:architect
-    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/update-api"
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
     pr = draft_pr_factory(
         subsystem_branch, SUBSYSTEM_TITLE,
         SUBSYSTEM_PR_BODY_TEMPLATE.format(subsystem_number=subsystem.number),
@@ -393,7 +393,7 @@ def _setup_ss_design(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
         epic_labels=["layer:epic", layer_type, *re_label],
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     factories["epic_pr_factory"](
         branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
     )
@@ -402,7 +402,7 @@ def _setup_ss_design(
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
         labels=["layer:story", layer_type, *re_label],
     )
-    story_branch = f"feat/story/task-edit-{story.number}"
+    story_branch = f"feat/story/task-edit-{story.number}/base"
     factories["draft_pr_factory"](
         story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
     )
@@ -414,7 +414,7 @@ def _setup_ss_design(
         body=SUBSYSTEM_BODY_TEMPLATE.format(story_number=story.number),
         labels=["layer:subsystem", layer_type, "scope:backend", *re_label],
     )
-    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/update-api"
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
     pr = factories["draft_pr_factory"](
         subsystem_branch, SUBSYSTEM_TITLE,
         pr_body.format(subsystem_number=subsystem.number), base_branch=story_branch,

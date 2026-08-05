@@ -106,7 +106,7 @@ def _issue_ns(number, labels, assignees=()):
 def _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify, prev=None):
     agents = build_agents(label_settings, agent_settings=agent_settings)
     return run_cycle(
-        mon_settings, agents, registry=mon_registry, prev_targets=prev or {}, last_heartbeat_at=FUTURE, labels=label_settings, gate=RateLimitGate()
+        mon_settings, agents, registry=mon_registry, prev_targets=prev or {}, last_heartbeat_at=FUTURE, labels=label_settings, gate=RateLimitGate(), notified_gates={}
     , notify=notify)
 
 

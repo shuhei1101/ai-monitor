@@ -38,7 +38,7 @@ sequenceDiagram
   activate MON
   MON-->>GH: 紐づく Issue から intake の本文を読み<br>対象範囲を抽出
   MON->>GH: 要件 4 セクションの草案を<br>epic PR 本文に反映
-  MON->>GH: epic PR に完了報告コメントと<br>確認事項コメント（本文から一意に定まらない論点のみ）を投稿
+  MON->>GH: epic PR に確認事項コメント<br>（本文から一意に定まらない論点のみ）を投稿
   MON->>GH: epic PR に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 
@@ -115,7 +115,7 @@ sequenceDiagram
   MON->>GH: 要件 4 セクションの草案を<br>epic PR 本文に反映
   MON-->>REPO: 既存の複合 UC シナリオと<br>照合して修正箇所の有無を判定
   MON->>MON: 判断が分かれる論点が無く<br>複合 UC の修正も不要と確定
-  MON->>GH: epic PR に完了報告コメントを投稿<br>（質問せずに置いた前提を明示・議論中 は付けない）
+  MON->>GH: epic PR に確認事項コメントを投稿<br>（質問せずに置いた前提を明示・議論中 は付けない）
   deactivate MON
 
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
@@ -134,7 +134,7 @@ sequenceDiagram
 - `## ユースケース一覧` が 1 行（起点の intake の対象範囲が 1 操作に閉じているため）
 - `## 横断要件` が定型の `なし（本 epic のユースケースは 1 件のため、ユースケース間を横断する要件は発生しない）` になっている（要件の表を書いていない）
 - `議論中` が付与されず assignee も設定されていない（ユーザーを止めずに通り抜けている）
-- 完了報告コメントに、質問せずに前提として置いた判断とその根拠が書かれている
+- 確認事項コメントに、質問せずに前提として置いた判断とその根拠が書かれている
 - 複合UCシナリオの成果物ブランチと PR が作られていない（epic ブランチ上で作業する担当が居ないため）
 - epic PR 本文に `## タスク一覧` が無い
 - story ブランチと Draft PR が作成され `確認:story-conductor` が付与されている
@@ -250,7 +250,7 @@ sequenceDiagram
   MON-->>GH: 親 system PR の エピック一覧から<br>当該 epic の範囲と所属 UC を読む
   MON-->>REPO: epic ブランチの現状モックと現状シナリオから<br>現在の振る舞いを把握
   MON->>GH: 概要 / 背景 / 横断要件を現状の設計書から逆算して<br>epic PR 本文に反映
-  MON->>GH: epic PR に完了報告コメントと<br>確認事項コメント（実装と要件が乖離している箇所・<br>あるべき姿に直す範囲）を投稿
+  MON->>GH: epic PR に確認事項コメント<br>（実装と要件が乖離している箇所・<br>あるべき姿に直す範囲）を投稿
   MON->>GH: epic PR に 議論中 付与 +<br>assignee=ユーザー 設定
   deactivate MON
 

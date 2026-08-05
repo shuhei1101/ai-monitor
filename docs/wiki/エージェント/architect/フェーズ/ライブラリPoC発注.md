@@ -6,7 +6,7 @@
 
 ### PoC ブランチと PoC PR の作成
 
-subsystem ブランチ名 `{type}/{scope}/{ドメイン}/{UC名}/{変更内容}` から scope・ドメイン・UC 名を取り出す。
+subsystem ブランチ名 `{type}/{scope}/{ドメイン}/{UC名}/base` から scope・ドメイン・UC 名を取り出す。
 
 候補ごとに MCP `worktree_create` を呼ぶ:
 - `branch`: `poc/{scope}/{ドメイン}/{UC名}/{lib名}`

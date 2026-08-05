@@ -1,6 +1,6 @@
-# 子epic起票
+# 子epicPR作成
 
-system PR の `## エピック一覧` から epic PR を一括起票し、着手順の先頭だけを epic-conductor に渡す。
+system PR の `## エピック一覧` から epic PR を一括作成し、着手順の先頭だけを epic-conductor に渡す。
 
 ## 手順
 
@@ -17,7 +17,7 @@ epic ごとに `## 紐づく Issue`（自 PR と同じ起点の Issue 番号）�
 ### 子 epic ブランチの作成
 
 epic 1 件ごとに MCP `worktree_create` を呼ぶ:
-- `branch`: `{type}/epic/{ドメイン}`（規約『ブランチ戦略』の命名形式）
+- `branch`: `{type}/epic/{ドメイン}/base`（規約『ブランチ戦略』の命名形式）
 - `base_ref`: `origin/{自分の system ブランチ}`
 
 ### 子 epic PR の作成
@@ -65,8 +65,8 @@ MCP `resolve_comments` を呼ぶ:
 
 ### 監視面の整理
 
-system PR は最上位（親 Issue を持たない）なので、後片付けは本エージェントが担う（共通ルール『最終マージの判定』）。
-起票した epic の進行中は epic 側の conductor が自分の監視面を持つため、ここでは自分の監視面に PR 番号が残っていないことだけを確認する。
+system PR は最上位（base が `master` で親レイヤーの PR を持たない）なので、後片付けは本エージェントが担う（共通ルール『最終マージの判定』）。
+作成した epic の進行中は epic 側の conductor が自分の監視面を持つため、ここでは自分の監視面に PR 番号が残っていないことだけを確認する。
 
 - 残っている番号がある場合、MCP `remove_watch_targets` で除去する（`agent_name`: `system-conductor`・`number`: $number）
 

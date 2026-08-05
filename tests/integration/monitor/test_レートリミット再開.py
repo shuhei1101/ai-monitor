@@ -52,7 +52,7 @@ def _cycle(mon_settings, label_settings, agent_settings, mon_registry, gate, not
     agents = build_agents(label_settings, agent_settings=agent_settings)
     return run_cycle(
         mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=PAST,
-        labels=label_settings, gate=gate,
+        labels=label_settings, gate=gate, notified_gates={},
      notify=notify)
 
 

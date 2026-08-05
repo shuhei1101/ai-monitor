@@ -95,14 +95,14 @@ def test_normal_when_new_project(
     assert "layer:system" in labels, f"layer:system が付与されていない: {sorted(labels)}"
     assert "type:feat" in labels, f"type:feat が付与されていない: {sorted(labels)}"
 
-    # 検証: エピック一覧が未起票のまま並び、着手順に重複がない
+    # 検証: エピック一覧が未作成のまま並び、着手順に重複がない
     body = (data.body or "").replace("\r\n", "\n")
     epic_rows = [
         line for line in body.split("## エピック一覧", 1)[1].splitlines()
         if line.startswith("|") and "---" not in line and "エピック名" not in line
     ]
     assert epic_rows, "エピック一覧に行がない"
-    assert all("未起票" in row for row in epic_rows), f"対応 Issue 列が全行 未起票 でない: {epic_rows}"
+    assert all("未作成" in row for row in epic_rows), f"対応 PR 列が全行 未作成 でない: {epic_rows}"
     orders = [cell.strip() for row in epic_rows for cell in row.split("|")[1:-1]]
     numeric = [cell for cell in orders if cell.isdigit()]
     assert len(numeric) == len(set(numeric)), f"着手順が重複している: {numeric}"

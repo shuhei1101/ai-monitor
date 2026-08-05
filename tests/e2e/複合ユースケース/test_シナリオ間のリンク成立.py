@@ -11,10 +11,10 @@ INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集できる機能を追加する。"
 
 EPIC_TITLE = "タスク編集機能"
-# 子storyPR作成 の起動条件に合わせて 対応 story 列は 未起票 のままにする
-EPIC_BODY = """## 前提条件
+# 子storyPR作成 の起動条件に合わせて 対応 story 列は 未作成 のままにする
+EPIC_PR_BODY = """## 紐づく Issue
 
-なし
+- #{intake_number}
 
 ## 概要
 
@@ -26,13 +26,30 @@ EPIC_BODY = """## 前提条件
 
 ## ユースケース一覧
 
-| UC 名 | 概要 | 対応 story |
-| --- | --- | --- |
-| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 未起票 |
+| ユースケース | 変更種別 | 概要 | 対応 story | 補足 |
+| --- | --- | --- | --- | --- |
+| タスク編集 | 変更 | 一覧から編集画面へ遷移して編集内容を保存する | 未作成 | - |
 
 ## 横断要件
 
-- 保存時は既存 API を利用する
+| カテゴリ | 要件 | 対象 UC | 補足 |
+| --- | --- | --- | --- |
+| 既存 API | 保存時は既存 API を利用する | 全 UC | - |
+
+## タスク一覧
+
+- [ ] 複合ユースケースシナリオを作成
+"""
+
+SCENARIO_REQUEST = """> from: @epic-conductor
+> to: @complex-scenario-writer
+
+複合ユースケースシナリオの設計をお願いします。
+
+- 親 epic PR の `## ユースケース一覧` を元に、UC をまたぐ業務フローを起こしてください
+- 成果物は本 PR に commit してください
+
+------
 """
 
 COMPLEX_DIR = "docs/wiki/設計図/シナリオ/複合ユースケース/"
@@ -49,6 +66,15 @@ def _issue(gh_live, owner, repo, number):
 def _label_names(data) -> set[str]:
     """スナップショットのラベル名集合を返す。"""
     return {label.name for label in data.labels}
+
+
+def _children(gh_live, owner, repo, base_branch) -> list:
+    """指定ブランチを base にした open PR を返す。"""
+    return list(
+        gh_live.rest.pulls.list(
+            owner=owner, repo=repo, state="open", base=base_branch, per_page=100
+        ).parsed_data
+    )
 
 
 def _tree_paths(gh_live, owner, repo, ref, prefix) -> list[str]:
@@ -95,11 +121,11 @@ def _approve(gh_live, owner, repo, number, assignees) -> None:
         )
 
 
-def _cleanup_agent_stories(gh_live, owner, repo, sandbox, story_numbers: list[int]) -> None:
-    """エージェントが起票した story の PR / ブランチ / worktree を片付ける。
+def _cleanup_agent_branches(gh_live, owner, repo, sandbox, numbers: list[int]) -> None:
+    """エージェントが作った PR / ブランチ / worktree を片付ける。
 
-    story Issue 自体は親 intake からの再帰クローズで回収されるが、
-    その PR は本文が story 番号を参照するため親 factory の掃除対象から外れる。
+    起点 intake から辿れない面（story PR とその成果物 PR）は親 factory の掃除対象から外れるため、
+    本文が対象番号を参照している open PR をここで回収する。
     """
     local_path = sandbox["local_path"]
     try:
@@ -107,7 +133,7 @@ def _cleanup_agent_stories(gh_live, owner, repo, sandbox, story_numbers: list[in
     except RequestFailed:
         pulls = []
     for pr in pulls:
-        if not any(f"#{number}" in (pr.body or "") for number in story_numbers):
+        if not any(f"#{number}" in (pr.body or "") for number in numbers):
             continue
         branch = pr.head.ref
         try:
@@ -130,32 +156,46 @@ def _cleanup_agent_stories(gh_live, owner, repo, sandbox, story_numbers: list[in
 
 
 def test_normal(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, sandbox, wait_until,
+    monitor, gh_live, repo_ctx, issue_factory, layer_pr_factory, sandbox, wait_until,
 ):
     """複合シナリオ → 子storyPR作成 → story要件確定 → 単一シナリオでリンクが成立することを確認する（正常系）。"""
     owner, repo = repo_ctx
-    # 準備: ユースケース一覧 確定済みの epic Issue + epic Draft PR + epic ブランチの worktree
-    intake, epic = epic_issue_factory(
-        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
+
+    # 準備: 起点 intake Issue + ユースケース一覧 確定済みの epic PR
+    intake = issue_factory(
+        title=INTAKE_TITLE, body=INTAKE_BODY, labels=["layer:intake", "type:feat"]
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
-    epic_pr = epic_pr_factory(
-        branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
+    epic_branch = f"feat/epic/task-edit-{intake.number}/base"
+    epic_pr = layer_pr_factory(
+        epic_branch, EPIC_TITLE, EPIC_PR_BODY.format(intake_number=intake.number),
+        labels=["layer:epic", "type:feat"],
     )
     _add_worktree(sandbox["local_path"], epic_branch)
+
+    # 準備: 複合UCシナリオの成果物 PR（base=epic ブランチ）と設計依頼
+    scenario_branch = f"docs/epic/task-edit-{intake.number}/scenario"
+    scenario_pr = layer_pr_factory(
+        scenario_branch, f"{EPIC_TITLE}（複合ユースケースシナリオ）",
+        f"## 紐づく Issue\n\n- #{intake.number}\n", base_branch=epic_branch,
+    )
+    _add_worktree(sandbox["local_path"], scenario_branch)
+    gh_live.rest.issues.create_comment(
+        owner=owner, repo=repo, issue_number=scenario_pr.number, body=SCENARIO_REQUEST
+    )
     gh_live.rest.issues.add_labels(
-        owner=owner, repo=repo, issue_number=epic_pr.number, labels=["確認:complex-scenario-writer"]
+        owner=owner, repo=repo, issue_number=scenario_pr.number,
+        labels=["確認:complex-scenario-writer"],
     )
 
-    story_numbers: list[int] = []
+    tracked: list[int] = [epic_pr.number, scenario_pr.number]
     try:
         # 実行: 複合シナリオ設計（作成 → 待機）を待つ
         def _complex_scenario_done():
-            data = _issue(gh_live, owner, repo, epic_pr.number)
+            data = _issue(gh_live, owner, repo, scenario_pr.number)
             names = _label_names(data)
             if "議論中" not in names or not data.assignees:
                 return None
-            files = _tree_paths(gh_live, owner, repo, epic_branch, COMPLEX_DIR)
+            files = _tree_paths(gh_live, owner, repo, scenario_branch, COMPLEX_DIR)
             return (data, files) if files else None
 
         pr_data, complex_files = wait_until(
@@ -163,53 +203,60 @@ def test_normal(
             message="複合シナリオ設計の完了（議論中 + assignee + 複合UC .md commit）",
         )
 
-        # 検証: 複合UC .md が epic ブランチに新規 commit されている
+        # 検証: 複合UC .md が成果物ブランチに新規 commit されている
         master_paths = set(_tree_paths(gh_live, owner, repo, "master", COMPLEX_DIR))
         new_complex = [path for path in complex_files if path not in master_paths]
         assert new_complex, f"新規追加された複合UC .md が見つからない: {complex_files}"
 
         # 準備: ユーザー承認（複合シナリオの確定）
-        _approve(gh_live, owner, repo, epic_pr.number, pr_data.assignees)
+        _approve(gh_live, owner, repo, scenario_pr.number, pr_data.assignees)
 
-        # 実行: 完了報告 → epic-conductor の子storyPR作成 を待つ
+        # 実行: 成果物 PR のマージ → epic-conductor の子storyPR作成 を待つ
         def _stories_created():
-            epic_now = _issue(gh_live, owner, repo, epic.number)
+            epic_now = _issue(gh_live, owner, repo, epic_pr.number)
             if any(name.startswith("確認:") for name in _label_names(epic_now)):
                 return None
-            subs = gh_live.rest.issues.list_sub_issues(
-                owner=owner, repo=repo, issue_number=epic.number
-            ).parsed_data
-            return (epic_now, subs) if subs else None
+            stories = [
+                pr for pr in _children(gh_live, owner, repo, epic_branch)
+                if "layer:story" in _label_names(_issue(gh_live, owner, repo, pr.number))
+            ]
+            return (epic_now, stories) if stories else None
 
         epic_now, stories = wait_until(
-            _stories_created, timeout_sec=1800, message="子storyPR作成の完了（story Issue 起票 + 確認:* 除去）"
+            _stories_created, timeout_sec=2400, message="子storyPR作成の完了（story PR 作成 + 確認:* 除去）"
         )
-        story_numbers = [story.number for story in stories]
+        tracked += [pr.number for pr in stories]
 
-        # 検証: ユースケース一覧の行数と同数の story が layer:story + 確認:story-conductor で起票されている
+        # 検証: ユースケース一覧の行数と同数の story PR が layer:story + 確認:story-conductor で作られている
         uc_rows = [
             line for line in (epic_now.body or "").replace("\r\n", "\n")
             .split("## ユースケース一覧", 1)[1].split("\n## ", 1)[0].splitlines()
             if line.startswith("|")
         ][2:]
         assert len(stories) == len(uc_rows), (
-            f"ユースケース一覧 {len(uc_rows)} 行に対し story が {len(stories)} 件"
+            f"ユースケース一覧 {len(uc_rows)} 行に対し story PR が {len(stories)} 件"
         )
         for story in stories:
-            names = _label_names(story)
+            names = _label_names(_issue(gh_live, owner, repo, story.number))
             assert "layer:story" in names, f"#{story.number} に layer:story がない: {sorted(names)}"
             assert "確認:story-conductor" in names, (
                 f"#{story.number} に 確認:story-conductor がない: {sorted(names)}"
             )
-        assert "未起票" not in (epic_now.body or ""), "対応 story 列に 未起票 が残っている"
-        for number in story_numbers:
-            assert f"#{number}" in (epic_now.body or ""), f"対応 story 列に #{number} が反映されていない"
+        assert "未作成" not in (epic_now.body or ""), "対応 story 列に 未作成 が残っている"
+        for story in stories:
+            assert f"#{story.number}" in (epic_now.body or ""), (
+                f"対応 story 列に #{story.number} が反映されていない"
+            )
 
-        story = stories[0]
+        story_pr = stories[0]
+        story_branch = story_pr.head.ref
+        assert story_pr.base.ref == epic_branch, (
+            f"story PR の base が epic ブランチでない: {story_pr.base.ref}"
+        )
 
         # 実行: story要件確定（本文確定 → 待機）を待つ
         def _story_requirements_done():
-            data = _issue(gh_live, owner, repo, story.number)
+            data = _issue(gh_live, owner, repo, story_pr.number)
             names = _label_names(data)
             return data if "議論中" in names and data.assignees else None
 
@@ -218,77 +265,60 @@ def test_normal(
             message="story要件確定の完了（議論中 + assignee）",
         )
 
-        # 検証: story 本文に 4 セクションが揃い、親 epic の UC との対応が書かれている
+        # 検証: story PR 本文に必須セクションが揃っている
         story_body = (story_data.body or "").replace("\r\n", "\n")
-        for section in ("## 前提条件", "## 概要", "## 背景", "## ユースケース要件"):
-            assert section in story_body, f"story 本文に {section} がない"
-        assert f"#{epic.number}" in story_body, "story 本文の 背景 に親 epic の番号がない"
+        for section in ("## 紐づく Issue", "## 概要", "## 背景", "## ユースケース要件"):
+            assert section in story_body, f"story PR 本文に {section} がない"
 
         # 準備: ユーザー承認（story 要件の確定）
-        _approve(gh_live, owner, repo, story.number, story_data.assignees)
+        _approve(gh_live, owner, repo, story_pr.number, story_data.assignees)
 
-        # 実行: story Draft PR の作成 + 確認:single-scenario-writer の付与を待つ
-        def _story_pr_created():
-            story_now = _issue(gh_live, owner, repo, story.number)
+        # 実行: 単一UCシナリオの成果物 PR 作成 + 確認:single-scenario-writer の付与を待つ
+        def _scenario_pr_created():
+            story_now = _issue(gh_live, owner, repo, story_pr.number)
             if "確認:story-conductor" in _label_names(story_now):
                 return None
-            pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-            candidates = [p for p in pulls if f"#{story.number}" in (p.body or "")]
-            if not candidates:
-                return None
-            pr = candidates[0]
-            labels = {label.name for label in pr.labels}
-            return pr if "確認:single-scenario-writer" in labels else None
+            for pr in _children(gh_live, owner, repo, story_branch):
+                labels = _label_names(_issue(gh_live, owner, repo, pr.number))
+                if "確認:single-scenario-writer" in labels:
+                    return pr
+            return None
 
-        story_pr = wait_until(
-            _story_pr_created, timeout_sec=1800,
-            message="story Draft PR の作成（確認:single-scenario-writer 付与）",
+        single_pr = wait_until(
+            _scenario_pr_created, timeout_sec=1800,
+            message="単一UCシナリオの成果物 PR 作成（確認:single-scenario-writer 付与）",
         )
-        story_branch = story_pr.head.ref
-        assert story_pr.base.ref == epic_branch, (
-            f"story PR の base が epic ブランチでない: {story_pr.base.ref}"
-        )
+        tracked.append(single_pr.number)
+        single_branch = single_pr.head.ref
 
         # 実行: 単一シナリオ設計（作成 → 待機）を待つ
         def _single_scenario_done():
-            data = _issue(gh_live, owner, repo, story_pr.number)
+            data = _issue(gh_live, owner, repo, single_pr.number)
             names = _label_names(data)
             if "議論中" not in names or not data.assignees:
                 return None
-            files = _tree_paths(gh_live, owner, repo, story_branch, SINGLE_DIR)
+            files = _tree_paths(gh_live, owner, repo, single_branch, SINGLE_DIR)
             return (data, files) if files else None
 
-        story_pr_data, single_files = wait_until(
+        single_data, single_files = wait_until(
             _single_scenario_done, timeout_sec=1800,
             message="単一シナリオ設計の完了（議論中 + assignee + 単一UC .md commit）",
         )
 
-        # 検証: 単一UC .md が story ブランチに新規 commit されている
+        # 検証: 単一UC .md が成果物ブランチに新規 commit されている
         master_single = set(_tree_paths(gh_live, owner, repo, "master", SINGLE_DIR))
         new_single = [path for path in single_files if path not in master_single]
         assert new_single, f"新規追加された単一UC .md が見つからない: {single_files}"
 
         # 準備: ユーザー承認（単一シナリオの確定）
-        _approve(gh_live, owner, repo, story_pr.number, story_pr_data.assignees)
+        _approve(gh_live, owner, repo, single_pr.number, single_data.assignees)
 
-        # 実行: 単一シナリオ設計の完了処理（親 story への完了報告）を待つ
-        def _single_scenario_wrapped_up():
-            pr_now = _issue(gh_live, owner, repo, story_pr.number)
-            story_now = _issue(gh_live, owner, repo, story.number)
-            if "確認:single-scenario-writer" in _label_names(pr_now):
-                return None
-            return story_now if "確認:story-conductor" in _label_names(story_now) else None
-
-        wait_until(
-            _single_scenario_wrapped_up, timeout_sec=1800,
-            message="単一シナリオ設計の完了処理（親 story への完了報告）",
-        )
-
-        # 実行: story ブランチを epic ブランチへ取り込む（後続工程のマージ相当）
-        gh_live.rest.repos.merge(
-            owner=owner, repo=repo, base=epic_branch, head=story_branch,
-            commit_message=f"chore: e2e 用に {story_branch} を取り込み",
-        )
+        # 実行: 成果物ブランチを epic ブランチへ取り込む（後続のマージ相当）
+        for head in (single_branch, story_branch):
+            gh_live.rest.repos.merge(
+                owner=owner, repo=repo, base=epic_branch, head=head,
+                commit_message=f"chore: e2e 用に {head} を取り込み",
+            )
 
         # 検証: 複合UC の click リンクが単一UC ファイルとして epic ブランチに実在する
         merged_single = set(_tree_paths(gh_live, owner, repo, epic_branch, SINGLE_DIR))
@@ -315,4 +345,4 @@ def test_normal(
                 checked += 1
         assert checked, "検証した click リンクが 0 件"
     finally:
-        _cleanup_agent_stories(gh_live, owner, repo, sandbox, story_numbers)
+        _cleanup_agent_branches(gh_live, owner, repo, sandbox, tracked)

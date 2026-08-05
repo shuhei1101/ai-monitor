@@ -42,7 +42,7 @@ def _register_poc_session(mon_registry):
 
 def _cycle(mon_settings, label_settings, agent_settings, mon_registry, notify):
     agents = build_agents(label_settings, agent_settings=agent_settings)
-    return run_cycle(mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=FUTURE, labels=label_settings, gate=RateLimitGate(), notify=notify)
+    return run_cycle(mon_settings, agents, registry=mon_registry, prev_targets={}, last_heartbeat_at=FUTURE, labels=label_settings, gate=RateLimitGate(), notified_gates={}, notify=notify)
 
 
 def test_normal(gh_mon, tmux_calls, mon_settings, label_settings, agent_settings, mon_registry, notify):

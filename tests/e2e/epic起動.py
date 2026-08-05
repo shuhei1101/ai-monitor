@@ -8,8 +8,8 @@ from __future__ import annotations
 import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import approve, comments, issue, label_names, waiting_for_user
 
-# 要件確定で epic Issue 本文に揃うセクション
-EPIC_SECTIONS = ["## 前提条件", "## 概要", "## 背景", "## ユースケース一覧", "## 横断要件"]
+# 要件確定で epic PR 本文に揃うセクション（PR 本文テンプレート『エピック』の必須セクション）
+EPIC_SECTIONS = ["## 紐づく Issue", "## 概要", "## 背景", "## ユースケース一覧", "## 横断要件"]
 
 
 def _no_confirm_label(data) -> bool:

@@ -98,8 +98,8 @@ ARCHITECTURE_RE_REPORT = """> from: @architecture-reverse-engineer
 ------
 """
 
-# 構成要件まで確定済みの system Issue 本文（土台生成 / 子epicPR作成 の起点）
-SYSTEM_ISSUE_BODY = """## 概要
+# 要件セクションだけを取り出したもの（system PR 本文の組み立てに使う）
+SYSTEM_REQUIREMENTS = """## 概要
 
 タスクを登録して編集・一覧できる個人向けのタスク管理ツール。
 
@@ -118,17 +118,13 @@ SYSTEM_ISSUE_BODY = """## 概要
 
 ## エピック一覧
 
-| エピック名 | 概要 | 所属ユースケース | 着手順 | 対応 Issue |
-| --- | --- | --- | --- | --- |
-| タスク編集機能 | 登録済みタスクのタイトルと本文を編集する | タスク編集 | 1 | 未起票 |
-| タスク一覧機能 | 登録済みタスクを一覧で確認する | タスク一覧 | 2 | 未起票 |
+| エピック | 概要 | 所属ユースケース | 着手順 | 対応 PR | 補足 |
+| --- | --- | --- | --- | --- | --- |
+| タスク編集機能 | 登録済みタスクのタイトルと本文を編集する | タスク編集 | 1 | 未作成 | - |
+| タスク一覧機能 | 登録済みタスクを一覧で確認する | タスク一覧 | 2 | 未作成 | タスク編集機能の完了後 |
 """
 
-SYSTEM_PR_BODY = """## 紐づく Issue
-
-- #{system_number}
-
-## タスク一覧
+SYSTEM_TASKS = """## タスク一覧
 
 - [ ] `docs/wiki/` の骨格と `docs/rules.yaml` を生成
 - [ ] `設計図/アーキテクチャ図.md` を作成
@@ -139,8 +135,22 @@ SYSTEM_PR_BODY = """## 紐づく Issue
 - [ ] GitHub ラベルを一括作成
 """
 
+SYSTEM_PR_BODY = """## 紐づく Issue
+
+- #{system_number}
+
+""" + SYSTEM_TASKS
+
+# 要件まで確定済みの system PR 本文（土台生成 / 子epicPR作成 の起点）
+# 面が Issue から PR へ移ったため、要件の置き場所は立ち上げ Issue ではなく PR 本文になる
+SYSTEM_PR_BODY_CONFIRMED = """## 紐づく Issue
+
+- #{system_number}
+
+""" + SYSTEM_REQUIREMENTS + "\n" + SYSTEM_TASKS
+
 # 土台生成が終わってタスク一覧を消化済みの system PR 本文（system マージ の起点）
-SYSTEM_PR_BODY_DONE = SYSTEM_PR_BODY.replace("- [ ]", "- [x]")
+SYSTEM_PR_BODY_DONE = SYSTEM_PR_BODY_CONFIRMED.replace("- [ ]", "- [x]")
 
 # system-architect が生成済みの土台（system マージ の seed）
 FOUNDATION_FILES = {
@@ -245,14 +255,14 @@ def setup_re_target(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
         epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}"
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
     epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     story = story_issue_factory(
         epic.number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
         labels=["layer:story", "type:docs", "リバースエンジニアリング"],
     )
-    story_branch = f"feat/story/task-edit-{story.number}"
+    story_branch = f"feat/story/task-edit-{story.number}/base"
     draft_pr_factory(
         story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
     )
@@ -268,6 +278,42 @@ def setup_re_target(
         "story": story,
         "story_branch": story_branch,
         "subsystem": subsystem,
+    }
+
+
+def setup_system_with_foundation(
+    gh_live, owner, repo, system_issue_factory, layer_pr_factory, commit_file,
+    *, pr_labels: list[str], re_route: bool = False,
+):
+    """立ち上げ Issue + 要件確定済みの system PR + マージ済みの土台生成成果物 PR を用意する。
+
+    子epicPR作成 の起動条件が「土台生成の成果物 PR が merged」なので、
+    成果物ブランチを切って squash マージするところまで再現する。
+    """
+    issue_labels = ["layer:system", "type:docs" if re_route else "type:feat"]
+    if re_route:
+        issue_labels.append("リバースエンジニアリング")
+    system = system_issue_factory(SYSTEM_TITLE, SYSTEM_BODY, labels=issue_labels)
+    branch = system_branch(system.number)
+    system_pr = layer_pr_factory(
+        branch, SYSTEM_TITLE, SYSTEM_PR_BODY_CONFIRMED.format(system_number=system.number),
+        labels=pr_labels,
+    )
+    # 土台生成の成果物 PR（base=system ブランチ）を作り、成果物を積んでからマージする
+    artifact_branch = foundation_branch(system.number)
+    artifact_pr = layer_pr_factory(
+        artifact_branch, "土台生成", f"## 紐づく Issue\n\n- #{system.number}\n", base_branch=branch,
+    )
+    for path, content in FOUNDATION_FILES.items():
+        commit_file(artifact_branch, path, content, f"docs: e2e 用に {path} を配置")
+    gh_live.rest.pulls.merge(
+        owner=owner, repo=repo, pull_number=artifact_pr.number, merge_method="squash"
+    )
+    return {
+        "system": system,
+        "system_pr": system_pr,
+        "branch": branch,
+        "artifact_pr": artifact_pr,
     }
 
 
@@ -292,5 +338,13 @@ def re_branch(number: int) -> str:
 
 
 def system_branch(number: int) -> str:
-    """system PR のブランチ名を返す。"""
-    return f"docs/system/task-{number}"
+    """system PR のブランチ名（レイヤーブランチ）を返す。"""
+    return f"docs/system/task-{number}/base"
+
+
+def foundation_branch(number: int) -> str:
+    """土台生成の成果物ブランチ名を返す。
+
+    レイヤーブランチと兄弟にする（`.../base` の配下に置くと git の ref 名前空間で衝突する）。
+    """
+    return f"docs/system/task-{number}/foundation"

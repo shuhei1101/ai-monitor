@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from pathlib import Path
 
 import yaml
@@ -18,8 +18,16 @@ def load_sessions(path: Path) -> list[AgentSession]:
     if not path.exists():
         return []
     entries = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    # 旧版が書いたキーは読み飛ばす（台帳は実行時の記録なので、項目を減らした版で起動できなくしない）
+    known = {f.name for f in fields(AgentSession)}
+    dropped = sorted({key for entry in entries for key in entry if key not in known})
+    if dropped:
+        logger.warning("台帳の未知の項目を読み飛ばしました: path=%s keys=%s", path, dropped)
     # 各エントリを AgentSession に変換して返す
-    sessions = [AgentSession(**entry) for entry in entries]
+    sessions = [
+        AgentSession(**{key: value for key, value in entry.items() if key in known})
+        for entry in entries
+    ]
     logger.info("セッション台帳を復元しました: path=%s count=%s", path, len(sessions))
     return sessions
 

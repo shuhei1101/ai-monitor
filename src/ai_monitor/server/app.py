@@ -85,6 +85,8 @@ def create_app(
     mcp_app = build_mcp_app(settings, registry=registry, agents=agents, label_settings=label_settings)
     # 上限の待機状態は到達通知の受信とポーリングループで共有する（上限はアカウント単位なので 1 つだけ持つ）
     gate = RateLimitGate()
+    # ユーザー確認ゲートの通知済み番号（1 面を複数セッションが監視するためプロジェクト単位で持つ）
+    notified_gates: dict[str, set[int]] = {}
 
     # lifespan で MCP のセッション管理を開始し、その内側でポーリングループを起動する
     @asynccontextmanager
@@ -112,6 +114,7 @@ def create_app(
                         last_heartbeat_at=heartbeat_at,
                         labels=label_settings,
                         gate=gate,
+                        notified_gates=notified_gates,
                         notify=notify,
                     )
                     # 監視役の生存を見る（落ちていれば再起動して通知する）

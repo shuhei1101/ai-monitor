@@ -127,14 +127,14 @@ def test_normal(
     missing = [d for d in EXPECTED_DESIGN_DIRS if not _exists(gh_live, owner, repo, d, "master")]
     assert not missing, f"先頭 epic の範囲の設計書が master に揃っていない: {missing}"
 
-    # 検証: エピック一覧の 対応 Issue 列が全行 #N に更新されている
+    # 検証: エピック一覧の 対応 PR 列が全行 #N に更新されている
     body = (issue(gh_live, owner, repo, system.number).body or "").replace("\r\n", "\n")
     epic_rows = [
         line for line in body.split("## エピック一覧", 1)[1].splitlines()
         if line.startswith("|") and "---" not in line and "エピック名" not in line
     ]
-    assert epic_rows and not any("未起票" in row for row in epic_rows), (
-        f"対応 Issue 列が更新されていない: {epic_rows}"
+    assert epic_rows and not any("未作成" in row for row in epic_rows), (
+        f"対応 PR 列が更新されていない: {epic_rows}"
     )
 
     # 検証: 2 本目以降の epic は open のまま確認ラベルなしで残っている
