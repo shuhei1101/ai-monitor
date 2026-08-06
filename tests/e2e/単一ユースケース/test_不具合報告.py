@@ -17,7 +17,8 @@ from tests.e2e.統合テスト import STORY_PR_BODY, setup_story, story_branch_f
 
 # 起票されるのはテストデータなので、起票先を sandbox へ上書きした別実行で回す
 # （複製 Wiki のページ差し替えが他テストからも見えるため直列実行も前提）
-pytestmark = pytest.mark.defect_report
+# 起票先の上書き（defect_report）に加え、手順書を書き換えるので単独で走らせる（serial）
+pytestmark = [pytest.mark.defect_report, pytest.mark.serial]
 
 PHASE_PAGE = "エージェント/single-scenario-writer/フェーズ/統合テスト割り当て.md"
 

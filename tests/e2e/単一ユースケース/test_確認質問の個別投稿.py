@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import pytest
+
 import re
 
 INTAKE_TITLE = "顧客一覧に絞り込みを追加したい"
@@ -60,6 +62,7 @@ MCP `report_completion` を呼ぶ:
 """
 
 
+@pytest.mark.serial
 def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, broken_phase_page, wait_until):
     """質問 3 件が 3 コメントに分かれて投稿されることを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx

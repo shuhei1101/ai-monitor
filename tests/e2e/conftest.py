@@ -35,14 +35,40 @@ def pytest_addoption(parser):
 
 
 def pytest_collection_modifyitems(config, items):
-    """--run-e2e なしでは E2E テスト（本フォルダ配下）を全 skip する。"""
-    if config.getoption("--run-e2e"):
+    """--run-e2e なしでは E2E テスト（本フォルダ配下）を全 skip する。
+
+    あわせて `serial` マーカーのテストが並列実行に混ざっていないかを収集時点で確かめる。
+    """
+    if not config.getoption("--run-e2e"):
+        skip_marker = pytest.mark.skip(reason="--run-e2e なしのため skip")
+        e2e_dir = Path(__file__).resolve().parent
+        for item in items:
+            if item.path.resolve().is_relative_to(e2e_dir):
+                item.add_marker(skip_marker)
         return
-    skip_marker = pytest.mark.skip(reason="--run-e2e なしのため skip")
-    e2e_dir = Path(__file__).resolve().parent
-    for item in items:
-        if item.path.resolve().is_relative_to(e2e_dir):
-            item.add_marker(skip_marker)
+    _reject_serial_in_parallel(config, items)
+
+
+def _reject_serial_in_parallel(config, items) -> None:
+    """`serial` のテストが並列実行に混ざっていたら実行を止める。
+
+    共有資源（モニターの設定・複製 Wiki）を書き換えるため、他テストと同時に走らせると
+    影響を受けた側の結果が読めなくなる。実行し始めてから気づけないので収集時点で落とす。
+    """
+    # worker 側は controller の判定に従う（同じ判定を各 worker で繰り返さない）
+    if hasattr(config, "workerinput"):
+        return
+    if (getattr(config.option, "numprocesses", None) or 0) < 2:
+        return
+    serial = sorted({item.nodeid for item in items if item.get_closest_marker("serial")})
+    if not serial:
+        return
+    raise pytest.UsageError(
+        "`serial` のテストは並列実行できません（規約『テスト実行方法』の直列オンリーのテスト）。\n"
+        "並列側から外す: -m \"not serial and not defect_report\"\n"
+        "直列側だけ回す: -m \"serial\"（-n は付けない）\n"
+        "混ざっていたテスト:\n  " + "\n  ".join(serial)
+    )
 
 
 def pytest_sessionstart(session):
@@ -170,15 +196,22 @@ def e2e_state_path() -> Path:
 
 
 @pytest.fixture(scope="session")
-def ai_monitor_wiki(e2e_settings_path) -> Path:
-    """ai-monitor の Wiki を `.e2e/wiki` へ複製し、そのパスを返す。
+def ai_monitor_wiki(request, e2e_settings_path) -> Path:
+    """モニターに読ませる ai-monitor Wiki のパスを返す。
 
-    エージェントに欠けた手順書を読ませるテスト（不具合報告）が手順書を書き換えるため、
-    実クローンではなく複製を読ませる。
-    起動役だけが複製し、相乗り側は出来上がったものを使う。
+    既定は実クローンを直読みする（手順書を直すと次のエージェント起動から効く）。
+    手順書を書き換えるテスト（`serial` マーカー）を含む実行のときだけ複製を読ませ、
+    実クローンを汚さないようにする。
     """
     source = Path(yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8"))["ai_monitor_wiki_base"])
-    return SHARED_DIR / "wiki" if source.is_dir() else source
+    if not source.is_dir():
+        return source
+    return SHARED_DIR / "wiki" if _has_serial(request.session) else source
+
+
+def _has_serial(session) -> bool:
+    """この実行に `serial` マーカーのテストが含まれるかを返す。"""
+    return any(item.get_closest_marker("serial") for item in session.items)
 
 
 @pytest.fixture(scope="session")
@@ -202,9 +235,9 @@ def monitor(e2e_settings_path, e2e_state_path, ai_monitor_wiki):
     if is_owner:
         # 前回の実行が残したポートファイルを消す（古い番号へ繋ぎに行かないため）
         port_path.unlink(missing_ok=True)
-        # 手順書を書き換えるテストのために、実クローンではなく複製を読ませる
+        # `serial` 実行のときだけ複製を作る（既定は実クローンを直読みするので複製しない）
         source = Path(yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8"))["ai_monitor_wiki_base"])
-        if source.is_dir():
+        if source.is_dir() and ai_monitor_wiki != source:
             shutil.rmtree(ai_monitor_wiki, ignore_errors=True)
             shutil.copytree(source, ai_monitor_wiki)
         env = os.environ.copy()
