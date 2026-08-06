@@ -1013,12 +1013,20 @@ def setup_subsystem(
     gh_live, owner, repo,
     epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file,
-    *, pr_body: str, artifact: str = "update-api",
+    *, pr_body: str, artifact: str = "update-api", branch_type: str = "feat",
 ):
     """epic / story / subsystem のベース PR と、作業対象の成果物 PR まで用意する。
 
     ベース PR は要件の SoT、成果物 PR は作業する面（タスク一覧を持つ）。
     `pr` / `subsystem_branch` は作業対象（成果物側）を指す。
+
+    `branch_type` / `artifact` で成果物ブランチの段階を選ぶ（規約『ブランチ戦略』の成果物ブランチ）。
+
+    | 段階 | branch_type | artifact |
+    | --- | --- | --- |
+    | インターフェース定義 | `docs` | `interface` |
+    | モジュール構成 | `docs` | `module` |
+    | 実装・テスト | `feat` | 変更内容 |
     """
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
@@ -1047,7 +1055,7 @@ def setup_subsystem(
         SUBSYSTEM_BASE_BODY.format(subsystem_number=subsystem.number), base_branch=story_branch,
     )
     # 作業対象の成果物 PR（base=subsystem ベースブランチ）
-    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/{artifact}"
+    subsystem_branch = f"{branch_type}/backend/task-edit-{subsystem.number}/{artifact}"
     pr = draft_pr_factory(
         subsystem_branch, SUBSYSTEM_TITLE,
         pr_body.format(subsystem_number=subsystem.number), base_branch=subsystem_base_branch,

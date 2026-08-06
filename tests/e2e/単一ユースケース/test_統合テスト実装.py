@@ -123,7 +123,7 @@ def test_normal_single(
     ctx = setup_story(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
-        pr_body=STORY_PR_BODY, files=story_branch_files(),
+        pr_body=STORY_PR_BODY, files=story_branch_files(), artifact="test",
     )
     add_worktree(sandbox["local_path"], ctx["story_branch"])
     seed_sha = branch_sha(gh_live, owner, repo, ctx["story_branch"])
@@ -150,7 +150,7 @@ def test_normal_complex(
     owner, repo = repo_ctx
     ctx = setup_epic(
         gh_live, owner, repo, epic_issue_factory, epic_pr_factory, commit_file,
-        pr_body=EPIC_PR_BODY, files=epic_branch_files(),
+        pr_body=EPIC_PR_BODY, files=epic_branch_files(), artifact="test",
     )
     add_worktree(sandbox["local_path"], ctx["epic_branch"])
     seed_sha = branch_sha(gh_live, owner, repo, ctx["epic_branch"])
@@ -179,7 +179,7 @@ def test_error_when_revision_needed(
     ctx = setup_story(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
-        pr_body=STORY_PR_BODY, files=story_branch_files(),
+        pr_body=STORY_PR_BODY, files=story_branch_files(), artifact="test",
     )
     # story のユースケース要件と矛盾したシナリオを置き、設計書どおりに書けない状態を誘発する
     commit_file(

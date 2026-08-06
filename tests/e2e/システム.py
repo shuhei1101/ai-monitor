@@ -234,10 +234,11 @@ def setup_re_target(
     story_issue_factory, subsystem_issue_factory, commit_file,
     *, subsystem_labels: list[str],
 ):
-    """RE 起動の対象になる subsystem Issue までを用意する（通常 PR は作らない）。
+    """RE 起動の対象になる subsystem のベース PR までを用意する（成果物 PR は作らない）。
 
-    RE は要件確定より前の工程なので、subsystem PR がまだ無い状態から始める。
-    起こす対象の実装コードは story ブランチへ置く（RE ブランチはそこから生える）。
+    RE は要件確定より前の工程だが、面そのものは story-conductor が作ったベース PR。
+    RE ブランチは自レイヤーのブランチから生えるため、ベース PR は RE より先に要る。
+    起こす対象の実装コードは story ブランチへ置く（subsystem ブランチはそこから生える）。
     """
     from tests.e2e.実装対象 import (
         EPIC_BODY,
@@ -271,7 +272,16 @@ def setup_re_target(
     # RE が読む現状の実装コードを置く
     for path, content in PROJECT_FILES.items():
         commit_file(story_branch, path, content, f"chore: e2e 用に {path} を配置")
-    subsystem = subsystem_issue_factory(story.number, SUBSYSTEM_TITLE, labels=subsystem_labels)
+    # subsystem Issue は確認ラベルなしで作る（起動対象はベース PR 側）
+    subsystem = subsystem_issue_factory(story.number, SUBSYSTEM_TITLE, labels=["layer:subsystem"])
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    subsystem_pr = draft_pr_factory(
+        subsystem_branch, SUBSYSTEM_TITLE, f"## 紐づく Issue\n\n- #{intake.number}\n",
+        base_branch=story_branch,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=subsystem_pr.number, labels=subsystem_labels
+    )
     return {
         "intake": intake,
         "epic": epic,
@@ -279,6 +289,8 @@ def setup_re_target(
         "story": story,
         "story_branch": story_branch,
         "subsystem": subsystem,
+        "subsystem_pr": subsystem_pr,
+        "subsystem_branch": subsystem_branch,
     }
 
 

@@ -141,7 +141,7 @@ def test_normal_when_test_bounce(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     # テストの構造が設計から決められないモジュール構成を積む（tester の差し戻しを誘発）
     seed_sha = seed_subsystem_branch(

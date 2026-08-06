@@ -1,6 +1,6 @@
 # subsystemマージ
 
-ユーザーの最終承認を受けて subsystem PR を親 story ブランチへマージし、story-conductor に完了報告する。
+検収を通った subsystem PR を親 story ブランチへマージし、story-conductor に完了報告する。
 
 ## 手順
 

@@ -86,7 +86,7 @@ def _setup_escalated(gh_live, owner, repo, factories, commit_file, sandbox):
         gh_live, owner, repo,
         factories["epic_issue_factory"], factories["epic_pr_factory"], factories["draft_pr_factory"],
         factories["story_issue_factory"], factories["subsystem_issue_factory"], commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     seed_subsystem_branch(
         gh_live, owner, repo, commit_file, ctx["subsystem_branch"],
@@ -240,7 +240,7 @@ def test_normal_when_receive_decision(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     seed_subsystem_branch(
         gh_live, owner, repo, commit_file, ctx["subsystem_branch"],
@@ -298,7 +298,7 @@ def test_normal_when_scenario_fix(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
 
     # 準備: story Issue に subsystem-conductor のエスカレーション報告 + 方針確認ゲートを再現
@@ -353,7 +353,7 @@ def test_normal_when_notify_decision(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     # 準備: 修正済みのシナリオを story ブランチへ積む
     commit_file(

@@ -8,7 +8,7 @@ INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集・削除できる機能を追加する。"
 
 EPIC_TITLE = "タスク編集機能"
-EPIC_BRANCH = "feat/epic/task-edit-{number}"
+EPIC_BRANCH = "feat/epic/task-edit-{number}/base"
 
 # UC 数分の作成を確認するため、ユースケース一覧は 2 行にする
 EPIC_PR_BODY = """## 紐づく Issue

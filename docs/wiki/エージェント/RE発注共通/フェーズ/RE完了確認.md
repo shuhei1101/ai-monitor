@@ -5,6 +5,20 @@
 
 ## 手順
 
+### base の面の確認
+
+初期処理で取得した `parent`（RE PR の base ブランチを head に持つ面）の `state` を見る。
+
+`closed` の場合は上位が作業を畳んだ後なので、起こした成果物を引き取る面が無い。
+マージせず RE PR を畳んで手番を返す（以降の手順は実行しない）。
+
+1. MCP `comment` を呼ぶ（`number`: RE PR の番号・`is_pr`: true・`sender`: `{自分}`・`receiver`: ユーザーログイン名・`format`: `type` が `plain` で `body` が base の面が closed のため RE をマージせず畳む旨と、起こした成果物へのリンク）
+2. MCP `close` を呼ぶ（`number`: RE PR の番号・`reason`: `not_planned`・`delete_branch`: true）
+3. MCP `remove_watch_targets` を呼ぶ（`agent_name`: `{自分}`・`number`: $number・`watch_numbers`: RE PR の番号）
+4. MCP `report_completion` を呼ぶ（`agent_name`: `{自分}`・`number`: RE PR の番号）
+
+成果物は closed PR の diff に残るので、上位が再開したときに読み直せる。
+
 ### 起こされたページの確認
 
 RE ブランチの worktree（`.claude/worktrees/{ブランチ名の / を - に置換}`）へ移動し、`git pull --ff-only` でリモートの最新を取り込む。

@@ -52,12 +52,11 @@ def _setup_re_pr(
         story_issue_factory, subsystem_issue_factory, commit_file,
         subsystem_labels=["layer:subsystem", f"scope:{scope}", "リバースエンジニアリング"],
     )
-    subsystem_number = ctx["subsystem"].number
-    re_branch = f"docs/reverse/{scope}/task-edit-{subsystem_number}"
+    re_branch = f"docs/reverse/{scope}/task-edit-{ctx['subsystem'].number}"
     re_pr = draft_pr_factory(
         re_branch, f"{SUBSYSTEM_TITLE}（現状の設計書）",
-        RE_PR_BODY.format(subsystem_number=subsystem_number),
-        base_branch=ctx["story_branch"],
+        RE_PR_BODY.format(subsystem_number=ctx["subsystem_pr"].number),
+        base_branch=ctx["subsystem_branch"],
     )
     ctx["re_branch"] = re_branch
     ctx["re_pr"] = re_pr
@@ -105,7 +104,7 @@ def test_normal(
     )
 
     # 検証: 設計書が RE ブランチに commit されている
-    changed = _changed_files(gh_live, owner, repo, ctx["story_branch"], ctx["re_branch"])
+    changed = _changed_files(gh_live, owner, repo, ctx["subsystem_branch"], ctx["re_branch"])
     design_files = [f for f in changed if f.startswith("docs/wiki/設計図/")]
     assert design_files, f"現状の設計書が commit されていない: {changed}"
 
@@ -176,7 +175,7 @@ def test_error_when_no_target(
     )
 
     # 検証: 設計書が 1 ページも commit されていない
-    changed = _changed_files(gh_live, owner, repo, ctx["story_branch"], ctx["re_branch"])
+    changed = _changed_files(gh_live, owner, repo, ctx["subsystem_branch"], ctx["re_branch"])
     design_files = [f for f in changed if f.startswith("docs/wiki/設計図/")]
     assert not design_files, f"実装が無いのに設計書が commit されている: {design_files}"
 

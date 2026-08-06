@@ -75,7 +75,7 @@ def test_normal(
     ctx = setup_epic(
         gh_live, owner, repo, epic_issue_factory, epic_pr_factory, commit_file,
         pr_body=EPIC_PR_BODY_WITH_TABLE,
-        files=epic_branch_files(service=BUGGY_SERVICE_PY, complex_e2e_test=COMPLEX_E2E_TEST_PY),
+        files=epic_branch_files(service=BUGGY_SERVICE_PY, complex_e2e_test=COMPLEX_E2E_TEST_PY), artifact="test",
     )
     # 全 story がマージ済み（closed）の状態を再現する
     story = story_issue_factory(

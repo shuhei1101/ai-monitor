@@ -90,17 +90,20 @@ def test_normal(
         owner=owner, repo=repo, issue_number=pr_number, labels=["確認:subsystem-conductor"]
     )
 
-    # 実行: 最終確認ゲート（議論中 + assignee）が開くのを待つ
-    def _gate_opened():
-        data = issue(gh_live, owner, repo, pr_number)
-        names = label_names(data)
-        if "議論中" not in names or not data.assignees:
+    # 実行: 検収結果の記録が投稿されるのを待つ
+    # 一式完了報告は実装の成果物 PR に付くが、conductor はそれをマージしてから
+    # subsystem のベース PR で検収する（成果物の受け取り → マージ起動）
+    gate_number = ctx["subsystem_pr"].number
+
+    def _accepted():
+        data = issue(gh_live, owner, repo, gate_number)
+        if "確認:subsystem-conductor" not in label_names(data):
             return None
-        requests = comments_from(gh_live, owner, repo, pr_number, "subsystem-conductor")
+        requests = comments_from(gh_live, owner, repo, gate_number, "subsystem-conductor")
         return (data, requests[-1]) if requests else None
 
     data, request = wait_until(
-        _gate_opened, timeout_sec=1800, message="マージ前の最終確認ゲート（議論中 + assignee）"
+        _accepted, timeout_sec=1800, message="一式完了報告の検収と検収結果の記録"
     )
 
     # 検証: タスク一覧が全チェック済みのまま保たれている
@@ -114,12 +117,16 @@ def test_normal(
         f"タスク一覧に未チェックが残っている: {task_lines}"
     )
 
-    # 検証: 一式完了報告が Resolve 済みで、最終確認の依頼コメントが投稿されている
+    # 検証: 一式完了報告が Resolve 済みで、検収結果の記録コメントが投稿されている
     assert server._is_minimized(report.node_id), "architect の一式完了報告が未 Resolve"
-    assert request.node_id != report.node_id, "最終確認の依頼コメントが投稿されていない"
+    assert request.node_id != report.node_id, "検収結果の記録コメントが投稿されていない"
 
-    # 検証: 確認:subsystem-conductor は保持されたまま（承認後のマージ実行で復帰する）
+    # 検証: 検収は自動で通る（議論中 も assignee も付かない）
     names = label_names(data)
+    assert "議論中" not in names, f"検収でユーザー確認ゲートが開いている: {sorted(names)}"
+    assert not data.assignees, "検収で assignee が設定されている"
+
+    # 検証: 確認:subsystem-conductor は保持されたまま（次ターンのマージ実行で復帰する）
     assert "確認:subsystem-conductor" in names, (
         f"確認:subsystem-conductor が保持されていない: {sorted(names)}"
     )

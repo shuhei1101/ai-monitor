@@ -32,30 +32,21 @@ EPIC_BODY = """## 概要
 """
 
 
-def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, sandbox, wait_until, tmp_path):
+def test_normal(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    sandbox, wait_until, tmp_path,
+):
     """シナリオ作成 → 承認 → 完了処理までを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
     def _get(number):
         return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
 
-    # 準備: 5 セクション確定済みの epic Issue（確認ラベルなし）+ 親 intake
-    intake, epic = epic_issue_factory(
-        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic"]
+    # 準備: 要件確定済みの epic ベース PR + 作業対象のシナリオ成果物 PR + worktree
+    ctx = _setup_scenario_pr(
+        gh_live, owner, repo, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     )
-    # 準備: epic Draft PR（本文は `## 紐づく Issue` のみ）
-    branch = f"feat/epic/task-edit-{epic.number}/base"
-    pr = epic_pr_factory(
-        branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
-    )
-    # 準備: epic ブランチのローカル worktree（complex-scenario-writer が commit するため。本番では epic-conductor が worktree_create で用意する）
-    local_path = sandbox["local_path"]
-    worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
-    subprocess.run(["git", "-C", local_path, "fetch", "origin", branch], check=True)
-    subprocess.run(
-        ["git", "-C", local_path, "worktree", "add", str(worktree_path), branch],
-        check=True,
-    )
+    epic_pr, pr, branch = ctx["epic_pr"], ctx["pr"], ctx["branch"]
     # 準備: 確認ラベルを付ける（前工程はなく、指示コメントは不要 = シナリオでもセットアップに指示コメントは書かれていない）
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=pr.number, labels=["確認:complex-scenario-writer"]
@@ -109,12 +100,12 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
     # 実行: 完了処理完了を待つ（PR の 確認:complex-scenario-writer 除去 + 親 epic に 確認:epic-conductor 付与 + @epic-conductor 宛完了報告コメント投稿）
     def _wrapped_up():
         pr_now = _get(pr.number)
-        epic_now = _get(epic.number)
+        epic_now = _get(epic_pr.number)
         pr_labels = {label.name for label in pr_now.labels}
         epic_labels = {label.name for label in epic_now.labels}
         if not ("確認:complex-scenario-writer" not in pr_labels and "確認:epic-conductor" in epic_labels):
             return None
-        epic_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=epic.number).parsed_data
+        epic_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=epic_pr.number).parsed_data
         completion = [c for c in epic_comments if "> to: @epic-conductor" in c.body]
         if not completion:
             return None
@@ -163,8 +154,46 @@ def _worktree(local_path, branch):
     subprocess.run(["git", "-C", local_path, "worktree", "add", str(worktree_path), branch], check=True)
 
 
+ARTIFACT_PR_BODY = """## 紐づく Issue
+
+- #{intake_number}
+
+## タスク一覧
+
+- [ ] `設計図/シナリオ/複合ユースケース/タスク編集から一覧反映.md` を作成 / 更新
+- [ ] `設計図/シナリオ/README.md` の `## 一覧` に該当行を追加
+"""
+
+
+def _setup_scenario_pr(
+    gh_live, owner, repo, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    *, extra_labels=None,
+):
+    """epic ベース PR と、作業対象の複合UCシナリオ成果物 PR まで用意する。
+
+    要件はベース PR が持ち、writer は成果物 PR 上で作業する（規約『ブランチ戦略』の成果物ブランチ）。
+    """
+    marks = list(extra_labels or [])
+    intake, epic = epic_issue_factory(
+        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
+        epic_labels=["layer:epic", *marks],
+    )
+    # 要件の SoT になる epic ベース PR（確認ラベルなし = 起動対象にしない）
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
+    epic_pr = epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=EPIC_BODY)
+    # 作業対象の成果物 PR（base=epic ブランチ）
+    branch = f"docs/epic/task-edit-{epic.number}/scenario"
+    pr = draft_pr_factory(
+        branch, f"{EPIC_TITLE}（複合ユースケースシナリオ）",
+        ARTIFACT_PR_BODY.format(intake_number=intake.number), base_branch=epic_branch,
+    )
+    _worktree(sandbox["local_path"], branch)
+    return {"intake": intake, "epic": epic, "epic_pr": epic_pr, "pr": pr, "branch": branch}
+
+
 def test_normal_when_scenario_fix(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, commit_file, sandbox, wait_until
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    commit_file, sandbox, wait_until,
 ):
     """エスカレーションの決定を受けたシナリオ修正を実環境で確認する（正常系・エスカレーション由来のシナリオ修正）。"""
     owner, repo = repo_ctx
@@ -172,14 +201,12 @@ def test_normal_when_scenario_fix(
     def _get(number):
         return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
 
-    # 準備: 確定済みの複合 UC シナリオが載った epic PR
-    intake, epic = epic_issue_factory(
-        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic"]
+    # 準備: 確定済みの複合 UC シナリオが載ったシナリオ成果物 PR
+    ctx = _setup_scenario_pr(
+        gh_live, owner, repo, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     )
-    branch = f"feat/epic/task-edit-{epic.number}/base"
-    pr = epic_pr_factory(branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
+    epic_pr, pr, branch = ctx["epic_pr"], ctx["pr"], ctx["branch"]
     commit_file(branch, CURRENT_COMPLEX_PATH, CURRENT_COMPLEX_MD, "docs: 複合UC シナリオを追加")
-    _worktree(sandbox["local_path"], branch)
     seed = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch=branch).parsed_data.commit.sha
 
     # 準備: epic-conductor のシナリオ修正指示 → 確認ラベル付与（起動トリガー）
@@ -194,10 +221,10 @@ def test_normal_when_scenario_fix(
     def _fixed():
         if "確認:complex-scenario-writer" in {label.name for label in _get(pr.number).labels}:
             return None
-        if "確認:epic-conductor" not in {label.name for label in _get(epic.number).labels}:
+        if "確認:epic-conductor" not in {label.name for label in _get(epic_pr.number).labels}:
             return None
         epic_comments = gh_live.rest.issues.list_comments(
-            owner=owner, repo=repo, issue_number=epic.number
+            owner=owner, repo=repo, issue_number=epic_pr.number
         ).parsed_data
         completion = [c for c in epic_comments if "> to: @epic-conductor" in (c.body or "")]
         return completion if completion else None
@@ -220,13 +247,13 @@ def test_normal_when_scenario_fix(
     assert "> from: @complex-scenario-writer" in (thread.body or ""), "修正内容が返信追記されていない"
     assert server._is_minimized(instruction.node_id), "シナリオ修正指示コメントが未 Resolve"
 
-    # 検証: 完了報告が未 Resolve のまま親 epic Issue に投稿されている
+    # 検証: 完了報告が未 Resolve のまま親 epic PR に投稿されている
     assert not server._is_minimized(completion[-1].node_id), "完了報告が Resolve されている"
-    assert intake is not None
 
 
 def test_normal_when_reverse(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, commit_file, sandbox, wait_until
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    commit_file, sandbox, wait_until,
 ):
     """現状のシナリオを入力にした複合 UC シナリオ設計を実環境で確認する（正常系・リバースエンジニアリング）。"""
     owner, repo = repo_ctx
@@ -234,15 +261,13 @@ def test_normal_when_reverse(
     def _get(number):
         return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
 
-    # 準備: RE 経路の epic Issue + 現状のシナリオが入った epic ブランチ
-    intake, epic = epic_issue_factory(
-        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
-        epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
+    # 準備: RE 経路の epic と、現状のシナリオが入ったシナリオ成果物 PR
+    ctx = _setup_scenario_pr(
+        gh_live, owner, repo, sandbox, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+        extra_labels=["type:docs", "リバースエンジニアリング"],
     )
-    branch = f"feat/epic/task-edit-{epic.number}/base"
-    pr = epic_pr_factory(branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
+    pr, branch = ctx["pr"], ctx["branch"]
     commit_file(branch, CURRENT_COMPLEX_PATH, CURRENT_COMPLEX_MD, "docs: 現状の複合UC シナリオを追加")
-    _worktree(sandbox["local_path"], branch)
     seed = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch=branch).parsed_data.commit.sha
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=pr.number, labels=["確認:complex-scenario-writer"]
@@ -278,4 +303,4 @@ def test_normal_when_reverse(
     assert [c for c in pr_comments if (c.body or "").lstrip().startswith("> from: @complex-scenario-writer")], (
         "確認事項コメントが投稿されていない"
     )
-    assert intake is not None and pr_data is not None
+    assert pr_data is not None

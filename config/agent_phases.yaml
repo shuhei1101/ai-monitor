@@ -14,6 +14,7 @@ architect:
   - エージェント/architect/フェーズ/応答ループ.md
   - エージェント/architect/フェーズ/再開指示の受領.md
   - エージェント/architect/フェーズ/設計完了の引き渡し.md
+  - エージェント/architect/フェーズ/テスト作成の委任.md
   - エージェント/architect/フェーズ/テストレビュー.md
   - エージェント/architect/フェーズ/実装後の再レビュー.md
   - エージェント/architect/フェーズ/実装レビュー.md
@@ -128,6 +129,7 @@ single-scenario-tester:
 story-conductor:
   - エージェント/story-conductor/README.md
   - エージェント/story-conductor/フェーズ/初期処理.md
+  - エージェント/story-conductor/フェーズ/storyPR作成.md
   - エージェント/story-conductor/フェーズ/要件確定（初回）.md
   - エージェント/story-conductor/フェーズ/応答ループ.md
   - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md

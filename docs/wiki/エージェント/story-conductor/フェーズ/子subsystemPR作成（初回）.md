@@ -9,9 +9,21 @@ single-scenario-writer の完了報告を受けて、単一シナリオを元に
 
 ### 単一シナリオの確認
 
-epic ブランチ配下の worktree に切り替えて（成果物ブランチの worktree）、single-scenario-writer が commit した `docs/wiki/設計図/シナリオ/単一ユースケース/{UC名}.md` を読む。
+単一UCシナリオの成果物ブランチの worktree に切り替えて、single-scenario-writer が commit した `docs/wiki/設計図/シナリオ/単一ユースケース/{UC名}.md` を読む。
 
 単一 UC 影響なしの経路では新規シナリオが無いため、代わりに master 側の既存シナリオと story PR 本文の `## ユースケース要件` を材料にする。
+
+### 単一UCシナリオの成果物 PR のマージ
+
+シナリオ設計を挟んだ経路でだけ実行する（単一 UC 影響なしの story では成果物 PR が無いので実行しない）。
+成果物 PR 本文の `## タスク一覧` が全行 `[x]` になっていることを確認する。
+子 subsystem はこのマージ後の story ブランチから生やす（シナリオが子の入力になるため）。
+
+- 未チェックのまま残っている行がある場合、完了報告コメントに追記して指摘し、チェックを入れてもらってからマージする
+
+`規約/マージ手順.md` に沿って base（自分の story ブランチ）を取り込み、コンフリクトがないことを確認する。
+
+MCP `mark_pr_ready`（`pr_number`: 成果物 PR の番号）→ MCP `merge_pr`（`pr_number`: 成果物 PR の番号・`strategy`: `squash`）→ MCP `worktree_remove`（`branch`: `docs/story/{ドメイン}/{UC名}/scenario`）→ MCP `remove_watch_targets`（`agent_name`: `story-conductor`・`number`: $number・`watch_numbers`: マージした成果物 PR の番号）の順に呼ぶ。
 
 ### subsystem の洗い出しと依存順の決定
 
@@ -56,7 +68,7 @@ epic ブランチ配下の worktree に切り替えて（成果物ブランチ�
 - `is_pr`: true
 - `labels`: `$AI_MONITOR_LABEL_CONFIRM_SUBSYSTEM_CONDUCTOR` の値
 
-本文とスタックの接続を終えてから付ける（先に付けると材料が揃う前に担当が動き出す）。
+本文を書き終えてから付ける（先に付けると材料が揃う前に担当が動き出す）。
 
 ### サブシステム一覧の記入
 

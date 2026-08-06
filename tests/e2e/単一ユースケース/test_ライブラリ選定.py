@@ -97,7 +97,7 @@ def _setup(gh_live, owner, repo, factories, commit_file, sandbox, *, comparison:
         gh_live, owner, repo,
         factories["epic_issue_factory"], factories["epic_pr_factory"], factories["draft_pr_factory"],
         factories["story_issue_factory"], factories["subsystem_issue_factory"], commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     seed_subsystem_branch(
         gh_live, owner, repo, commit_file, ctx["subsystem_branch"],
@@ -350,7 +350,7 @@ def test_error_when_no_candidate(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     seed_subsystem_branch(
         gh_live, owner, repo, commit_file, ctx["subsystem_branch"],

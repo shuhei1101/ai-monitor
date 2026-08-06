@@ -114,7 +114,10 @@ def test_load_constants_when_settings_missing(tmp_env_file, tmp_remote_repo, tmp
     assert result.returncode == 0, result.stderr
     written = tmp_env_file.read_text(encoding="utf-8")
     assert "export AI_MONITOR_LABEL_" in written
-    assert "WIKI_BASE" not in written
+    # 継承した値が残らないよう 3 つとも空に倒す（別リポジトリを指したまま気づけない事故を防ぐ）
+    assert 'export REPO_SLUG=""' in written
+    assert 'export WIKI_BASE=""' in written
+    assert 'export AI_MONITOR_WIKI_BASE=""' in written
     assert "監視対象として解決できませんでした" in result.stdout
 
 
@@ -133,7 +136,10 @@ def test_load_constants_when_no_remote(tmp_env_file, tmp_path, tmp_hook_settings
     assert result.returncode == 0, result.stderr
     written = tmp_env_file.read_text(encoding="utf-8")
     assert "export AI_MONITOR_LABEL_" in written
-    assert "WIKI_BASE" not in written
+    # 継承した値が残らないよう 3 つとも空に倒す（別リポジトリを指したまま気づけない事故を防ぐ）
+    assert 'export REPO_SLUG=""' in written
+    assert 'export WIKI_BASE=""' in written
+    assert 'export AI_MONITOR_WIKI_BASE=""' in written
     assert "監視対象として解決できませんでした" in result.stdout
 
 
@@ -151,5 +157,8 @@ def test_load_constants_when_project_unregistered(
     assert result.returncode == 0, result.stderr
     written = tmp_env_file.read_text(encoding="utf-8")
     assert "export AI_MONITOR_LABEL_" in written
-    assert "WIKI_BASE" not in written
+    # 継承した値が残らないよう 3 つとも空に倒す（別リポジトリを指したまま気づけない事故を防ぐ）
+    assert 'export REPO_SLUG=""' in written
+    assert 'export WIKI_BASE=""' in written
+    assert 'export AI_MONITOR_WIKI_BASE=""' in written
     assert "監視対象として解決できませんでした" in result.stdout

@@ -242,22 +242,29 @@ def test_normal_when_no_er(
         body=SUBSYSTEM_BODY_TEMPLATE.format(story_number=story.number),
         labels=["layer:subsystem", "scope:backend"],
     )
-    # 準備: タスク一覧承認済みの subsystem Draft PR（base=story ブランチ）+ worktree + 確認:architect
-    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
-    pr = draft_pr_factory(
-        subsystem_branch, SUBSYSTEM_TITLE,
-        SUBSYSTEM_PR_BODY_TEMPLATE.format(subsystem_number=subsystem.number),
+    # 準備: SA 確定済みの subsystem ベース PR（base=story ブランチ・確認ラベルなし）
+    subsystem_base_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    draft_pr_factory(
+        subsystem_base_branch, SUBSYSTEM_TITLE,
+        SUBSYSTEM_BODY_TEMPLATE.format(story_number=story.number),
         base_branch=story_branch,
+    )
+    # 準備: タスク一覧承認済みの成果物 Draft PR（base=subsystem ブランチ）+ worktree + 確認:architect
+    subsystem_branch = f"docs/backend/task-edit-{subsystem.number}/interface"
+    pr = draft_pr_factory(
+        subsystem_branch, f"{SUBSYSTEM_TITLE}（インターフェース定義）",
+        SUBSYSTEM_PR_BODY_TEMPLATE.format(subsystem_number=subsystem.number),
+        base_branch=subsystem_base_branch,
     )
     _add_worktree(sandbox["local_path"], subsystem_branch)
     gh_live.rest.issues.add_labels(owner=owner, repo=repo, issue_number=pr.number, labels=["確認:architect"])
 
-    # 実行: 設計ページごとの「提案 → 待機 → ユーザー承認」を tester へ引き渡されるまで繰り返す
+    # 実行: 設計ページごとの「提案 → 待機 → ユーザー承認」を発注元へ引き渡されるまで繰り返す
     def _gate_or_handoff():
         pr_now = _get(pr.number)
         labels = {label.name for label in pr_now.labels}
-        # 全ページ確定済みなら tester へ引き渡されている
-        if "確認:tester" in labels:
+        # 全ページ確定済みなら発注元の conductor へ引き渡されている
+        if "確認:subsystem-conductor" in labels:
             return ("handoff", pr_now)
         # 設計ページの提案待機（議論中 + assignee）なら承認して次のページへ進める
         return ("gate", pr_now) if "議論中" in labels and pr_now.assignees else None
@@ -288,16 +295,16 @@ def test_normal_when_no_er(
                 owner=owner, repo=repo, issue_number=pr.number, assignees=[assignee.login]
             )
     else:
-        raise AssertionError(f"{MAX_ROUNDS} 往復しても tester へ引き渡されなかった")
+        raise AssertionError(f"{MAX_ROUNDS} 往復しても subsystem-conductor へ引き渡されなかった")
 
     assert rounds == 1, (
         f"確認ゲートが 1 回にまとまっていない: {rounds} 回（設計タスクは {len(DESIGN_TASK_LINES)} 件）"
     )
 
-    # 検証: 確認:tester が付与され、確認:architect が除去されている
+    # 検証: 確認:subsystem-conductor が付与され、確認:architect が除去されている
     pr_final = _get(pr.number)
     labels = {label.name for label in pr_final.labels}
-    assert "確認:tester" in labels, f"確認:tester が付与されていない: {sorted(labels)}"
+    assert "確認:subsystem-conductor" in labels, f"確認:subsystem-conductor が付与されていない: {sorted(labels)}"
     assert "確認:architect" not in labels, "確認:architect が除去されていない"
 
     # 検証: タスク一覧の設計タスクがチェック済みで、実装・テストのタスクは未チェックのまま
@@ -318,8 +325,8 @@ def test_normal_when_no_er(
     comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
     agent_comments = [c for c in comments if c.body.lstrip().startswith("> from: @architect")]
     assert agent_comments, "architect のコメントが見つからない"
-    handoffs = [c for c in agent_comments if "> to: @tester" in c.body]
-    proposals = [c for c in agent_comments if "> to: @tester" not in c.body]
+    handoffs = [c for c in agent_comments if "> to: @subsystem-conductor" in c.body]
+    proposals = [c for c in agent_comments if "> to: @subsystem-conductor" not in c.body]
     assert len(proposals) >= len(DESIGN_TASK_LINES), f"設計提案コメントが足りない: {len(proposals)} 件"
     for comment in proposals:
         assert server._is_minimized(comment.node_id), f"設計提案コメント {comment.html_url} が未 Resolve"
@@ -373,8 +380,13 @@ BOUNCE_REPORT = """> from: @tester
 def _setup_ss_design(
     gh_live, owner, repo, sandbox, factories, commit_file,
     *, pr_body: str, re_route: bool = False, base_designs: dict[str, str] | None = None,
+    artifact: str = "docs/backend/task-edit-{number}/interface",
 ):
-    """タスク一覧承認済みの subsystem Draft PR（確認:architect 付き）まで用意する。"""
+    """subsystem のベース PR と、作業対象の成果物 Draft PR まで用意する。
+
+    `artifact` はブランチ名のテンプレート（`{number}` に subsystem Issue 番号が入る）。
+    既定はインターフェース定義の成果物ブランチで、バグ修正経路は `fix/...` を渡す。
+    """
     layer_type = "type:docs" if re_route else "type:feat"
     re_label = ["リバースエンジニアリング"] if re_route else []
     intake, epic = factories["epic_issue_factory"](
@@ -402,10 +414,17 @@ def _setup_ss_design(
         body=SUBSYSTEM_BODY_TEMPLATE.format(story_number=story.number),
         labels=["layer:subsystem", layer_type, "scope:backend", *re_label],
     )
-    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    # 要件の SoT になるベース PR（確認ラベルなし = 起動対象にしない）
+    subsystem_base_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    subsystem_pr = factories["draft_pr_factory"](
+        subsystem_base_branch, SUBSYSTEM_TITLE,
+        SUBSYSTEM_BODY_TEMPLATE.format(story_number=story.number), base_branch=story_branch,
+    )
+    # 作業対象のインターフェース定義の成果物 PR（タスク一覧を持つ）
+    subsystem_branch = artifact.format(number=subsystem.number)
     pr = factories["draft_pr_factory"](
-        subsystem_branch, SUBSYSTEM_TITLE,
-        pr_body.format(subsystem_number=subsystem.number), base_branch=story_branch,
+        subsystem_branch, f"{SUBSYSTEM_TITLE}（成果物）",
+        pr_body.format(subsystem_number=subsystem.number), base_branch=subsystem_base_branch,
     )
     _add_worktree(sandbox["local_path"], subsystem_branch)
     seed = gh_live.rest.repos.get_branch(
@@ -413,6 +432,7 @@ def _setup_ss_design(
     ).parsed_data.commit.sha
     return {
         "intake": intake, "epic": epic, "story": story, "subsystem": subsystem, "pr": pr,
+        "subsystem_pr": subsystem_pr, "subsystem_base_branch": subsystem_base_branch,
         "subsystem_branch": subsystem_branch, "story_branch": story_branch, "seed": seed,
     }
 
@@ -429,12 +449,12 @@ def _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issu
 
 
 def _drive_design(gh_live, owner, repo, pr_number, wait_until, *, max_rounds: int) -> int:
-    """設計ページごとの「提案 → 承認」を tester へ引き渡されるまで繰り返し、往復回数を返す。"""
+    """設計ページごとの「提案 → 承認」を発注元へ引き渡されるまで繰り返し、往復回数を返す。"""
 
     def _gate_or_handoff():
         data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=pr_number).parsed_data
         labels = {label.name for label in data.labels}
-        if "確認:tester" in labels:
+        if "確認:subsystem-conductor" in labels:
             return ("handoff", data)
         return ("gate", data) if "議論中" in labels and data.assignees else None
 
@@ -485,20 +505,20 @@ def test_normal(
     )
     assert [p for p in paths if p.startswith("docs/wiki/設計図/モジュール構成/")], f"モジュール構成が未作成: {paths}"
 
-    # 検証: タスク一覧の設計タスクがチェック済みで、tester へ引き渡されている
+    # 検証: タスク一覧の設計タスクがチェック済みで、発注元へ引き渡されている
     pr_final = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=ctx["pr"].number).parsed_data
     pr_body = (pr_final.body or "").replace("\r\n", "\n")
     for task in DESIGN_TASK_LINES_WITH_ER:
         assert f"- [x] {task}" in pr_body, f"設計タスクがチェックされていない: {task}"
     labels = {label.name for label in pr_final.labels}
-    assert "確認:tester" in labels and "確認:architect" not in labels
+    assert "確認:subsystem-conductor" in labels and "確認:architect" not in labels
 
-    # 検証: tester への割り当てコメントに確定したページ名と commit 範囲が載っている
+    # 検証: 発注元への完了報告コメントに確定したページ名と commit 範囲が載っている
     comments = gh_live.rest.issues.list_comments(
         owner=owner, repo=repo, issue_number=ctx["pr"].number
     ).parsed_data
-    handoffs = [c for c in comments if "> to: @tester" in (c.body or "")]
-    assert handoffs, "tester への割り当てコメントが投稿されていない"
+    handoffs = [c for c in comments if "> to: @subsystem-conductor" in (c.body or "")]
+    assert handoffs, "発注元への完了報告コメントが投稿されていない"
     assert "設計図/" in (handoffs[-1].body or ""), "割り当てコメントに設計ページ名がない"
 
 
@@ -512,6 +532,7 @@ def test_normal_when_no_design_change(
         gh_live, owner, repo, sandbox,
         _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, subsystem_issue_factory),
         commit_file, pr_body=PR_BODY_NO_DESIGN,
+        artifact="fix/backend/task-edit-{number}/update-api",
     )
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
@@ -707,13 +728,13 @@ def test_normal_when_reverse(
     module_md = base64.b64decode(content.content).decode("utf-8")
     assert "update_task" in module_md, "実装の物理名が設計書に残っていない"
 
-    # 検証: tester へ引き渡され、確認:architect が除去されている
+    # 検証: 発注元へ引き渡され、確認:architect が除去されている
     labels = {
         label.name for label in gh_live.rest.issues.get(
             owner=owner, repo=repo, issue_number=ctx["pr"].number
         ).parsed_data.labels
     }
-    assert "確認:tester" in labels and "確認:architect" not in labels
+    assert "確認:subsystem-conductor" in labels and "確認:architect" not in labels
 
 
 def _addressed_review_comments(gh_live, owner, repo, pr_number, login: str) -> list:

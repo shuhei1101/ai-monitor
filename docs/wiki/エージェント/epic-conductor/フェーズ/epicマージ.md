@@ -20,6 +20,15 @@ MCP `resolve_comments` で完了報告コメントを Resolve する。
 
 初期処理で取得した epic PR の base ブランチから、最終マージか通常マージかを決める（共通ルール『最終マージの判定』）。
 
+### 統合テストの成果物 PR のマージ
+
+epic PR より先に、配下の統合テストの成果物 PR（`test/epic/{ドメイン}/integration`）を epic ブランチへマージする。
+`規約/マージ手順.md` に沿って base（自分の epic ブランチ）を取り込み、コンフリクトがないことを確認する。
+
+MCP `mark_pr_ready`（`pr_number`: 成果物 PR の番号）→ MCP `merge_pr`（`pr_number`: 成果物 PR の番号・`strategy`: `squash`）→ MCP `worktree_remove`（`branch`: 統合テストの成果物ブランチ）→ MCP `remove_watch_targets`（`agent_name`: `epic-conductor`・`number`: $number・`watch_numbers`: マージした成果物 PR の番号）の順に呼ぶ。
+
+open の成果物 PR が残っていない場合は本手順を実行しない
+
 ### Draft 解除
 
 MCP `mark_pr_ready` を呼ぶ:

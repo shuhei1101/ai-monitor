@@ -5,6 +5,11 @@
 
 ## 手順
 
+### base の面の確認
+
+初期処理で取得した `parent` の `state` が `closed` の場合、マージ先の面が既に畳まれているのでマージしない。
+「RE完了確認」の `### base の面の確認` と同じ手順で RE PR を畳み、以降の手順は実行しない。
+
 ### 一括 Resolve
 
 MCP `resolve_comments` を呼ぶ:

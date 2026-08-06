@@ -60,7 +60,7 @@ def test_normal(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     # 修正対象の複合 UC シナリオを epic ブランチに置く
     commit_file(

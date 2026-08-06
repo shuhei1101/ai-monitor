@@ -62,7 +62,7 @@ def test_normal(
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
-    epic_branch = f"feat/epic/task-ops-{epic.number}"
+    epic_branch = f"feat/epic/task-ops-{epic.number}/base"
     epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
     # 準備: 衝突面が重ならない story を 2 件同時に起票する（2 セッションの同時起動を誘発）
     stories = [story_issue_factory(epic.number, title) for title in STORY_TITLES]

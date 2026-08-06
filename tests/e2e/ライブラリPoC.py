@@ -268,7 +268,7 @@ def setup_poc_pr(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     poc_branch = f"poc/backend/task/task-edit-{ctx['subsystem'].number}/sqlite3"
     poc_pr = draft_pr_factory(

@@ -43,7 +43,7 @@ MCP `get_issue_or_pr` を呼ぶ:
 
 `設計図/インターフェース定義/バックエンド/{論理名}.md` の `## インターフェース` を確定させた場合は、全ページの commit 後に subsystem-conductor へインターフェース確定報告を投稿する（後続 subsystem を起票するかの判断は story-conductor が行う）。
 
-報告先は成果物 PR にする（発注元の conductor がマージする）。
+報告先は自分が作業している成果物 PR ではなく、親 subsystem PR にする。
 成果物 PR に `確認:subsystem-conductor` を足すと `確認:architect` と 2 つ並び、両方が同時に起動してしまうため（規約『フェーズ索引の網羅』の 1 面 1 確認ラベル）。
 別の面へ報告することで、成果物 PR の手番は architect が持ったまま設計を続けられる。
 

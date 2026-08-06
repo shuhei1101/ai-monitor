@@ -8,6 +8,18 @@ UC 一覧は要件確定で承認済みのため、ユーザー承認なしの�
 
 ## 手順
 
+### 複合UCシナリオの成果物 PR のマージ
+
+シナリオ設計を挟んだ経路でだけ実行する（複合 UC 影響なしの epic では成果物 PR が無いので実行しない）。
+成果物 PR 本文の `## タスク一覧` が全行 `[x]` になっていることを確認する。
+子 story はこのマージ後の epic ブランチから生やす（シナリオが子の入力になるため）。
+
+- 未チェックのまま残っている行がある場合、完了報告コメントに追記して指摘し、チェックを入れてもらってからマージする
+
+`規約/マージ手順.md` に沿って base（自分の epic ブランチ）を取り込み、コンフリクトがないことを確認する。
+
+MCP `mark_pr_ready`（`pr_number`: 成果物 PR の番号）→ MCP `merge_pr`（`pr_number`: 成果物 PR の番号・`strategy`: `squash`）→ MCP `worktree_remove`（`branch`: `docs/epic/{ドメイン}/scenario`）→ MCP `remove_watch_targets`（`agent_name`: `epic-conductor`・`number`: $number・`watch_numbers`: マージした成果物 PR の番号）の順に呼ぶ。
+
 ### 子 story ブランチの作成
 
 `## ユースケース一覧` の各 UC につき 1 件、MCP `worktree_create` を呼ぶ:
@@ -34,7 +46,7 @@ UC 一覧は要件確定で承認済みのため、ユーザー承認なしの�
 - `is_pr`: true
 - `labels`: `$AI_MONITOR_LABEL_CONFIRM_STORY_CONDUCTOR` の値
 
-本文とスタックの接続を終えてから付ける（先に付けると材料が揃う前に担当が動き出す）。
+本文を書き終えてから付ける（先に付けると材料が揃う前に担当が動き出す）。
 
 ### 対応 story 列の反映
 

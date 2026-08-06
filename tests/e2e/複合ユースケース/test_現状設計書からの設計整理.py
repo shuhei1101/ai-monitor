@@ -44,20 +44,21 @@ def test_normal(
         story_issue_factory, subsystem_issue_factory, commit_file,
         subsystem_labels=RE_LABELS,
     )
-    subsystem_number = ctx["subsystem"].number
+    subsystem_pr_number = ctx["subsystem_pr"].number
+    subsystem_branch = ctx["subsystem_branch"]
 
     def _faces():
-        # subsystem Issue と、それに紐づく open PR（RE PR → 通常 PR）が応答対象の面
-        faces = [("subsystem_issue", subsystem_number)]
+        # subsystem のベース PR と、その配下の成果物 PR（RE PR → 通常の成果物 PR）が応答対象の面
+        faces = [("subsystem_pr", subsystem_pr_number)]
         pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-        faces += [("subsystem_pr", p.number) for p in pulls if f"#{subsystem_number}" in (p.body or "")]
+        faces += [("artifact_pr", p.number) for p in pulls if p.base.ref == subsystem_branch]
         return faces
 
     def _assigned_to_tester():
         # 設計が確定して tester へ割り当てられた時点で終端
         pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
         for pr in pulls:
-            if f"#{subsystem_number}" not in (pr.body or ""):
+            if pr.base.ref != subsystem_branch:
                 continue
             if "確認:tester" in label_names(issue(gh_live, owner, repo, pr.number)):
                 return pr
@@ -68,9 +69,9 @@ def test_normal(
         gh_live, owner, repo,
         faces=_faces,
         choices={
-            ("subsystem_issue", "確認:subsystem-conductor"): None,
             ("subsystem_pr", "確認:subsystem-conductor"): None,
-            ("subsystem_pr", "確認:architect"): None,
+            ("artifact_pr", "確認:subsystem-conductor"): None,
+            ("artifact_pr", "確認:architect"): None,
         },
         terminal=_assigned_to_tester,
         wait_until=wait_until,
@@ -80,20 +81,20 @@ def test_normal(
 
     # 検証: RE PR がマージされ、story ブランチに現状の設計書が入っている
     closed_prs = gh_live.rest.pulls.list(owner=owner, repo=repo, state="closed", per_page=100).parsed_data
-    re_prs = [p for p in closed_prs if f"#{subsystem_number}" in (p.body or "") and p.merged_at]
+    re_prs = [p for p in closed_prs if p.head.ref.startswith("docs/reverse/") and p.merged_at]
     assert re_prs, "RE PR が merged になっていない"
     branches = {b.name for b in gh_live.rest.repos.list_branches(
         owner=owner, repo=repo, per_page=100
     ).parsed_data}
     for pr in re_prs:
         assert pr.head.ref not in branches, f"マージした RE ブランチが残っている: {pr.head.ref}"
-    assert _exists(gh_live, owner, repo, MODULE_PATH, ctx["story_branch"]), (
-        "story ブランチに現状の設計書が入っていない"
+    assert _exists(gh_live, owner, repo, MODULE_PATH, subsystem_branch), (
+        "subsystem ブランチに現状の設計書が入っていない"
     )
 
     # 検証: 通常 PR の差分が現状からあるべき構造への変更範囲になっている
     compare = gh_live.rest.repos.compare_commits(
-        owner=owner, repo=repo, basehead=f"{ctx['story_branch']}...{subsystem_pr.head.ref}"
+        owner=owner, repo=repo, basehead=f"{subsystem_branch}...{subsystem_pr.head.ref}"
     ).parsed_data
     changed = [f.filename for f in (compare.files or [])]
     design_changes = [f for f in changed if f.startswith("docs/wiki/設計図/")]
@@ -115,7 +116,7 @@ def test_normal(
     assert proposals, "現状とあるべき構造の差分がコメントに残っていない"
 
     # 検証: 処理中ラベルがどこにも残っていない
-    for number in (subsystem_number, subsystem_pr.number):
+    for number in (subsystem_pr_number, subsystem_pr.number):
         names = label_names(issue(gh_live, owner, repo, number))
         assert not [n for n in names if n.startswith("処理中:")], (
             f"#{number} に処理中ラベルが残っている: {sorted(names)}"

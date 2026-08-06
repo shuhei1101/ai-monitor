@@ -59,20 +59,36 @@ def test_normal_when_delegate(monitor, gh_live, repo_ctx, epic_issue_factory, ep
     )
     story = _make_story(gh_live, repo_ctx, epic.number, "期限通知メールの受信", closed=True)
     pr = epic_pr_factory(
-        branch=f"feat/epic/togo-delegate-{epic.number}", title=EPIC_TITLE, body=PR_BODY.format(epic_number=epic.number)
+        branch=f"feat/epic/togo-delegate-{epic.number}/base", title=EPIC_TITLE, body=PR_BODY.format(epic_number=epic.number)
     )
     report = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=epic.number, body=STORY_DONE_REPORT.format(story_number=story.number)
     ).parsed_data
     gh_live.rest.issues.add_labels(owner=owner, repo=repo, issue_number=epic.number, labels=["確認:epic-conductor"])
 
-    # 実行: モニターの polling 検知 → 統合テスト委任の完了を待つ
+    # 実行: モニターの polling 検知 → 統合テストの成果物 PR への委任を待つ
     def _delegated():
-        data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=pr.number).parsed_data
-        labels = {label.name for label in data.labels}
-        return data if "確認:complex-scenario-writer" in labels else None
+        for opened in gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data:
+            # 統合テストの成果物 PR（epic ブランチ直下の test/epic/.../integration）だけを見る
+            if not opened.head.ref.startswith("test/epic/"):
+                continue
+            data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=opened.number).parsed_data
+            if "確認:complex-scenario-writer" in {label.name for label in data.labels}:
+                return opened
+        return None
 
-    wait_until(_delegated, timeout_sec=1200, message="統合テストの委任（epic PR に 確認:complex-scenario-writer）")
+    integration_pr = wait_until(
+        _delegated, timeout_sec=1200,
+        message="統合テストの委任（成果物 PR に 確認:complex-scenario-writer）",
+    )
+
+    # 検証: 成果物 PR が epic ブランチを base にした Draft で作られている
+    assert integration_pr.base.ref == f"feat/epic/togo-delegate-{epic.number}/base"
+    assert integration_pr.draft, "統合テストの成果物 PR が Draft ではない"
+
+    # 検証: 委任先は成果物 PR で、epic PR には確認ラベルが残っていない
+    epic_pr_data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=pr.number).parsed_data
+    assert not any(label.name.startswith("確認:") for label in epic_pr_data.labels)
 
     # 検証: epic Issue の 確認:* が除去され、完了報告コメントが Resolve 済み
     issue = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=epic.number).parsed_data
@@ -91,7 +107,7 @@ def test_normal_when_children_remaining(monitor, gh_live, repo_ctx, epic_issue_f
     done_story = _make_story(gh_live, repo_ctx, epic.number, "期限通知メールの受信", closed=True)
     open_story = _make_story(gh_live, repo_ctx, epic.number, "通知設定の変更", closed=False)
     pr = epic_pr_factory(
-        branch=f"feat/epic/togo-remaining-{epic.number}", title=EPIC_TITLE, body=PR_BODY.format(epic_number=epic.number)
+        branch=f"feat/epic/togo-remaining-{epic.number}/base", title=EPIC_TITLE, body=PR_BODY.format(epic_number=epic.number)
     )
     gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=epic.number, body=STORY_DONE_REPORT.format(story_number=done_story.number)
@@ -117,9 +133,11 @@ def test_normal_when_children_remaining(monitor, gh_live, repo_ctx, epic_issue_f
 
     wait_until(_epic_confirm_removed, timeout_sec=600, message="epic の 確認:* 除去")
 
-    # 検証: 統合テストの委任は発生していない（epic PR に 確認:complex-scenario-writer なし）
+    # 検証: 統合テストの委任は発生していない（epic PR にラベルなし + 成果物 PR 未作成）
     pr_data = gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=pr.number).parsed_data
     assert not any(label.name == "確認:complex-scenario-writer" for label in pr_data.labels)
+    opened = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data
+    assert not [p for p in opened if p.head.ref.startswith("test/epic/")], "統合テストの成果物 PR が作られている"
 
 
 def test_normal_when_bug_return(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, epic_body, wait_until):
@@ -132,7 +150,7 @@ def test_normal_when_bug_return(monitor, gh_live, repo_ctx, epic_issue_factory, 
     )
     story = _make_story(gh_live, repo_ctx, epic.number, "期限通知メールの受信", closed=True)
     epic_pr_factory(
-        branch=f"feat/epic/togo-bug-{epic.number}", title=EPIC_TITLE, body=PR_BODY.format(epic_number=epic.number)
+        branch=f"feat/epic/togo-bug-{epic.number}/base", title=EPIC_TITLE, body=PR_BODY.format(epic_number=epic.number)
     )
     report = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=epic.number, body=FAIL_REPORT.format(story_number=story.number)

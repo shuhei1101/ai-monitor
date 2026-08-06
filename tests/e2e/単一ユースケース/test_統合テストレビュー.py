@@ -91,20 +91,20 @@ def _setup(gh_live, owner, repo, level, factories, *, e2e_test, service=SERVICE_
             gh_live, owner, repo,
             factories["epic_issue_factory"], factories["epic_pr_factory"],
             factories["draft_pr_factory"], factories["story_issue_factory"], factories["commit_file"],
-            pr_body=STORY_PR_BODY_WITH_TABLE, files=files,
+            pr_body=STORY_PR_BODY_WITH_TABLE, files=files, artifact="test",
         )
         ctx["branch"] = ctx["story_branch"]
-        ctx["parent_number"] = ctx["story"].number
+        ctx["parent_number"] = ctx["story_pr"].number
         return ctx
     files = epic_branch_files(service=service, complex_e2e_test=e2e_test)
     files = {**files, **(extra or {})}
     ctx = setup_epic(
         gh_live, owner, repo,
         factories["epic_issue_factory"], factories["epic_pr_factory"], factories["commit_file"],
-        pr_body=EPIC_PR_BODY_WITH_TABLE, files=files,
+        pr_body=EPIC_PR_BODY_WITH_TABLE, files=files, artifact="test",
     )
     ctx["branch"] = ctx["epic_branch"]
-    ctx["parent_number"] = ctx["epic"].number
+    ctx["parent_number"] = ctx["epic_pr"].number
     return ctx
 
 

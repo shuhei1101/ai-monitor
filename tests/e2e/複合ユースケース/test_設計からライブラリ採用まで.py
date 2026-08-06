@@ -86,7 +86,7 @@ def test_normal(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     # 外部ライブラリ Wiki の索引を置いておく（採用結果はここへ行追加される）
     seed_subsystem_branch(

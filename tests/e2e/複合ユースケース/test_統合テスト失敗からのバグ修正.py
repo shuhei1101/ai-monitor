@@ -75,7 +75,7 @@ def test_normal(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
         pr_body=STORY_PR_BODY_WITH_TABLE,
-        files=story_branch_files(service=BUGGY_SERVICE_PY, e2e_test=E2E_TEST_PY),
+        files=story_branch_files(service=BUGGY_SERVICE_PY, e2e_test=E2E_TEST_PY), artifact="test",
     )
     subsystem = add_merged_subsystem(
         gh_live, owner, repo, subsystem_issue_factory, ctx["story"].number

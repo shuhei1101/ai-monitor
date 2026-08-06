@@ -15,6 +15,15 @@ single-scenario-writer の全 pass 報告を受けて story PR を親 epic ブ�
 
 MCP `resolve_comments` で完了報告コメントを Resolve する。
 
+### 統合テストの成果物 PR のマージ
+
+story PR より先に、配下の統合テストの成果物 PR（`test/story/{ドメイン}/{UC名}/integration`）を story ブランチへマージする。
+`規約/マージ手順.md` に沿って base（自分の story ブランチ）を取り込み、コンフリクトがないことを確認する。
+
+MCP `mark_pr_ready`（`pr_number`: 成果物 PR の番号）→ MCP `merge_pr`（`pr_number`: 成果物 PR の番号・`strategy`: `squash`）→ MCP `worktree_remove`（`branch`: 統合テストの成果物ブランチ）→ MCP `remove_watch_targets`（`agent_name`: `story-conductor`・`number`: $number・`watch_numbers`: マージした成果物 PR の番号）の順に呼ぶ。
+
+- open の成果物 PR が残っていない場合は本手順を実行しない
+
 ### Draft 解除
 
 MCP `mark_pr_ready` を呼ぶ:

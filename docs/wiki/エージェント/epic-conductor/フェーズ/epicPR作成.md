@@ -41,11 +41,14 @@ MCP `create_draft_pr` を呼ぶ:
 - `head_branch`: 作成した epic ブランチ
 - `base_branch`: 決定した base
 - `title`: Issue のタイトル
-- `body`: `## 紐づく Issue`（`- #$number`）のみ
+- `body`: `## 紐づく Issue`（起点の Issue 番号を 1 件）のみ
 - `labels`:
   - `$AI_MONITOR_LABEL_LAYER_EPIC` の値
   - Issue に付いているのと同じ `type:*` ラベルの値
   - `リバースエンジニアリング` ラベルがある場合はその値
+
+`## 紐づく Issue` に書くのは起点の Issue（intake Issue、system レイヤーから始まる場合は立ち上げ Issue）で、起動要因になった自 Issue とは限らない（規約『ブランチ戦略』の「親子関係の表し方」）。
+初期処理で取得した `parent` が intake Issue ならその番号、`parent` が無ければ自 Issue（$number）が起点になる。
 
 要件は次のターンの「要件確定（初回）」が書くので、ここでは本文を作り込まない。
 
@@ -73,7 +76,7 @@ MCP `add_labels` を呼ぶ:
   - `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` の値
 - `add_labels_`: なし
 
-起点の Issue は close せず open のまま残す（`## 紐づく Issue` の参照先で、配下の PR が全てマージされた時点でモニターが閉じる）。
+起動要因になった Issue も起点の Issue も close せず open のまま残す（起点は `## 紐づく Issue` の参照先で、配下の PR が全てマージされた時点でモニターが閉じる）。
 
 ### 作業完了報告
 

@@ -127,7 +127,7 @@ def test_normal_single(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
         pr_body=STORY_PR_BODY_WITH_TABLE,
-        files=story_branch_files(e2e_test=E2E_TEST_PY_MISSING_ERROR_CASE),
+        files=story_branch_files(e2e_test=E2E_TEST_PY_MISSING_ERROR_CASE), artifact="test",
     )
     add_worktree(sandbox["local_path"], ctx["story_branch"])
     seed_sha = branch_sha(gh_live, owner, repo, ctx["story_branch"])
@@ -157,7 +157,7 @@ def test_normal_complex(
     ctx = setup_epic(
         gh_live, owner, repo, epic_issue_factory, epic_pr_factory, commit_file,
         pr_body=EPIC_PR_BODY_WITH_TABLE,
-        files=epic_branch_files(complex_e2e_test=COMPLEX_E2E_TEST_PY_MISSING_ERROR_CASE),
+        files=epic_branch_files(complex_e2e_test=COMPLEX_E2E_TEST_PY_MISSING_ERROR_CASE), artifact="test",
     )
     add_worktree(sandbox["local_path"], ctx["epic_branch"])
     seed_sha = branch_sha(gh_live, owner, repo, ctx["epic_branch"])

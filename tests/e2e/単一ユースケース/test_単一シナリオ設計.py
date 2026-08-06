@@ -57,6 +57,7 @@ def test_normal(
     repo_ctx,
     epic_issue_factory,
     epic_pr_factory,
+    draft_pr_factory,
     story_issue_factory,
     sandbox,
     wait_until,
@@ -68,28 +69,12 @@ def test_normal(
     def _get(number):
         return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
 
-    # 準備: epic Issue（親 intake 付き・確認ラベルなし）
-    intake, epic = epic_issue_factory(
-        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic"]
+    # 準備: 要件確定済みの story ベース PR + 作業対象のシナリオ成果物 PR + worktree
+    ctx = _setup_scenario_pr(
+        gh_live, owner, repo, sandbox,
+        epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory,
     )
-    # 準備: 4 セクション確定済みの story Issue（確認ラベルなし・親 epic 付き）
-    story_body = STORY_BODY_TEMPLATE.format(epic_number=epic.number)
-    story = story_issue_factory(
-        epic.number, STORY_TITLE, body=story_body, labels=["layer:story"]
-    )
-    # 準備: story Draft PR（本文は `## 紐づく Issue` のみ）
-    branch = f"feat/story/task-edit-{story.number}/base"
-    pr = epic_pr_factory(
-        branch=branch, title=STORY_TITLE, body=f"## 紐づく Issue\n\n- #{story.number}\n"
-    )
-    # 準備: story ブランチのローカル worktree（single-scenario-writer が commit するため。本番では story-conductor が worktree_create で用意する）
-    local_path = sandbox["local_path"]
-    worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
-    subprocess.run(["git", "-C", local_path, "fetch", "origin", branch], check=True)
-    subprocess.run(
-        ["git", "-C", local_path, "worktree", "add", str(worktree_path), branch],
-        check=True,
-    )
+    story_pr, pr, branch = ctx["story_pr"], ctx["pr"], ctx["branch"]
     # 準備: 確認ラベルを付ける（前工程はなく、指示コメントは不要 = シナリオでもセットアップに指示コメントは書かれていない）
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=pr.number, labels=["確認:single-scenario-writer"]
@@ -143,13 +128,13 @@ def test_normal(
     # 実行: 完了処理完了を待つ（PR の 確認:single-scenario-writer 除去 + 親 story に 確認:story-conductor 付与 + @story-conductor 宛完了報告コメント投稿）
     def _wrapped_up():
         pr_now = _get(pr.number)
-        story_now = _get(story.number)
+        story_now = _get(story_pr.number)
         pr_labels = {label.name for label in pr_now.labels}
         story_labels = {label.name for label in story_now.labels}
         if not ("確認:single-scenario-writer" not in pr_labels and "確認:story-conductor" in story_labels):
             return None
         story_comments = gh_live.rest.issues.list_comments(
-            owner=owner, repo=repo, issue_number=story.number
+            owner=owner, repo=repo, issue_number=story_pr.number
         ).parsed_data
         completion = [c for c in story_comments if "> to: @story-conductor" in c.body]
         if not completion:
@@ -201,9 +186,61 @@ def _worktree(local_path, branch):
     subprocess.run(["git", "-C", local_path, "worktree", "add", str(worktree_path), branch], check=True)
 
 
+ARTIFACT_PR_BODY = """## 紐づく Issue
+
+- #{intake_number}
+
+## タスク一覧
+
+- [ ] `設計図/シナリオ/単一ユースケース/タスク編集.md` を作成 / 更新
+- [ ] `設計図/シナリオ/README.md` の `## 一覧` に該当行を追加
+"""
+
+
+def _setup_scenario_pr(
+    gh_live, owner, repo, sandbox,
+    epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory,
+    *, extra_labels=None,
+):
+    """story ベース PR と、作業対象の単一UCシナリオ成果物 PR まで用意する。
+
+    要件はベース PR が持ち、writer は成果物 PR 上で作業する（規約『ブランチ戦略』の成果物ブランチ）。
+    """
+    marks = list(extra_labels or [])
+    intake, epic = epic_issue_factory(
+        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
+        epic_labels=["layer:epic", *marks],
+    )
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
+    epic_pr_factory(
+        branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{intake.number}\n"
+    )
+    story = story_issue_factory(
+        epic.number, STORY_TITLE, body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
+        labels=["layer:story", *marks],
+    )
+    # 要件の SoT になる story ベース PR（確認ラベルなし = 起動対象にしない）
+    story_branch = f"feat/story/task-edit-{story.number}/base"
+    story_pr = draft_pr_factory(
+        story_branch, STORY_TITLE, STORY_BODY_TEMPLATE.format(epic_number=epic.number),
+        base_branch=epic_branch,
+    )
+    # 作業対象の成果物 PR（base=story ブランチ）
+    branch = f"docs/story/task-edit-{story.number}/scenario"
+    pr = draft_pr_factory(
+        branch, f"{STORY_TITLE}（単一ユースケースシナリオ）",
+        ARTIFACT_PR_BODY.format(intake_number=intake.number), base_branch=story_branch,
+    )
+    _worktree(sandbox["local_path"], branch)
+    return {
+        "intake": intake, "epic": epic, "story": story,
+        "story_pr": story_pr, "pr": pr, "branch": branch,
+    }
+
+
 def test_normal_when_scenario_fix(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, story_issue_factory,
-    commit_file, sandbox, wait_until,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, commit_file, sandbox, wait_until,
 ):
     """エスカレーションの決定を受けたシナリオ修正を実環境で確認する（正常系・エスカレーション由来のシナリオ修正）。"""
     owner, repo = repo_ctx
@@ -211,18 +248,13 @@ def test_normal_when_scenario_fix(
     def _get(number):
         return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
 
-    # 準備: 確定済みシナリオが載った story PR
-    intake, epic = epic_issue_factory(
-        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic"]
+    # 準備: 確定済みシナリオが載ったシナリオ成果物 PR
+    ctx = _setup_scenario_pr(
+        gh_live, owner, repo, sandbox,
+        epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory,
     )
-    story = story_issue_factory(
-        epic.number, STORY_TITLE, body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
-        labels=["layer:story"],
-    )
-    branch = f"feat/story/task-edit-{story.number}/base"
-    pr = epic_pr_factory(branch=branch, title=STORY_TITLE, body=f"## 紐づく Issue\n\n- #{story.number}\n")
+    story_pr, pr, branch = ctx["story_pr"], ctx["pr"], ctx["branch"]
     commit_file(branch, CURRENT_SCENARIO_PATH, CURRENT_SCENARIO_MD, "docs: 単一UC シナリオを追加")
-    _worktree(sandbox["local_path"], branch)
     seed = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch=branch).parsed_data.commit.sha
 
     # 準備: story-conductor のシナリオ修正指示 → 確認ラベル付与（起動トリガー）
@@ -238,11 +270,11 @@ def test_normal_when_scenario_fix(
         pr_now = _get(pr.number)
         if "確認:single-scenario-writer" in {label.name for label in pr_now.labels}:
             return None
-        story_now = _get(story.number)
+        story_now = _get(story_pr.number)
         if "確認:story-conductor" not in {label.name for label in story_now.labels}:
             return None
         story_comments = gh_live.rest.issues.list_comments(
-            owner=owner, repo=repo, issue_number=story.number
+            owner=owner, repo=repo, issue_number=story_pr.number
         ).parsed_data
         completion = [c for c in story_comments if "> to: @story-conductor" in (c.body or "")]
         return completion if completion else None
@@ -265,14 +297,13 @@ def test_normal_when_scenario_fix(
     assert "> from: @single-scenario-writer" in (thread.body or ""), "修正内容が返信追記されていない"
     assert server._is_minimized(instruction.node_id), "シナリオ修正指示コメントが未 Resolve"
 
-    # 検証: 完了報告が未 Resolve のまま親 story Issue に投稿されている
+    # 検証: 完了報告が未 Resolve のまま親 story PR に投稿されている
     assert not server._is_minimized(completion[-1].node_id), "完了報告が Resolve されている"
-    assert intake is not None
 
 
 def test_normal_when_reverse(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, story_issue_factory,
-    commit_file, sandbox, wait_until,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, commit_file, sandbox, wait_until,
 ):
     """現状のシナリオを入力にした単一 UC シナリオ設計を実環境で確認する（正常系・リバースエンジニアリング）。"""
     owner, repo = repo_ctx
@@ -280,19 +311,14 @@ def test_normal_when_reverse(
     def _get(number):
         return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
 
-    # 準備: RE 経路の epic / story と、現状のシナリオが入った story ブランチ
-    intake, epic = epic_issue_factory(
-        INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
-        epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
+    # 準備: RE 経路の epic / story と、現状のシナリオが入ったシナリオ成果物 PR
+    ctx = _setup_scenario_pr(
+        gh_live, owner, repo, sandbox,
+        epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory,
+        extra_labels=["type:docs", "リバースエンジニアリング"],
     )
-    story = story_issue_factory(
-        epic.number, STORY_TITLE, body=STORY_BODY_TEMPLATE.format(epic_number=epic.number),
-        labels=["layer:story", "type:docs", "リバースエンジニアリング"],
-    )
-    branch = f"feat/story/task-edit-{story.number}/base"
-    pr = epic_pr_factory(branch=branch, title=STORY_TITLE, body=f"## 紐づく Issue\n\n- #{story.number}\n")
+    pr, branch = ctx["pr"], ctx["branch"]
     commit_file(branch, CURRENT_SCENARIO_PATH, CURRENT_SCENARIO_MD, "docs: 現状の単一UC シナリオを追加")
-    _worktree(sandbox["local_path"], branch)
     seed = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch=branch).parsed_data.commit.sha
     gh_live.rest.issues.add_labels(
         owner=owner, repo=repo, issue_number=pr.number, labels=["確認:single-scenario-writer"]
@@ -319,4 +345,4 @@ def test_normal_when_reverse(
     assert [c for c in pr_comments if (c.body or "").lstrip().startswith("> from: @single-scenario-writer")], (
         "確認事項コメントが投稿されていない"
     )
-    assert intake is not None and pr_data is not None
+    assert pr_data is not None

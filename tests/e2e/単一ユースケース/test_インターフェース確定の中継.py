@@ -88,7 +88,7 @@ def test_normal(
         gh_live, owner, repo,
         epic_issue_factory, epic_pr_factory, draft_pr_factory,
         story_issue_factory, subsystem_issue_factory, commit_file,
-        pr_body=SUBSYSTEM_PR_BODY,
+        pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
     # 準備: 後続 subsystem が 未作成 で残っている story 本文にする
     gh_live.rest.issues.update(

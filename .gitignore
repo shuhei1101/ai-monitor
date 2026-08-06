@@ -47,3 +47,4 @@ plugins/ai-monitor/hooks/pre-tool-use/inject-rules/cache/
 
 # E2E の共有モニター作業ディレクトリ
 .e2e/
+.claude/settings.local.json

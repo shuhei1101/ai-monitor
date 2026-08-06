@@ -43,10 +43,18 @@ BOUNCE_REPORT = """> from: @ss-design-reverse-engineer
 """
 
 
-def _find_re_pr(gh_live, owner, repo, subsystem_number: int):
-    """subsystem Issue に紐づく open PR を返す（無ければ None）。"""
+def _child_prs(gh_live, owner, repo, subsystem_branch: str) -> list:
+    """subsystem ブランチを base にした open PR を返す。"""
     pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-    candidates = [p for p in pulls if f"#{subsystem_number}" in (p.body or "")]
+    return [p for p in pulls if p.base.ref == subsystem_branch]
+
+
+def _find_re_pr(gh_live, owner, repo, subsystem_branch: str):
+    """subsystem ブランチ配下の RE PR を返す（無ければ None）。"""
+    candidates = [
+        p for p in _child_prs(gh_live, owner, repo, subsystem_branch)
+        if p.head.ref.startswith("docs/reverse/")
+    ]
     return candidates[0] if candidates else None
 
 
@@ -71,11 +79,12 @@ def test_normal_when_request(
         story_issue_factory, subsystem_issue_factory, commit_file,
         subsystem_labels=RE_LABELS,
     )
-    subsystem_number = ctx["subsystem"].number
+    subsystem_pr_number = ctx["subsystem_pr"].number
+    subsystem_branch = ctx["subsystem_branch"]
 
     # 実行: RE PR の作成と依頼先への引き渡しを待つ
     def _requested():
-        pr = _find_re_pr(gh_live, owner, repo, subsystem_number)
+        pr = _find_re_pr(gh_live, owner, repo, subsystem_branch)
         if pr is None:
             return None
         pr_labels = label_names(issue(gh_live, owner, repo, pr.number))
@@ -83,15 +92,15 @@ def test_normal_when_request(
 
     pr = wait_until(_requested, timeout_sec=2400, message="RE Draft PR の作成と依頼")
 
-    # 検証: base は通常 PR と同じ story ブランチで、Draft のまま
+    # 検証: base は自レイヤーの subsystem ブランチで、Draft のまま
     assert pr.draft is True, "RE PR が Draft で作成されていない"
-    assert pr.base.ref == ctx["story_branch"], f"base が story ブランチでない: {pr.base.ref}"
+    assert pr.base.ref == subsystem_branch, f"base が subsystem ブランチでない: {pr.base.ref}"
     pr_body = (pr.body or "").replace("\r\n", "\n")
     assert "## 紐づく Issue" in pr_body, "PR 本文に ## 紐づく Issue がない"
     assert "## タスク一覧" in pr_body, "PR 本文に ## タスク一覧 がない"
 
     # 検証: 作成した PR の番号が自セッションの監視面に登録されている
-    assert pr.number in watch_numbers(e2e_state_path, "subsystem-conductor", subsystem_number), (
+    assert pr.number in watch_numbers(e2e_state_path, "subsystem-conductor", subsystem_pr_number), (
         "RE PR の番号が監視面に登録されていない"
     )
 
@@ -100,17 +109,18 @@ def test_normal_when_request(
     assert requests, "RE の依頼コメントが投稿されていない"
     assert not server._is_minimized(requests[-1].node_id), "依頼コメントが Resolve されている"
 
-    # 検証: 通常 PR はまだ作られていない
-    open_prs = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-    linked = [p for p in open_prs if f"#{subsystem_number}" in (p.body or "")]
-    assert len(linked) == 1, f"RE PR 以外の PR が作られている: {[p.number for p in linked]}"
+    # 検証: RE PR 以外の成果物 PR はまだ作られていない
+    children = _child_prs(gh_live, owner, repo, subsystem_branch)
+    assert [p.number for p in children] == [pr.number], (
+        f"RE PR 以外の成果物 PR が作られている: {[p.number for p in children]}"
+    )
 
     # 検証: 手番が依頼先へ渡り、依頼元は起動条件を満たさなくなる（依頼中の再起動が起きない）
     def _handed_over():
-        names = label_names(issue(gh_live, owner, repo, subsystem_number))
+        names = label_names(issue(gh_live, owner, repo, subsystem_pr_number))
         return True if "確認:subsystem-conductor" not in names else None
 
-    wait_until(_handed_over, timeout_sec=900, message="対象 Issue の 確認:subsystem-conductor の除去")
+    wait_until(_handed_over, timeout_sec=900, message="subsystem PR の 確認:subsystem-conductor の除去")
 
 
 def test_normal_when_merge(
@@ -125,13 +135,13 @@ def test_normal_when_merge(
         story_issue_factory, subsystem_issue_factory, commit_file,
         subsystem_labels=["layer:subsystem", "scope:backend", "リバースエンジニアリング"],
     )
-    subsystem_number = ctx["subsystem"].number
+    subsystem_pr_number = ctx["subsystem_pr"].number
     # 準備: RE が現状の設計書を commit 済みの RE PR を再現する
-    re_branch_name = f"docs/reverse/backend/task-edit-{subsystem_number}"
+    re_branch_name = f"docs/reverse/backend/task-edit-{ctx['subsystem'].number}"
     re_pr = draft_pr_factory(
         re_branch_name, f"{SUBSYSTEM_TITLE}（現状の設計書）",
-        f"## 紐づく Issue\n\n- #{subsystem_number}\n\n## タスク一覧\n\n- [x] 現状のモジュール構成を起こす\n",
-        base_branch=ctx["story_branch"],
+        f"## 紐づく Issue\n\n- #{subsystem_pr_number}\n\n## タスク一覧\n\n- [x] 現状のモジュール構成を起こす\n",
+        base_branch=ctx["subsystem_branch"],
     )
     commit_file(re_branch_name, MODULE_PATH, MODULE_MD, "docs: 現状のモジュール構成を追加")
 
@@ -152,7 +162,7 @@ def test_normal_when_merge(
     wait_until(_merged, timeout_sec=2400, message="RE PR のマージ")
 
     # 検証: base ブランチに現状の設計書が入っている
-    assert _file_exists(gh_live, owner, repo, MODULE_PATH, ctx["story_branch"]), (
+    assert _file_exists(gh_live, owner, repo, MODULE_PATH, ctx["subsystem_branch"]), (
         "base ブランチに現状の設計書が入っていない"
     )
 
@@ -163,20 +173,22 @@ def test_normal_when_merge(
 
     # 検証: RE PR の番号が監視面から除去されている
     def _watch_updated():
-        numbers = watch_numbers(e2e_state_path, "subsystem-conductor", subsystem_number)
+        numbers = watch_numbers(e2e_state_path, "subsystem-conductor", subsystem_pr_number)
         return True if re_pr.number not in numbers else None
 
     wait_until(_watch_updated, timeout_sec=900, message="RE PR の番号が監視面から除去")
 
-    # 検証: 手番が対象 Issue へ戻る（要件確定へ続く。本文はまだ空）
+    # 検証: 手番が subsystem PR へ戻る（要件確定へ続く。SA はまだ未記入）
     def _handed_back():
-        data = issue(gh_live, owner, repo, subsystem_number)
+        data = issue(gh_live, owner, repo, subsystem_pr_number)
         return data if "確認:subsystem-conductor" in label_names(data) else None
 
     subsystem_now = wait_until(
-        _handed_back, timeout_sec=900, message="対象 Issue への 確認:subsystem-conductor 付与"
+        _handed_back, timeout_sec=900, message="subsystem PR への 確認:subsystem-conductor 付与"
     )
-    assert not (subsystem_now.body or "").strip(), f"対象 Issue の本文が埋まっている: {subsystem_now.body}"
+    assert "## システム要件（SA）" not in (subsystem_now.body or ""), (
+        f"要件確定が先に進んでいる: {subsystem_now.body}"
+    )
 
     # 検証: 自分宛コメントが Resolve 済み
     assert server._is_minimized(report.node_id), "RE の完了報告が未 Resolve"
@@ -194,13 +206,12 @@ def test_error_when_bounced(
         story_issue_factory, subsystem_issue_factory, commit_file,
         subsystem_labels=["layer:subsystem", "scope:backend", "リバースエンジニアリング"],
     )
-    subsystem_number = ctx["subsystem"].number
     # 準備: 設計書が 1 ページも commit されていない RE PR を再現する
-    re_branch_name = f"docs/reverse/backend/task-edit-{subsystem_number}"
+    re_branch_name = f"docs/reverse/backend/task-edit-{ctx['subsystem'].number}"
     re_pr = draft_pr_factory(
         re_branch_name, f"{SUBSYSTEM_TITLE}（現状の設計書）",
-        f"## 紐づく Issue\n\n- #{subsystem_number}\n\n## タスク一覧\n\n- [ ] 現状のモジュール構成を起こす\n",
-        base_branch=ctx["story_branch"],
+        f"## 紐づく Issue\n\n- #{ctx['subsystem_pr'].number}\n\n## タスク一覧\n\n- [ ] 現状のモジュール構成を起こす\n",
+        base_branch=ctx["subsystem_branch"],
     )
 
     # 準備: RE の差し戻し報告 → 確認:subsystem-conductor 付与（起動トリガー）

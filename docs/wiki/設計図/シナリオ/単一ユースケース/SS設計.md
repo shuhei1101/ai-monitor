@@ -67,7 +67,7 @@ sequenceDiagram
   activate MON
   MON->>GH: 成果物 PR の<br>自分宛コメント一括 Resolve
 
-  MON->>GH: 親 subsystem PR のタスク一覧の<br>設計タスクにチェックを入れる
+  MON->>GH: 成果物 PR のタスク一覧の<br>設計タスクにチェックを入れる
   MON->>GH: 成果物 PR の 確認:architect 除去
   MON->>GH: 成果物 PR に 完了報告コメント +<br>確認:subsystem-conductor 付与<br>（マージと次段階の発注を依頼）
   deactivate MON
@@ -80,7 +80,7 @@ sequenceDiagram
 - タスク一覧の担当分の設計 Wiki（`設計図/ER図/{分類}.md` / `設計図/画面構成/{画面名}.md` / `設計図/インターフェース定義/バックエンド/{論理名}.md` / `設計図/インターフェース定義/フロントエンド/{論理名}.md`）が上流順に作成され、interface の成果物ブランチに commit されている
 - モジュール構成は本段階では作られていない（次の段階の成果物ブランチで作る）
 - ユーザーの確認が全ページで 1 回にまとまっている（`議論中` の付与がページ数ぶん繰り返されていない）
-- 親 subsystem PR の `## タスク一覧` の設計タスクがチェック済み
+- 成果物 PR の `## タスク一覧` の設計タスクがチェック済み
 - 完了報告コメントに、確定した設計 Wiki のページ名と各ページの commit 範囲が記載されている
 - 成果物 PR に `確認:subsystem-conductor` が付与され、`確認:architect` が除去されている
 - 自分宛コメントが全て Resolve 済み
@@ -95,7 +95,7 @@ sequenceDiagram
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| 成果物 Draft PR | `確認:architect` 付与済み（base=subsystem ブランチ） | 親 subsystem PR の `## タスク一覧` は承認済み |
+| 成果物 Draft PR | `確認:architect` 付与済み（base=subsystem ブランチ） | 成果物 PR の `## タスク一覧` は承認済み |
 | タスク一覧 | 設計タスクにインターフェース定義（バックエンド）が含まれる | 報告を誘発 |
 | assignee | 未設定 | エージェント起動条件 |
 
@@ -132,7 +132,7 @@ sequenceDiagram
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| 成果物 Draft PR | `確認:architect` 付与済み（base=subsystem ブランチ） | 親 subsystem PR の `## タスク一覧` は承認済み |
+| 成果物 Draft PR | `確認:architect` 付与済み（base=subsystem ブランチ） | 成果物 PR の `## タスク一覧` は承認済み |
 | タスク一覧 | 設計タスクが インターフェース定義（バックエンド）・モジュール構成 のみ | DB 変更を伴わない subsystem。分岐を決定的に誘発 |
 | assignee | 未設定 | エージェント起動条件 |
 
@@ -146,13 +146,13 @@ sequenceDiagram
 
   Note over MON: 起動〜領域別アーキ調査までは<br>正常シナリオと同一
   activate MON
-  MON->>GH: 親 subsystem PR の タスク一覧 を読み<br>担当分（インターフェース定義（バックエンド）・<br>モジュール構成の 2 件）を把握
+  MON->>GH: 成果物 PR の タスク一覧 を読み<br>担当分（インターフェース定義（バックエンド）・<br>モジュール構成の 2 件）を把握
 
   loop タスク一覧の設計 Wiki ごと<br>（インターフェース →<br>インターフェース定義（バックエンド）（フロー）→<br>モジュール構成）
     Note over MON: 作成〜確定の手順は<br>正常シナリオと同一
   end
 
-  MON->>GH: 親 subsystem PR のタスク一覧の<br>設計タスクにチェックを入れる
+  MON->>GH: 成果物 PR のタスク一覧の<br>設計タスクにチェックを入れる
   MON->>GH: 成果物 PR の 確認:architect 除去
   MON->>GH: 成果物 PR に 完了報告コメント +<br>確認:subsystem-conductor 付与<br>（マージと次段階の発注を依頼）
   deactivate MON
@@ -188,7 +188,7 @@ sequenceDiagram
   ORC-->>GH: polling（確認ラベル + assignee なし を検知）
   ORC->>MON: セッションを作成して送信
   activate MON
-  MON-->>GH: 親 subsystem PR の タスク一覧 を読み<br>設計タスクが 0 件と判定
+  MON-->>GH: 成果物 PR の タスク一覧 を読み<br>設計タスクが 0 件と判定
   MON-->>GH: 親 subsystem PR の システム要件（SA）と<br>親 story の ユースケース要件 を取得
   MON->>REPO: worktree で fail 内容と<br>既存の設計 Wiki・実装コードを確認
   MON->>MON: 影響調査の判定一覧が<br>全て「維持」と確定
@@ -361,7 +361,7 @@ sequenceDiagram
     MON->>GH: 成果物 PR の<br>自分宛コメント一括 Resolve
   end
 
-  MON->>GH: 親 subsystem PR のタスク一覧の<br>設計タスクにチェックを入れる
+  MON->>GH: 成果物 PR のタスク一覧の<br>設計タスクにチェックを入れる
   MON->>GH: 成果物 PR の 確認:architect 除去
   MON->>GH: 成果物 PR に 確認:subsystem-conductor 付与<br>（現状固定テスト作成タスクの割り当て）
   deactivate MON
@@ -375,7 +375,7 @@ sequenceDiagram
 - 本 PR の Files changed が現状からあるべき姿への変更範囲になっている
 - 各設計 Wiki の構成要素が実装の物理名と対応づいている（コンテナ列・物理名の引用行が実ファイル / 実シンボルを指す）
 - 現状構造とあるべき構造の差分が提案コメントに一覧化され、リファクタ範囲がユーザーと合意されている
-- 親 subsystem PR の `## タスク一覧` の設計タスクがチェック済み
+- 成果物 PR の `## タスク一覧` の設計タスクがチェック済み
 - 成果物 PR に `確認:subsystem-conductor` が付与され、`確認:architect` が除去されている
 - 自分宛コメントが全て Resolve 済み
 - 応答ループの各ターンで、決着したインライン確認事項スレッドが確定内容の返信付きで Resolve されている
