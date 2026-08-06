@@ -13,7 +13,7 @@ architect:
   - エージェント/architect/フェーズ/エスカレーション報告.md
   - エージェント/architect/フェーズ/応答ループ.md
   - エージェント/architect/フェーズ/再開指示の受領.md
-  - エージェント/architect/フェーズ/テスト作成の委任.md
+  - エージェント/architect/フェーズ/設計完了の引き渡し.md
   - エージェント/architect/フェーズ/テストレビュー.md
   - エージェント/architect/フェーズ/実装後の再レビュー.md
   - エージェント/architect/フェーズ/実装レビュー.md
@@ -52,6 +52,7 @@ epic-conductor:
   - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md
   - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
   - エージェント/RE発注共通/フェーズ/RE完了確認.md
+  - エージェント/RE発注共通/フェーズ/RE中止.md
   - エージェント/RE発注共通/フェーズ/REマージ.md
   - エージェント/epic-conductor/フェーズ/要件確定（完了処理）.md
   - エージェント/epic-conductor/フェーズ/PoC結果確認.md
@@ -132,6 +133,7 @@ story-conductor:
   - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md
   - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
   - エージェント/RE発注共通/フェーズ/RE完了確認.md
+  - エージェント/RE発注共通/フェーズ/RE中止.md
   - エージェント/RE発注共通/フェーズ/REマージ.md
   - エージェント/story-conductor/フェーズ/要件確定（完了処理）.md
   - エージェント/story-conductor/フェーズ/子subsystemPR作成（初回）.md
@@ -158,6 +160,7 @@ subsystem-conductor:
   - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md
   - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
   - エージェント/RE発注共通/フェーズ/RE完了確認.md
+  - エージェント/RE発注共通/フェーズ/RE中止.md
   - エージェント/RE発注共通/フェーズ/REマージ.md
   - エージェント/subsystem-conductor/フェーズ/エスカレーション対応（方針確認）.md
   - エージェント/subsystem-conductor/フェーズ/エスカレーション対応（実行）.md
@@ -166,6 +169,7 @@ subsystem-conductor:
   - エージェント/subsystem-conductor/フェーズ/SA変更確定.md
   - エージェント/subsystem-conductor/フェーズ/要件確定（完了処理）.md
   - エージェント/subsystem-conductor/フェーズ/インターフェース確定の中継.md
+  - エージェント/subsystem-conductor/フェーズ/成果物の受け取り.md
   - エージェント/subsystem-conductor/フェーズ/マージ起動.md
   - エージェント/subsystem-conductor/フェーズ/subsystemマージ.md
   - エージェント/共通/フェーズ/申し送りの反映.md
@@ -211,6 +215,7 @@ system-conductor:
   - エージェント/RE発注共通/フェーズ/リバースエンジニアリング起動.md
   - エージェント/RE発注共通/フェーズ/RE差し戻し対応.md
   - エージェント/RE発注共通/フェーズ/RE完了確認.md
+  - エージェント/RE発注共通/フェーズ/RE中止.md
   - エージェント/RE発注共通/フェーズ/REマージ.md
   - エージェント/system-conductor/フェーズ/構成確定（初回）.md
   - エージェント/system-conductor/フェーズ/構成確定（完了処理）.md

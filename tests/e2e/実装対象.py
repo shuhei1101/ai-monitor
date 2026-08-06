@@ -15,11 +15,7 @@ INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集できる機能を追加する。"
 
 EPIC_TITLE = "タスク編集機能"
-EPIC_BODY = """## 前提条件
-
-なし
-
-## 概要
+EPIC_BODY = """## 概要
 
 既存タスクを一覧から選択して編集できる機能を提供する。
 
@@ -29,9 +25,9 @@ EPIC_BODY = """## 前提条件
 
 ## ユースケース一覧
 
-| UC 名 | 概要 | 対応 story |
-| --- | --- | --- |
-| タスク編集 | 一覧から編集画面へ遷移して編集内容を保存する | 起票済み |
+| ユースケース | 変更種別 | 概要 | 対応 story | 補足 |
+| --- | --- | --- | --- | --- |
+| タスク編集 | 変更 | 一覧から編集画面へ遷移して編集内容を保存する | 作成済み | - |
 
 ## 横断要件
 
@@ -39,11 +35,7 @@ EPIC_BODY = """## 前提条件
 """
 
 STORY_TITLE = "タスク編集"
-STORY_BODY_TEMPLATE = """## 前提条件
-
-なし
-
-## 概要
+STORY_BODY_TEMPLATE = """## 概要
 
 ユーザーが一覧からタスクを選択して、内容を編集して保存する。
 
@@ -61,6 +53,53 @@ STORY_BODY_TEMPLATE = """## 前提条件
 
 SUBSYSTEM_TITLE = "タスク編集 バックエンド"
 
+# subsystem のベース PR 本文（要件の SoT。タスク一覧とテスト結果は成果物 PR が持つ）
+SUBSYSTEM_BASE_BODY = """## 紐づく Issue
+
+- #{subsystem_number}
+
+## 概要
+
+タスク編集機能のバックエンド側実装（更新 API と入力検証）を担当する。
+
+## 背景
+
+親 story「タスク編集」のバックエンド担当。
+既存の `src/tasks/service.py` に更新処理を追加する。
+
+## 現状
+
+### 関連 Issue/PR
+
+なし
+
+### 関連ドキュメント
+
+| 分類 | ページ | 概要 | 補足 |
+| --- | --- | --- | --- |
+| Wiki | `設計図/モジュール構成/バックエンド/タスク.py.md` | タスクのドメインロジック | 更新対象 |
+
+## システム要件（SA）
+
+### 機能要件
+
+| カテゴリ | 要件 | 補足 |
+| --- | --- | --- |
+| 編集機能 | タスクのタイトルと本文を更新できる | - |
+| バリデーション | タイトルは 1 文字以上 100 文字以内 | 空文字は拒否 |
+
+### 非機能要件
+
+なし
+
+### スコープ外
+
+| 項目 | 理由 | 補足 |
+| --- | --- | --- |
+| 画面の実装 | フロントエンドは本 story の対象外 | - |
+"""
+
+# 成果物 PR 本文（作業対象。タスク一覧を持つ）
 SUBSYSTEM_PR_BODY = """## 紐づく Issue
 
 - #{subsystem_number}
@@ -974,9 +1013,13 @@ def setup_subsystem(
     gh_live, owner, repo,
     epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file,
-    *, pr_body: str,
+    *, pr_body: str, artifact: str = "update-api",
 ):
-    """epic / story / subsystem の Issue と PR を作り、subsystem PR まで用意する。"""
+    """epic / story / subsystem のベース PR と、作業対象の成果物 PR まで用意する。
+
+    ベース PR は要件の SoT、成果物 PR は作業する面（タスク一覧を持つ）。
+    `pr` / `subsystem_branch` は作業対象（成果物側）を指す。
+    """
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
@@ -997,16 +1040,24 @@ def setup_subsystem(
     subsystem = subsystem_issue_factory(
         story.number, SUBSYSTEM_TITLE, labels=["layer:subsystem", "scope:backend"]
     )
-    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    # subsystem のベース PR（要件の SoT。確認ラベルなし = 起動対象にしない）
+    subsystem_base_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    subsystem_pr = draft_pr_factory(
+        subsystem_base_branch, SUBSYSTEM_TITLE,
+        SUBSYSTEM_BASE_BODY.format(subsystem_number=subsystem.number), base_branch=story_branch,
+    )
+    # 作業対象の成果物 PR（base=subsystem ベースブランチ）
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/{artifact}"
     pr = draft_pr_factory(
         subsystem_branch, SUBSYSTEM_TITLE,
-        pr_body.format(subsystem_number=subsystem.number), base_branch=story_branch,
+        pr_body.format(subsystem_number=subsystem.number), base_branch=subsystem_base_branch,
     )
     return {
         "intake": intake, "epic": epic, "story": story, "subsystem": subsystem,
-        "pr": pr, "epic_pr": epic_pr, "story_pr": story_pr,
+        "pr": pr, "epic_pr": epic_pr, "story_pr": story_pr, "subsystem_pr": subsystem_pr,
         "epic_branch": epic_branch, "story_branch": story_branch,
         "subsystem_branch": subsystem_branch,
+        "subsystem_base_branch": subsystem_base_branch,
     }
 
 

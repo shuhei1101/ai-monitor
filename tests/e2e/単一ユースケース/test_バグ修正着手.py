@@ -180,11 +180,7 @@ API 単体でも検証する必要があります。SA を見直したうえで�
 """
 
 # 検証責務がフロントエンドにあると書かれた SA（この記述の誤りを直させる）
-SA_CONFLICT_SUBSYSTEM_BODY = """## 前提条件
-
-なし
-
-## 概要
+SA_CONFLICT_SUBSYSTEM_BODY = """## 概要
 
 タスク編集のバックエンド側（`update_task`）を担当する。
 

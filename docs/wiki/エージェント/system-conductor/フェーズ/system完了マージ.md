@@ -8,7 +8,25 @@
 
 system PR 本文の `## エピック一覧` の `対応 PR` 列の番号を 1 件ずつ MCP `get_issue_or_pr` で取得し、全て merged かを確認する。
 
-- open の epic PR が残っている場合、報告コメントを Resolve して「ラベル除去」「作業完了報告」だけを実行する（残りの epic の完了報告で再び起動される）
+- open の epic PR が残っている場合、「次の epic の起動」へ進み、そこから「完了報告の Resolve」「ラベル除去」「作業完了報告」だけを実行する（マージ・起点 Issue のクローズ・監視面の除去は行わない。残りの epic の完了報告で再び起動される）
+
+### 次の epic の起動
+
+open の epic PR が残っている場合だけ実行する。
+
+`## エピック一覧` の `着手順` が最も小さい未着手の epic PR（確認ラベルが 1 つも付いていないもの）を 1 件選ぶ。
+
+- 既にどれかの epic PR に確認ラベルが付いている場合は何もしない（その epic が進行中）
+- 未着手が無い場合も何もしない
+
+MCP `add_labels` を呼ぶ:
+- `number`: 選んだ epic PR の番号
+- `is_pr`: true
+- `labels`:
+  - `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` の値
+
+着手順は「確認ラベルが 1 本だけ付いている」状態で表す（規約『ブランチ戦略』の着手順の表し方）。
+確認ラベルが無い PR はモニターが起動しないため、この付け替えが直列化そのものになる。
 
 ### 完了報告の Resolve
 
@@ -29,10 +47,7 @@ system ブランチの worktree へ移動し、`規約/マージ手順.md` に�
 
 - コンフリクトが発生した場合、system PR に競合ファイルとどちらを残すかの相談コメントを投稿し、`議論中` 付与 + `assignee=ユーザー` で待機する（解消の往復は「応答ループ」で回し、全競合解消後に本手順へ合流する）
 
-MCP `unlink_stack` を呼ぶ:
-- `pr_number`: system PR の番号
-
-続けて MCP `merge_pr` を呼ぶ:
+MCP `merge_pr` を呼ぶ:
 - `pr_number`: system PR の番号
 - `strategy`: `squash`
 

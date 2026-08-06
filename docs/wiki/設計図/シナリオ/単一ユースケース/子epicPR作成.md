@@ -39,7 +39,6 @@ sequenceDiagram
   MON-->>GH: エピックの PR 本文テンプレートを取得
   MON->>GH: epic 件数分のブランチを作成<br>（base=system ブランチ）
   MON->>GH: 各ブランチに Draft PR を作成<br>（layer:epic + type:* + 親の リバースエンジニアリング<br>ラベル付与・確認ラベルなし・<br>ユースケース一覧を記入）
-  MON->>GH: 着手順が 2 番目以降の PR を<br>先行 PR の上に積んでスタックに接続
   MON->>GH: system PR の エピック一覧 の<br>対応 PR 列に作成した番号を反映
   MON->>GH: 着手順が先頭の epic PR に<br>確認:epic-conductor 付与
   MON->>GH: system PR の自分宛コメント一括 Resolve
@@ -54,8 +53,8 @@ sequenceDiagram
 - 各 epic PR の base が system ブランチになっている
 - 各 epic PR 本文の `## ユースケース一覧` がエピック一覧の所属ユースケースで埋まり、対応 story 列が全行 `未作成`
 - 各 epic PR 本文の `## ユースケース一覧` の `変更種別` 列が全行 `新規` / `変更` / `削除` のいずれかで埋まっている（未記入の行がない）
-- 着手順が 2 番目以降の epic PR が先行 epic PR の上に積まれ、スタックの並びが着手順と一致している
-- スタック上で下に open な PR が残っている epic PR に着手の痕跡が無い（`議論中` 未付与・assignee 未設定・epic-conductor の投稿コメントなし）
+- 着手順が 2 番目以降の epic PR には確認ラベルが付いていない（先行のマージ時に付け替えられる）
+- 確認ラベルが付いていない epic PR に着手の痕跡が無い（`議論中` 未付与・assignee 未設定・epic-conductor の投稿コメントなし）
 - 全 epic PR に `layer:epic` と、経路に応じた `type:*`（新規は `type:feat` / 移行は `type:docs`）が付与されている
 - 親 system PR に `リバースエンジニアリング` ラベルが付いていた場合、全 epic PR に引き継がれている（付いていなければ子にも付かない）
 - `確認:epic-conductor` が着手順の先頭 epic PR にだけ付いている

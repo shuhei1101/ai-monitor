@@ -36,7 +36,7 @@ def _open_children(gh_live, owner: str, repo: str, base_branch: str) -> list:
 
 def test_normal(
     monitor, gh_live, repo_ctx, system_issue_factory, layer_pr_factory, commit_file,
-    stack_of, wait_until,
+    wait_until,
 ):
     """エピック一覧からの子 epic PR 一括作成と先頭 epic だけの起動を実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
@@ -90,17 +90,14 @@ def test_normal(
     # 検証: 着手は直列なので確認ラベルは先頭 1 件だけ
     assert len(started) == 1, f"確認:epic-conductor が先頭 1 件に絞られていない: {started}"
 
-    # 検証: 着手順 2 番目が先行 epic PR の上に積まれ、下に open が残る間は着手されていない
+    # 検証: 着手順 2 番目以降には確認ラベルが無く、着手の痕跡も無い
     others = [pr.number for pr in children if pr.number not in started]
     for number in others:
-        stack = stack_of(number)
-        assert stack is not None, f"#{number} がスタックに接続されていない"
-        assert stack.below_open, f"#{number} の下に open な先行 PR がない: {stack.pull_requests}"
-        assert started[0] in stack.below_open, (
-            f"#{number} の下に先頭 epic #{started[0]} が居ない: {stack.below_open}"
-        )
         follower = issue(gh_live, owner, repo, number)
         follower_labels = label_names(follower)
+        assert "確認:epic-conductor" not in follower_labels, (
+            f"#{number} に確認ラベルが付いている（着手順の先頭は #{started[0]}）"
+        )
         assert "議論中" not in follower_labels, f"#{number} に着手の痕跡（議論中）がある"
         assert not follower.assignees, f"#{number} に着手の痕跡（assignee）がある"
         assert not comments_from(gh_live, owner, repo, number, "epic-conductor"), (

@@ -58,7 +58,7 @@ WRITER_REPORT = """> from: @complex-scenario-writer
 
 
 def test_normal(
-    monitor, gh_live, repo_ctx, issue_factory, layer_pr_factory, stack_of, wait_until
+    monitor, gh_live, repo_ctx, issue_factory, layer_pr_factory, wait_until
 ):
     """完了報告の受領 → UC 数分の子 story PR 作成 → 対応 story 列の反映を確認する（正常系）。"""
     owner, repo = repo_ctx
@@ -111,16 +111,6 @@ def test_normal(
         )
         assert "リバースエンジニアリング" not in names, (
             f"#{story.number} に親に無い リバースエンジニアリング が付いている"
-        )
-
-    # 検証: 着手順の依存が無いので story PR 同士は積み重なっていない
-    numbers = {story.number for story in stories}
-    for story in stories:
-        stack = stack_of(story.number)
-        if stack is None:
-            continue
-        assert not (numbers & set(stack.below_open)), (
-            f"#{story.number} の下に兄弟 story が積まれている: {stack.below_open}"
         )
 
     # 検証: 対応 story 列の 未作成 が全て #番号 に置き換わっている

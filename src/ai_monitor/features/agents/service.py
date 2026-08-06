@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 from ai_monitor.features.agents.docs import build_agent_docs, load_phase_config
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
-from ai_monitor.integrations.github.stacks import get_stack
 from ai_monitor.integrations.github.labels import add_label
 from ai_monitor.integrations.tmux.ops import create_session, kill_session, send_keys
 from ai_monitor.shared.settings import MonitoredProject, TelemetrySettings
@@ -67,19 +66,8 @@ def poll(
     # 優先度順にソートして 1 件ずつ処理する
     ranks = {priority_urgent: 0, priority_low: 2}
     for target in sorted(matched, key=lambda t: _sort_key(t, ranks)):
-        # スタック上で自分より下に open な PR が残っている対象は送らない
-        # （起動しても待機して終わるだけで、Claude の利用枠を消費するため）
-        if isinstance(target, PullRequest):
-            stack = get_stack(project, target.number)
-            if stack is not None and stack.below_open:
-                logger.info(
-                    "スタック下位が open のため起動を見送りました: project=%s agent_name=%s number=%s below=%s",
-                    project.name,
-                    agent.name,
-                    target.number,
-                    stack.below_open,
-                )
-                continue
+        # 着手順は確認ラベルが 1 本だけ付いている状態で表すため、ここでの抑止は要らない
+        # （規約『ブランチ戦略』の着手順の表し方。付け替えはマージ時に親 conductor が行う）
         _process_one(
             project,
             agent,

@@ -6,11 +6,7 @@ from tests.e2e.エスカレーション import comments_from, issue, label_names
 from tests.e2e.実装対象 import SUBSYSTEM_PR_BODY, setup_subsystem
 
 # 依存順の後続 subsystem が 未作成 で残っている story 本文
-STORY_BODY_TEMPLATE = """## 前提条件
-
-なし
-
-## 概要
+STORY_BODY_TEMPLATE = """## 概要
 
 ユーザーが一覧からタスクを選択して、内容を編集して保存する。
 
@@ -34,11 +30,7 @@ STORY_BODY_TEMPLATE = """## 前提条件
 """
 
 # SA 確定済みの subsystem 本文（未記入だと索引が要件確定（初回）にマッチしてしまう）
-SUBSYSTEM_BODY_TEMPLATE = """## 前提条件
-
-なし
-
-## 概要
+SUBSYSTEM_BODY_TEMPLATE = """## 概要
 
 タスク編集のバックエンド側（タスク更新 API と入力検証）を担当する。
 

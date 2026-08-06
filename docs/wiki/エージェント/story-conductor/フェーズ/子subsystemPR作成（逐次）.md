@@ -41,14 +41,6 @@ MCP `create_draft_pr` を呼ぶ:
   - 対象システムの `scope:*` ラベル
   - 親から引き継ぐラベル（`type:*` / `リバースエンジニアリング`）
 
-### スタックへの接続
-
-先行 subsystem のインターフェースが確定済みのため待たせない。
-自 PR のスタックへ直接繋ぐ。
-
-MCP `link_stack` を呼ぶ:
-- `pull_requests`: 自 PR 番号と作成した PR 番号の配列（下から上）
-
 ### 確認ラベルの付与
 
 MCP `add_labels` を呼ぶ:

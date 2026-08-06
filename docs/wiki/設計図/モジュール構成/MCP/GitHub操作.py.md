@@ -2394,7 +2394,7 @@ CreatedIssueResult(issue_number=87, url="https://github.com/shuhei1101/my-plugin
 create_monitor_rule_issue(
     title="PR 本文テンプレート（エピック）に変更種別の記入例が無い",
     body="テンプレートに記入例が無く、列の要否を読み取れなかった。",
-    rule_page="docs/wiki/テンプレート/PR本文/エピック.md",
+    rule_page="docs/wiki/テンプレート/PR本文/エピックベース.md",
     rule_excerpt="（`## ユースケース一覧` の記述例に変更種別の列が無い）",
     agent_name="epic-conductor",
     number=90,

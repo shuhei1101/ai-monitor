@@ -8,6 +8,7 @@ import signal
 import socket
 import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import httpx
@@ -48,8 +49,14 @@ def pytest_sessionstart(session):
     """前回の実行が残したモニターとロックを掃除する（xdist では controller 側だけが実行する）。
 
     残骸が生きていると新しい実行が古いコードのモニターに相乗りしてしまうため、必ず停止させる。
+
+    `--run-e2e` が無いときは何もしない。
+    収集だけの実行や単体テストの実行でモニターを止めると、
+    並行して走っている E2E のエージェントが MCP へ繋げなくなるため。
     """
     if hasattr(session.config, "workerinput"):
+        return
+    if not session.config.getoption("--run-e2e"):
         return
     pid_path = SHARED_DIR / "monitor.pid"
     if pid_path.exists():
@@ -71,6 +78,9 @@ def pytest_sessionfinish(session, exitstatus):
     """共有モニターを停止してロックを解放する（xdist では controller 側だけが実行する）。"""
     # worker 側は自分の session 終了ごとに呼ばれるため何もしない（他 worker がまだ走っている）
     if hasattr(session.config, "workerinput"):
+        return
+    # 収集だけの実行や単体テストの実行では、並行している E2E のモニターに触らない
+    if not session.config.getoption("--run-e2e"):
         return
     pid_path = SHARED_DIR / "monitor.pid"
     if pid_path.exists():
@@ -132,6 +142,18 @@ def broken_phase_page(ai_monitor_wiki):
 def gh_live():
     """sandbox 向けの実 githubkit クライアントを返す。"""
     return server._get_client()
+
+
+@pytest.fixture
+def nonce() -> str:
+    """テスト 1 件ごとに変わる短い識別子を返す。
+
+    sandbox には過去の実行で closed になった同名 Issue が残る。
+    タイトルを使い回すと intake-issue-triager の重複判定がそれを拾うため、
+    seed するタイトルにこれを混ぜて実行間で衝突しないようにする。
+    同じテストの中では同じ値になるので、重複を意図的に作る seed では共有できる。
+    """
+    return uuid.uuid4().hex[:6]
 
 
 @pytest.fixture
@@ -451,7 +473,9 @@ def draft_pr_factory(gh_live, repo_ctx):
     """
     owner, repo = repo_ctx
 
-    def _create(branch: str, title: str, body: str, *, base_branch: str = "master") -> object:
+    def _create(
+        branch: str, title: str, body: str, *, base_branch: str = "master", draft: bool = True
+    ) -> object:
         # base 先端の commit / tree を取得して空 commit を作る（API のみで diff なし PR を成立させる）
         base = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch=base_branch).parsed_data
         commit = gh_live.rest.git.create_commit(
@@ -459,8 +483,9 @@ def draft_pr_factory(gh_live, repo_ctx):
             tree=base.commit.commit.tree.sha, parents=[base.commit.sha],
         ).parsed_data
         gh_live.rest.git.create_ref(owner=owner, repo=repo, ref=f"refs/heads/{branch}", sha=commit.sha)
+        # マージ済みの状態を seed する PR は Draft のままだと 405 になるので draft=False で作る
         return gh_live.rest.pulls.create(
-            owner=owner, repo=repo, title=title, head=branch, base=base_branch, body=body, draft=True
+            owner=owner, repo=repo, title=title, head=branch, base=base_branch, body=body, draft=draft
         ).parsed_data
 
     return _create
@@ -492,8 +517,9 @@ def layer_pr_factory(gh_live, repo_ctx, draft_pr_factory):
         *,
         base_branch: str = "master",
         labels: list[str] | None = None,
+        draft: bool = True,
     ) -> object:
-        pr = draft_pr_factory(branch, title, body, base_branch=base_branch)
+        pr = draft_pr_factory(branch, title, body, base_branch=base_branch, draft=draft)
         if labels:
             gh_live.rest.issues.add_labels(
                 owner=owner, repo=repo, issue_number=pr.number, labels=labels
@@ -501,31 +527,6 @@ def layer_pr_factory(gh_live, repo_ctx, draft_pr_factory):
         return pr
 
     return _create
-
-
-@pytest.fixture
-def stack_of(sandbox, e2e_settings_path):
-    """PR のスタック所属を返すヘルパ（未所属は None）。
-
-    着手順の依存はスタックの並びで表すため、期待値の検証に使う。
-    """
-    from ai_monitor.integrations.github import client as gh_client
-    from ai_monitor.integrations.github.stacks import get_stack
-    from ai_monitor.shared.settings import MonitoredProject, Settings
-
-    # stacks.py は integrations 側の共有クライアントを使うので、テストプロセスでも初期化しておく
-    gh_client.get_client(Settings(**yaml.safe_load(e2e_settings_path.read_text(encoding="utf-8"))))
-    project = MonitoredProject(
-        name=sandbox["name"],
-        repo=sandbox["repo"],
-        local_path=sandbox["local_path"],
-        wiki_base=sandbox["wiki_base"],
-    )
-
-    def _get(pr_number: int):
-        return get_stack(project, pr_number)
-
-    return _get
 
 
 @pytest.fixture
@@ -607,11 +608,7 @@ def system_issue_factory(gh_live, repo_ctx, sandbox):
 @pytest.fixture
 def epic_body() -> str:
     """5 セクション確定済みの epic Issue 本文（要件確定済み状態の再現用）。"""
-    return """## 前提条件
-
-なし
-
-## 概要
+    return """## 概要
 
 タスクの期限が近づいたらメールで通知する機能を提供する。
 
@@ -621,9 +618,9 @@ def epic_body() -> str:
 
 ## ユースケース一覧
 
-| UC 名 | 概要 | 対応 story |
-| --- | --- | --- |
-| 期限通知メールの受信 | 期限が近いタスクをメールで通知する | 未作成 |
+| ユースケース | 変更種別 | 概要 | 対応 story | 補足 |
+| --- | --- | --- | --- | --- |
+| 期限通知メールの受信 | 変更 | 期限が近いタスクをメールで通知する | 未作成 | - |
 
 ## 横断要件
 

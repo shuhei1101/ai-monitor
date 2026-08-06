@@ -6,7 +6,14 @@ import base64
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
-from tests.e2e.エスカレーション import comments_from, issue, label_names, supplement_review_comments
+from tests.e2e.エスカレーション import (
+    answer_review_threads,
+    comments_from,
+    issue,
+    label_names,
+    supplement_review_comments,
+    unresolved_review_threads,
+)
 from tests.e2e.システム import (
     BUILD_REQUEST,
     SYSTEM_BODY,
@@ -132,6 +139,30 @@ def test_normal(
     assert supplement_review_comments(gh_live, owner, repo, pr.number), (
         "補足事項のインラインコメントが投稿されていない"
     )
+
+    # 実行: インライン確認事項へユーザー役として回答する
+    # （完了処理は未解決の確認事項が残っている間は応答ループへ戻るので、承認より先に畳ませる）
+    answered = answer_review_threads(gh_live, owner, repo, pr.number)
+    if answered:
+        for assignee in data.assignees:
+            gh_live.rest.issues.remove_assignees(
+                owner=owner, repo=repo, issue_number=pr.number, assignees=[assignee.login]
+            )
+
+        # 応答ループが回答を反映してスレッドを畳み、assignee を戻すまで待つ
+        def _threads_closed():
+            current = issue(gh_live, owner, repo, pr.number)
+            if not current.assignees:
+                return None
+            remaining = [
+                body for body in unresolved_review_threads(gh_live, owner, repo, pr.number)
+                if "> to: " in body
+            ]
+            return current if not remaining else None
+
+        data = wait_until(
+            _threads_closed, timeout_sec=2400, message="インライン確認事項の Resolve（応答ループ）"
+        )
 
     # 実行: ユーザー承認（議論中 除去 + assignee 外し）→ 引き継ぎを待つ
     gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr.number, name="議論中")

@@ -39,7 +39,6 @@ sequenceDiagram
   MON->>GH: 洗い出した scope のラベル定義を用意<br>（未作成のものだけ作られる）
   MON->>GH: 依存のない先頭グループのみ<br>ブランチを作成（base=story ブランチ）
   MON->>GH: 作成したブランチに Draft PR を作成<br>（layer:subsystem + scope:* +<br>親の リバースエンジニアリング ラベル付与・<br>確認ラベルなし）
-  MON->>GH: 先頭グループは先行 PR が無いため<br>親のスタックへ直接接続
   MON->>GH: story PR 本文の サブシステム一覧 に<br>洗い出し結果を記入<br>（作成済みは PR 番号・残りは 未作成）
   MON->>GH: 作成した subsystem PR に<br>確認:subsystem-conductor 付与
   MON->>GH: story PR の完了報告コメントを Resolve
@@ -87,7 +86,6 @@ sequenceDiagram
   MON->>GH: 作成する scope のラベル定義を用意<br>（未作成のものだけ作られる）
   MON->>GH: 次の subsystem のブランチを作成<br>（base=story ブランチ）
   MON->>GH: 作成したブランチに Draft PR を作成<br>（layer:subsystem + scope:* +<br>親の リバースエンジニアリング ラベル付与・<br>確認ラベルなし）
-  MON->>GH: 先行 subsystem のインターフェースが<br>確定済みのため待たせず<br>親のスタックへ接続
   MON->>GH: story PR 本文の サブシステム一覧 の<br>該当行を PR 番号に更新
   MON->>GH: 次の subsystem PR に<br>確認:subsystem-conductor 付与
   MON->>GH: story PR の 確認:story-conductor 除去<br>（ユーザー承認なしの自動完了）

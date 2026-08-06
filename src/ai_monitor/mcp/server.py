@@ -552,7 +552,9 @@ def get_issue_or_pr(
     summary_value = None
     if sub_issues_summary and not is_pr:
         raw_summary = getattr(data, "sub_issues_summary", None)
-        if raw_summary is not None:
+        # githubkit は応答に無いフィールドへ UNSET を入れるため None 判定だけでは足りない
+        # （Sub-issue を 1 つも持たない Issue で UNSET が来て属性アクセスが落ちる）
+        if raw_summary is not None and hasattr(raw_summary, "total"):
             summary_value = SubIssuesSummary(
                 total=raw_summary.total,
                 completed=raw_summary.completed,

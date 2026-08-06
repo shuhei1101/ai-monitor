@@ -50,12 +50,12 @@ def _approve(gh_live, owner, repo, number, assignees) -> None:
         )
 
 
-def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, stack_of, wait_until):
+def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, wait_until, nonce):
     """Issue 起票 → 分解 → 承認 → 子 PR 作成の一連を実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
     # 準備: ユーザー起票の intake Issue（確認ラベル付き・assignee なし）
-    issue = intake_issue_factory(title=INTAKE_TITLE, body=INTAKE_BODY)
+    issue = intake_issue_factory(title=f"{INTAKE_TITLE}（{nonce}）", body=INTAKE_BODY)
 
     # 実行: モニターの検知 → 分解判定（初回）の完了（議論中 + assignee）を待つ
     def _first_turn_done():
@@ -86,22 +86,25 @@ def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, stack_of, wait
     )
 
     # 検証: 承認された案と同数のブランチと Draft PR が master の上に作られている
+    confirmed = [
+        pr for pr in children
+        if "確認:epic-conductor" in _labels(_issue(gh_live, owner, repo, pr.number))
+    ]
+    assert confirmed, "確認:epic-conductor が付いた PR が 1 件も無い"
     for pr in children:
         assert pr.draft, f"#{pr.number} が Draft でない"
         assert pr.base.ref == "master", f"#{pr.number} の base が master でない: {pr.base.ref}"
         assert f"#{issue.number}" in (pr.body or ""), f"#{pr.number} の 紐づく Issue に intake がない"
         pr_labels = _labels(_issue(gh_live, owner, repo, pr.number))
         assert "layer:epic" in pr_labels, f"#{pr.number} に layer:epic がない: {sorted(pr_labels)}"
-        assert "確認:epic-conductor" in pr_labels, f"#{pr.number} に 確認:epic-conductor がない"
 
-    # 検証: スタックに積まれた PR は下に open が残る間、着手されていない
+    # 検証: 確認ラベルが付いていない PR に着手の痕跡が無い（着手順は確認ラベルで表す）
     for pr in children:
-        stack = stack_of(pr.number)
-        if stack is None or not stack.below_open:
+        pr_now = _issue(gh_live, owner, repo, pr.number)
+        if "確認:epic-conductor" in _labels(pr_now):
             continue
-        follower = _issue(gh_live, owner, repo, pr.number)
-        assert "議論中" not in _labels(follower), f"#{pr.number} に着手の痕跡（議論中）がある"
-        assert not follower.assignees, f"#{pr.number} に着手の痕跡（assignee）がある"
+        assert "議論中" not in _labels(pr_now), f"#{pr.number} に着手の痕跡（議論中）がある"
+        assert not pr_now.assignees, f"#{pr.number} に着手の痕跡（assignee）がある"
 
     # 検証: intake Issue は本文不変のまま layer:intake + type:* が残り open のまま
     labels = _labels(data)
@@ -146,15 +149,17 @@ def _assert_closed_as_duplicate(gh_live, owner, repo, number, target_number, dat
 
 
 def test_normal_when_duplicated_pr(
-    monitor, gh_live, repo_ctx, intake_issue_factory, issue_factory, epic_pr_factory, wait_until
+    monitor, gh_live, repo_ctx, intake_issue_factory, issue_factory, epic_pr_factory, wait_until,
+    nonce,
 ):
     """目的が重複する既存 PR への統合とクローズを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
     # 準備: 同じ目的で進行中の既存 epic PR（担当エージェントの確認ラベル付き）
-    seed = issue_factory(title=DUPLICATE_TITLE, body=EXISTING_BODY, labels=["layer:intake", "type:feat"])
+    title = f"{DUPLICATE_TITLE}（{nonce}）"
+    seed = issue_factory(title=title, body=EXISTING_BODY, labels=["layer:intake", "type:feat"])
     existing = epic_pr_factory(
-        f"feat/epic/task-notify-{seed.number}/base", DUPLICATE_TITLE,
+        f"feat/epic/task-notify-{seed.number}/base", title,
         f"## 紐づく Issue\n\n- #{seed.number}\n",
     )
     gh_live.rest.issues.add_labels(
@@ -164,7 +169,7 @@ def test_normal_when_duplicated_pr(
     existing_labels_before = _labels(_issue(gh_live, owner, repo, existing.number))
 
     # 準備: 同じ目的の intake Issue（確認ラベル付き・assignee なし）
-    issue = intake_issue_factory(title=DUPLICATE_TITLE, body=DUPLICATE_BODY)
+    issue = intake_issue_factory(title=title, body=DUPLICATE_BODY)
 
     # 実行: 統合判定によるクローズを待つ（ユーザーの確認は挟まれない）
     def _merged():
@@ -215,7 +220,7 @@ def _rule_issue_body(agent: str, repo: str, number: int) -> str:
 
 
 def test_normal_when_duplicated_issue(
-    monitor, gh_live, repo_ctx, issue_factory, wait_until
+    monitor, gh_live, repo_ctx, issue_factory, wait_until, nonce
 ):
     """同じ内容の既存ルール改修 Issue への統合（転記なし）を実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
@@ -223,14 +228,14 @@ def test_normal_when_duplicated_issue(
 
     # 準備: 同じ対象ルール・同じ指摘の既存ルール改修 Issue（報告元だけが違う）
     existing = issue_factory(
-        title=RULE_TITLE, body=_rule_issue_body("architect", slug, 101),
+        title=f"{RULE_TITLE}（{nonce}）", body=_rule_issue_body("architect", slug, 101),
         labels=["AI不具合報告"],
     )
     existing_labels_before = _labels(_issue(gh_live, owner, repo, existing.number))
 
     # 準備: ユーザーがトリアージへ回した同内容のルール改修 Issue
     target = issue_factory(
-        title=RULE_TITLE, body=_rule_issue_body("tester", slug, 202),
+        title=f"{RULE_TITLE}（{nonce}）", body=_rule_issue_body("tester", slug, 202),
         labels=["AI不具合報告", "確認:intake-issue-triager"],
     )
 
@@ -281,7 +286,7 @@ def _defect_issue_body(agent: str, repo: str, number: int, workaround: str) -> s
 
 
 def test_normal_when_duplicated_issue_with_extra(
-    monitor, gh_live, repo_ctx, issue_factory, wait_until
+    monitor, gh_live, repo_ctx, issue_factory, wait_until, nonce
 ):
     """追加情報を持つ重複不具合 Issue の追記統合を実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
@@ -289,7 +294,7 @@ def test_normal_when_duplicated_issue_with_extra(
 
     # 準備: 同じ事象で回避策を持たない既存の不具合 Issue
     existing = issue_factory(
-        title=DEFECT_TITLE,
+        title=f"{DEFECT_TITLE}（{nonce}）",
         body=_defect_issue_body("single-scenario-writer", slug, 303, "なし（回避できず作業を中断した）"),
         labels=["AI不具合報告"],
     )
@@ -297,7 +302,7 @@ def test_normal_when_duplicated_issue_with_extra(
 
     # 準備: 同じ事象で回避策を持つ不具合 Issue（追加情報ありの分岐を誘発）
     target = issue_factory(
-        title=DEFECT_TITLE,
+        title=f"{DEFECT_TITLE}（{nonce}）",
         body=_defect_issue_body("complex-scenario-writer", slug, 404, DEFECT_WORKAROUND),
         labels=["AI不具合報告", "確認:intake-issue-triager"],
     )

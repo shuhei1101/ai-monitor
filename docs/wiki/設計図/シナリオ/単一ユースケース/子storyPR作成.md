@@ -38,7 +38,6 @@ sequenceDiagram
   MON->>GH: epic PR の完了報告を確認<br>（複合シナリオ確定 →<br>子 story PR の作成に進むと判断）
   MON->>GH: UC 数だけブランチを作成<br>（base=epic ブランチ）
   MON->>GH: 各ブランチに Draft PR を作成<br>（layer:story + 親の リバースエンジニアリング<br>ラベル付与・確認ラベルなし）
-  MON->>GH: 着手順の依存がある PR を<br>先行 PR の上に積んでスタックに接続<br>（対象が無ければ飛ばす）
   MON->>GH: epic PR 本文の 対応 story 列に<br>#35;番号 反映
   MON->>GH: 全 story PR に 確認:story-conductor 付与
   MON->>GH: epic PR の完了報告コメントを Resolve

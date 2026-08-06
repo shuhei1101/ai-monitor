@@ -11,7 +11,7 @@ from ai_monitor.mcp.models import CreatedIssueResult
 ARGS = dict(
     title="PR 本文テンプレート（エピック）に変更種別の記入例が無い",
     body="テンプレートに記入例が無く、列の要否を読み取れなかった。",
-    rule_page="docs/wiki/テンプレート/PR本文/エピック.md",
+    rule_page="docs/wiki/テンプレート/PR本文/エピックベース.md",
     rule_excerpt="（`## ユースケース一覧` の記述例に変更種別の列が無い）",
     agent_name="epic-conductor",
     number=90,
@@ -33,7 +33,7 @@ def test_normal(gh, resp, api):
     assert "| プロジェクト | sandbox |" in body
     assert "| エージェント | epic-conductor |" in body
     assert "| 対象 | shuhei1101/ai-monitor-e2e#90 |" in body
-    assert "`docs/wiki/テンプレート/PR本文/エピック.md`" in body
+    assert "`docs/wiki/テンプレート/PR本文/エピックベース.md`" in body
     assert "> （`## ユースケース一覧` の記述例に変更種別の列が無い）" in body
     assert "## 指摘の内容" in body
     # 承認する相手が常にユーザーなので assignee は認証ユーザー 1 名で固定

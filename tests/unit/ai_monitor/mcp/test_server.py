@@ -177,6 +177,27 @@ def test_get_issue_or_pr(gh, api):
     assert snap.base_ref is None
 
 
+class _Unset:
+    """githubkit が応答に無いフィールドへ入れる UNSET 相当のダミー。
+
+    属性アクセスすると AttributeError になる点だけ再現する。
+    """
+
+    def __repr__(self) -> str:
+        return "Unset"
+
+
+def test_get_issue_or_pr_when_summary_unset(gh, api):
+    """Sub-issue 集計が UNSET の Issue でも落ちないことを確認する（正常系）。"""
+    # 準備: Sub-issue を 1 つも持たない Issue（githubkit が UNSET を返す）
+    gh.rest.issues.get.return_value = _resp(_issue_ns(sub_issues_summary=_Unset()))
+    # 実行
+    snap = api.get_issue_or_pr(35, is_pr=False, comments=False, parent=False, sub_issues=False)
+    # 検証: 集計は None として扱われ、他のフィールドは通常どおり取れる
+    assert snap.sub_issues_summary is None
+    assert snap.number == 35
+
+
 def _pr_ns(head="feat/backend/profile/edit/edit-api", base="feat/story/profile/edit"):
     pr = _issue_ns()
     pr.head = NS(ref=head)
@@ -1258,7 +1279,7 @@ def test_create_monitor_rule_issue(gh, api):
     gh.rest.issues.create.return_value = _resp(NS(number=214, html_url="http://i/214"))
     # 実行
     res = api.create_monitor_rule_issue(
-        **_rule_args(rule_page="docs/wiki/テンプレート/PR本文/エピック.md", agent_name="epic-conductor")
+        **_rule_args(rule_page="docs/wiki/テンプレート/PR本文/エピックベース.md", agent_name="epic-conductor")
     )
     # 検証: 起票先だけがプラグイン側と異なる
     kwargs = gh.rest.issues.create.call_args.kwargs

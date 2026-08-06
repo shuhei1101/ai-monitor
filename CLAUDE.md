@@ -73,3 +73,53 @@ kill や Ctrl-C で止めてはいけない。
 pytest 本体は終わるが後片付けに到達せず、sandbox の Issue / PR / ブランチ / worktree と tmux セッションが残る。
 
 詳細は `docs/wiki/テスト/テスト実行方法.md`。
+
+## 不具合報告の検出
+
+エージェントは手順どおりに進められない事象に当たると `AI不具合報告` ラベルの Issue を ai-monitor へ起票する。
+E2E を回している間は特に出るので、新規分だけを拾って気づけるようにする。
+
+**Claude Code の `Monitor` ツールを使う。**
+Bash で直接回すとその場で待つことになるが、Monitor なら裏で動き続け、新規 Issue が出た時点で通知が届く。
+
+呼び出しの形は次のとおり。
+
+| 引数 | 値 |
+| --- | --- |
+| `command` | 下のスクリプト |
+| `description` | `ai-monitor の AI不具合報告 ラベルに新規 Issue が付いたら通知` |
+| `persistent` | `true`（セッションが終わるまで動き続ける。途中で止めるときは `TaskStop`） |
+| `timeout_ms` | `3600000`（`persistent: true` のときは無視されるが指定は必要） |
+
+`command` に渡すスクリプト。
+
+```bash
+R=shuhei1101/ai-monitor
+list() { gh issue list --repo "$R" --label "AI不具合報告" --state open --limit 100 --json number --jq '.[].number' 2>/dev/null | sort; }
+seen=$(list)
+while true; do
+  sleep 60
+  cur=$(list) || true
+  [ -z "$cur" ] && continue
+  comm -13 <(echo "$seen") <(echo "$cur") | while read -r n; do
+    [ -n "$n" ] && gh issue view "$n" --repo "$R" --json number,title --jq '"AI不具合報告 #\(.number) \(.title)"' 2>/dev/null || true
+  done
+  seen=$cur
+done
+```
+
+要点は 3 つ。
+
+| 項目 | 理由 |
+| --- | --- |
+| 起動時の一覧を `seen` に取る | 既存の open Issue を通知しないため（差分だけが欲しい） |
+| 60 秒間隔 | GitHub API のレート制限に配慮する。E2E の 1 ターンより十分短い |
+| `cur` が空なら `seen` を更新しない | 一時的な API 失敗で全件を「新規」と誤検出しないため |
+
+手で確認するだけなら一覧を引く。
+
+```bash
+gh issue list --repo shuhei1101/ai-monitor --label "AI不具合報告" --state open
+```
+
+テストが pass していても起票されていることがあるので、実行後は必ず見る。

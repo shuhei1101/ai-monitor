@@ -34,12 +34,7 @@ Ready 済みの PR に呼んでも何も起きない。
 
 - コンフリクトが発生した場合、epic PR に競合ファイルとどちらを残すかの相談コメントを投稿し、`議論中` 付与 + `assignee=ユーザー` で待機する（解消の往復は「応答ループ」で回し、全競合解消後に本手順へ合流する）
 
-MCP `unlink_stack` を呼ぶ:
-- `pr_number`: epic PR の番号
-
-スタックに属したままマージすると下位の PR まで一緒にマージされるため、先に外す（外したスタックの残りはツール側で組み直される）。
-
-続けて MCP `merge_pr` を呼ぶ:
+MCP `merge_pr` を呼ぶ:
 - `pr_number`: epic PR の番号
 - `strategy`: `squash`
 
@@ -66,6 +61,29 @@ MCP `comment` を呼ぶ:
 - `is_pr`: true
 - `labels`:
   - 報告先 conductor の確認ラベルの値（`layer:system` なら `$AI_MONITOR_LABEL_CONFIRM_SYSTEM_CONDUCTOR`）
+
+### 次の epic の起動
+
+「最終マージかの判定」で最終マージ（base が `master`）と判定した場合だけ実行する。
+親 system がある場合は system-conductor が引き継ぐので本手順は実行しない。
+
+起点 intake Issue から出た兄弟 epic のうち、着手を待っているものがあれば手番を渡す。
+
+MCP `search_issues_and_prs` を呼ぶ:
+- `query`: `#{起点 intake Issue の番号} is:pr is:open`
+
+戻り値から `layer:epic` が付いた open PR を集め、確認ラベルが 1 つも付いていないものを 1 件選ぶ。
+
+- 確認ラベル付きの epic PR が既にある場合は何もしない（その epic が進行中）
+- 未着手が無い場合も何もしない（intake は配下の PR が全て merged になった時点でモニターが閉じる）
+
+MCP `add_labels` を呼ぶ:
+- `number`: 選んだ epic PR の番号
+- `is_pr`: true
+- `labels`:
+  - `$AI_MONITOR_LABEL_CONFIRM_EPIC_CONDUCTOR` の値
+
+確認ラベルが無い PR はモニターが起動しないため、この付け替えが着手順の直列化そのものになる（規約『ブランチ戦略』の着手順の表し方）。
 
 ### ラベル除去
 

@@ -146,26 +146,53 @@ def confirm_labels(data) -> list[str]:
     return sorted(name for name in label_names(data) if name.startswith("確認:"))
 
 
-def unresolved_review_threads(gh_live, owner: str, repo: str, pr_number: int) -> list[str]:
-    """PR の未解決インライン指摘スレッドの先頭コメントを返す。"""
-    query = """
-    query($owner: String!, $repo: String!, $number: Int!) {
-      repository(owner: $owner, name: $repo) {
-        pullRequest(number: $number) {
-          reviewThreads(first: 100) {
-            nodes { isResolved comments(first: 1) { nodes { body } } }
-          }
-        }
+_REVIEW_THREAD_QUERY = """
+query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes { isResolved comments(first: 1) { nodes { body databaseId } } }
       }
     }
-    """
-    data = gh_live.graphql(query, {"owner": owner, "repo": repo, "number": pr_number})
+  }
+}
+"""
+
+
+def _unresolved_thread_nodes(gh_live, owner: str, repo: str, pr_number: int) -> list[dict]:
+    """未解決インラインスレッドの先頭コメント（body / databaseId）を返す。"""
+    data = gh_live.graphql(_REVIEW_THREAD_QUERY, {"owner": owner, "repo": repo, "number": pr_number})
     nodes = data["repository"]["pullRequest"]["reviewThreads"]["nodes"]
     return [
-        node["comments"]["nodes"][0]["body"][:120]
+        node["comments"]["nodes"][0]
         for node in nodes
         if not node["isResolved"] and node["comments"]["nodes"]
     ]
+
+
+def unresolved_review_threads(gh_live, owner: str, repo: str, pr_number: int) -> list[str]:
+    """PR の未解決インライン指摘スレッドの先頭コメントを返す。"""
+    return [node["body"][:120] for node in _unresolved_thread_nodes(gh_live, owner, repo, pr_number)]
+
+
+def answer_review_threads(
+    gh_live, owner: str, repo: str, pr_number: int, body: str = "推奨案のままで問題ありません。"
+) -> int:
+    """未解決のインライン確認事項スレッドにユーザー役として返信し、返信した件数を返す。
+
+    確認事項（`> to: ` 行を持つもの）だけが対象。
+    完了処理は未解決の確認事項が残っている間は応答ループへ戻るため、承認の前にここを畳ませる。
+    """
+    answered = 0
+    for node in _unresolved_thread_nodes(gh_live, owner, repo, pr_number):
+        if "> to: " not in (node["body"] or ""):
+            continue
+        gh_live.rest.pulls.create_reply_for_review_comment(
+            owner=owner, repo=repo, pull_number=pr_number,
+            comment_id=node["databaseId"], body=body,
+        )
+        answered += 1
+    return answered
 
 
 def supplement_review_comments(gh_live, owner: str, repo: str, pr_number: int) -> list:

@@ -28,12 +28,14 @@ def _open_prs(gh_live, owner, repo, *, base: str | None = None) -> list:
     )
 
 
-def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, wait_until, e2e_state_path):
+def test_normal(
+    monitor, gh_live, repo_ctx, intake_issue_factory, wait_until, e2e_state_path, nonce
+):
     """intake の epic 判定 → epic PR 作成 → 要件確定 → 成果物 PR までを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
     # 準備: ユーザー起票の intake Issue（確認ラベル付き・assignee なし）
-    intake = intake_issue_factory(title=INTAKE_TITLE, body=INTAKE_BODY)
+    intake = intake_issue_factory(title=f"{INTAKE_TITLE}（{nonce}）", body=INTAKE_BODY)
 
     # 実行: 分解判定（初回）の完了（分解案の提示 + 待機）を待つ
     def _triage_done():

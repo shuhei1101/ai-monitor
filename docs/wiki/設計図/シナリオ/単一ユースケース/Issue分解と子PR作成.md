@@ -56,7 +56,6 @@ sequenceDiagram
   activate MON
   MON->>GH: 作業単位ごとに<br>ブランチを作成（base=master）
   MON->>GH: 各ブランチに Draft PR を作成<br>（layer:epic 付与・確認ラベルなし・<br>本文は 紐づく Issue のみ）
-  MON->>GH: 着手順の依存がある PR を<br>先行 PR の上に積んでスタックに接続
   MON->>GH: 全 PR に 確認:epic-conductor 付与
   MON->>GH: intake Issue の自分宛コメント一括 Resolve
   MON->>GH: intake Issue の 確認:intake-issue-triager 除去
@@ -69,8 +68,8 @@ sequenceDiagram
 - 承認された案と同数のブランチと Draft PR が存在する（`layer:epic` + `確認:epic-conductor` が付与）
 - 各 PR の base が `master` になっている
 - 各 PR 本文の `## 紐づく Issue` に intake Issue の番号が入っている
-- 着手順の依存がある PR が先行 PR の上に積まれ、スタックの並びが着手順と一致している
-- スタック上で下に open な PR が残っている PR に着手の痕跡が無い（`議論中` 未付与・assignee 未設定・epic-conductor の投稿コメントなし）
+- 着手順の依存がある場合、確認ラベルは先頭の PR 1 本にだけ付いている（依存が無ければ全 PR に付く）
+- 確認ラベルが付いていない PR に着手の痕跡が無い（`議論中` 未付与・assignee 未設定・epic-conductor の投稿コメントなし）
 - intake Issue の本文がユーザー起票時のまま書き換わっていない
 - intake Issue に `layer:intake` + `type:*` が残り、`確認:*` は除去済み
 - 自分宛コメントが全て Resolve 済み

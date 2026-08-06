@@ -57,7 +57,7 @@ sequenceDiagram
   MON->>GH: story PR の自分宛コメント一括 Resolve
   MON->>GH: story PR 本文に タスク一覧 を追記
   MON->>REPO: 単一UCシナリオの成果物ブランチ作成<br>（docs/story/{ドメイン}/{UC名}/scenario・<br>base=story ブランチ）+ 空 commit push
-  MON->>GH: 成果物 Draft PR 作成 +<br>親のスタックへ接続
+  MON->>GH: 成果物 Draft PR 作成
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
   MON->>GH: 成果物 PR に 確認:single-scenario-writer 付与・<br>story PR の 確認:story-conductor 除去
   deactivate MON
@@ -179,7 +179,7 @@ sequenceDiagram
   MON->>GH: story PR の自分宛コメント一括 Resolve
   MON->>GH: story PR 本文に タスク一覧 を追記
   MON->>REPO: 単一UCシナリオの成果物ブランチ作成<br>（docs/story/{ドメイン}/{UC名}/scenario・<br>base=story ブランチ）+ 空 commit push
-  MON->>GH: 成果物 Draft PR 作成 +<br>親のスタックへ接続
+  MON->>GH: 成果物 Draft PR 作成
   MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
   MON->>GH: 成果物 PR に 確認:single-scenario-writer 付与・<br>story PR の 確認:story-conductor 除去
   deactivate MON

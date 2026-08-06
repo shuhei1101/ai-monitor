@@ -6,6 +6,7 @@ master にコードと現状の設計書を置いてから起動する。
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import yaml
@@ -281,6 +282,25 @@ def setup_re_target(
     }
 
 
+def _merge_when_ready(gh_live, owner, repo, pr_number: int, *, attempts: int = 20) -> None:
+    """マージ可能になるのを待ってから squash マージする。
+
+    GitHub は PR のマージ可能性を非同期で計算するため、作成 / push の直後は
+    `mergeable` が null のままで `merge` が 405 を返す。
+    """
+    for _ in range(attempts):
+        data = gh_live.rest.pulls.get(owner=owner, repo=repo, pull_number=pr_number).parsed_data
+        if data.mergeable:
+            gh_live.rest.pulls.merge(
+                owner=owner, repo=repo, pull_number=pr_number, merge_method="squash"
+            )
+            # マージ済み PR は後片付けの「open PR から辿る」対象に入らないのでここで消す
+            gh_live.rest.git.delete_ref(owner=owner, repo=repo, ref=f"heads/{data.head.ref}")
+            return
+        time.sleep(3)
+    raise AssertionError(f"PR #{pr_number} がマージ可能にならなかった（mergeable が null のまま）")
+
+
 def setup_system_with_foundation(
     gh_live, owner, repo, system_issue_factory, layer_pr_factory, commit_file,
     *, pr_labels: list[str], re_route: bool = False,
@@ -301,14 +321,14 @@ def setup_system_with_foundation(
     )
     # 土台生成の成果物 PR（base=system ブランチ）を作り、成果物を積んでからマージする
     artifact_branch = foundation_branch(system.number)
+    # マージまで再現するので Draft では作らない（Draft PR のマージは 405 になる）
     artifact_pr = layer_pr_factory(
-        artifact_branch, "土台生成", f"## 紐づく Issue\n\n- #{system.number}\n", base_branch=branch,
+        artifact_branch, "土台生成", f"## 紐づく Issue\n\n- #{system.number}\n",
+        base_branch=branch, draft=False,
     )
     for path, content in FOUNDATION_FILES.items():
         commit_file(artifact_branch, path, content, f"docs: e2e 用に {path} を配置")
-    gh_live.rest.pulls.merge(
-        owner=owner, repo=repo, pull_number=artifact_pr.number, merge_method="squash"
-    )
+    _merge_when_ready(gh_live, owner, repo, artifact_pr.number)
     return {
         "system": system,
         "system_pr": system_pr,

@@ -32,15 +32,6 @@ epic 1 件ごとに MCP `worktree_create` を呼ぶ:
   - 新規プロジェクトの場合は `$AI_MONITOR_LABEL_TYPE_FEAT` の値、既存プロジェクトの移行の場合は `$AI_MONITOR_LABEL_TYPE_DOCS` の値
   - system PR に `リバースエンジニアリング` が付いている場合は `$AI_MONITOR_LABEL_REVERSE_ENGINEERING` の値
 
-### スタックへの接続
-
-着手順が 2 番目以降の epic PR を、先行 epic PR の上に積む。
-
-MCP `link_stack` を呼ぶ:
-- `pull_requests`: 着手順に並べた epic PR 番号の配列（下から上）
-
-スタックの並びが着手順になり、モニターは下に open な PR が残っている間その PR を起動しない。
-
 ### 先頭 epic の起動
 
 MCP `add_labels` を呼ぶ:

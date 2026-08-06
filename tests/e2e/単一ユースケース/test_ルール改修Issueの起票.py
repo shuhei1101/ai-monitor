@@ -46,9 +46,9 @@ def _ai_report_numbers(gh_live, owner: str, repo: str) -> set[int]:
     return {data.number for data in listed if data.pull_request is None}
 
 
-def _drive_to_waiting(gh_live, owner, repo, intake_issue_factory, wait_until):
+def _drive_to_waiting(gh_live, owner, repo, intake_issue_factory, wait_until, nonce):
     """intake Issue を分解判定の応答ループ待機（議論中 + assignee=ユーザー）まで進める。"""
-    issue_data = intake_issue_factory(title=INTAKE_TITLE, body=INTAKE_BODY)
+    issue_data = intake_issue_factory(title=f"{INTAKE_TITLE}（{nonce}）", body=INTAKE_BODY)
 
     def _waiting():
         data = issue(gh_live, owner, repo, issue_data.number)
@@ -116,14 +116,14 @@ def _assert_loop_continued(gh_live, owner, repo, number, wait_until) -> None:
 
 
 def test_normal_when_rule_wrong(
-    monitor, gh_live, repo_ctx, intake_issue_factory, wait_until
+    monitor, gh_live, repo_ctx, intake_issue_factory, wait_until, nonce
 ):
     """ルールの記述が誤っている指摘から my-plugins へ起票する（正常系）。"""
     owner, repo = repo_ctx
     login = me(gh_live)
 
     # 準備: 応答ループ待機まで進めた intake Issue と、起票前の AI不具合報告 一覧
-    target = _drive_to_waiting(gh_live, owner, repo, intake_issue_factory, wait_until)
+    target = _drive_to_waiting(gh_live, owner, repo, intake_issue_factory, wait_until, nonce)
     before = _ai_report_numbers(gh_live, owner, repo)
 
     # 実行: 規約の記述と反対を求めるフィードバックを送る
@@ -142,14 +142,14 @@ def test_normal_when_rule_wrong(
 
 
 def test_normal_when_rule_missing(
-    monitor, gh_live, repo_ctx, intake_issue_factory, wait_until
+    monitor, gh_live, repo_ctx, intake_issue_factory, wait_until, nonce
 ):
     """ルールに記述が無い指摘から ai-monitor へ起票する（正常系）。"""
     owner, repo = repo_ctx
     login = me(gh_live)
 
     # 準備: 応答ループ待機まで進めた intake Issue と、起票前の AI不具合報告 一覧
-    target = _drive_to_waiting(gh_live, owner, repo, intake_issue_factory, wait_until)
+    target = _drive_to_waiting(gh_live, owner, repo, intake_issue_factory, wait_until, nonce)
     before = _ai_report_numbers(gh_live, owner, repo)
 
     # 実行: 手順書に規定が無い書き方を求めるフィードバックを送る
@@ -168,14 +168,14 @@ def test_normal_when_rule_missing(
 
 
 def test_normal_when_not_rule_caused(
-    monitor, gh_live, repo_ctx, intake_issue_factory, wait_until
+    monitor, gh_live, repo_ctx, intake_issue_factory, wait_until, nonce
 ):
     """ルール起因でない指摘では起票しない（正常系）。"""
     owner, repo = repo_ctx
     login = me(gh_live)
 
     # 準備: 応答ループ待機まで進めた intake Issue と、起票前の AI不具合報告 一覧
-    target = _drive_to_waiting(gh_live, owner, repo, intake_issue_factory, wait_until)
+    target = _drive_to_waiting(gh_live, owner, repo, intake_issue_factory, wait_until, nonce)
     before = _ai_report_numbers(gh_live, owner, repo)
 
     # 実行: 規約どおりの内容を求めるフィードバックを送る

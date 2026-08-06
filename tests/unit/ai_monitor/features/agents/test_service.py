@@ -15,7 +15,6 @@ import ai_monitor.features.sessions.registry as registry_mod
 from ai_monitor.features.agents.docs import PhaseConfig
 from ai_monitor.features.agents.types import Agent
 from ai_monitor.features.sessions.types import AgentSession
-from ai_monitor.integrations.github.stacks import Stack
 from ai_monitor.shared.settings import TelemetrySettings
 from ai_monitor.shared.types import Issue, PullRequest
 
@@ -46,9 +45,6 @@ def io_mocks(monkeypatch):
         phases={"intake-issue-triager": ["エージェント/intake-issue-triager/フェーズ/初期処理.md"]}
     )
     monkeypatch.setattr(service, "load_phase_config", mocks.load_phase_config)
-    # スタック所属の照会は既定で未所属にする（下位が open の側は各テストで上書きする）
-    mocks.get_stack.return_value = None
-    monkeypatch.setattr(service, "get_stack", mocks.get_stack)
     return mocks
 
 
@@ -150,30 +146,6 @@ def test_poll_when_rate_limited(agent, io_mocks, registry, mon_project, rate_lim
     io_mocks.add_label.assert_not_called()
     io_mocks.send_keys.assert_not_called()
 
-
-def test_poll_when_stack_below_open(agent, io_mocks, registry, mon_project, rate_limit_gate):
-    """スタック下位に open な PR が残っている対象を送らないことを確認する（正常系）。"""
-    # 準備: 対象がスタックに属し、自分より下に open な PR がある
-    io_mocks.get_stack.return_value = Stack(number=90, position=1, pull_requests=[34, 35], below_open=[34])
-    targets = [_pr(35, labels=["確認:intake-issue-triager"])]
-    # 実行
-    service.poll(
-        mon_project,
-        agent,
-        targets,
-        registry=registry,
-        telemetry=None,
-        port=8765,
-        ai_monitor_wiki_base="https://example.com/wiki",
-        priority_urgent="優先度:急ぎ",
-        priority_low="優先度:いつでも",
-        gate=rate_limit_gate,
-    )
-    # 検証: セッション作成も送信も処理中ラベルの付与も起きない
-    io_mocks.create_session.assert_not_called()
-    io_mocks.send_keys.assert_not_called()
-    io_mocks.add_label.assert_not_called()
-    assert registry.sessions == []
 
 
 def test_poll_when_priority_labels(agent, io_mocks, registry, mon_project, rate_limit_gate):

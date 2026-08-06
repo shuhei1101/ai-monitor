@@ -520,9 +520,13 @@ def story_branch_files(*, service: str = SERVICE_PY, e2e_test: str | None = None
 def setup_story(
     gh_live, owner, repo,
     epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issue_factory, commit_file,
-    *, pr_body: str, files: dict[str, str],
+    *, pr_body: str, files: dict[str, str], artifact: str | None = None,
 ):
-    """全 subsystem マージ済みの story（Issue + PR + ブランチ）を用意する。"""
+    """全 subsystem マージ済みの story を用意する。
+
+    `artifact` を渡すとベース PR に加えて成果物 PR を作り、`pr` / `story_branch` が成果物側を指す。
+    省略時はベース PR がそのまま作業対象になる（マージ系のように面そのものが主役のテスト向け）。
+    """
     from tests.e2e.実装対象 import (
         EPIC_BODY,
         EPIC_TITLE,
@@ -541,24 +545,38 @@ def setup_story(
         epic.number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number), labels=["layer:story", "type:feat"],
     )
-    story_branch = f"feat/story/task-edit-{story.number}/base"
-    pr = draft_pr_factory(
-        story_branch, STORY_TITLE, pr_body.format(story_number=story.number), base_branch=epic_branch
-    )
+    story_base_branch = f"feat/story/task-edit-{story.number}/base"
+    if artifact is None:
+        # ベース PR がそのまま作業対象
+        story_branch = story_base_branch
+        pr = draft_pr_factory(
+            story_branch, STORY_TITLE, pr_body.format(story_number=story.number),
+            base_branch=epic_branch,
+        )
+        story_pr = pr
+    else:
+        # ベース PR は要件の SoT（確認ラベルなし = 起動対象にしない）
+        story_pr = draft_pr_factory(
+            story_base_branch, STORY_TITLE,
+            STORY_BODY_TEMPLATE.format(epic_number=epic.number), base_branch=epic_branch,
+        )
+        # 作業対象の成果物 PR
+        story_branch = f"{artifact}/story/task-edit-{story.number}/integration"
+        pr = draft_pr_factory(
+            story_branch, STORY_TITLE, pr_body.format(story_number=story.number),
+            base_branch=story_base_branch,
+        )
     for path, content in files.items():
         commit_file(story_branch, path, content, f"chore: e2e 用に {path} を配置")
     return {
-        "intake": intake, "epic": epic, "story": story, "pr": pr,
+        "intake": intake, "epic": epic, "story": story, "pr": pr, "story_pr": story_pr,
         "epic_branch": epic_branch, "story_branch": story_branch,
+        "story_base_branch": story_base_branch,
     }
 
 
 SUBSYSTEM_TITLE = "タスク編集 バックエンド"
-SUBSYSTEM_BODY = """## 前提条件
-
-なし
-
-## 概要
+SUBSYSTEM_BODY = """## 概要
 
 タスク編集のバックエンド側（`update_task`）を担当する。
 
@@ -623,16 +641,33 @@ def epic_branch_files(*, service: str = SERVICE_PY, complex_e2e_test: str | None
     return files
 
 
+def _create_child_pr(gh_live, owner, repo, branch, title, body, base_branch):
+    """指定 base から空 commit ブランチを生やして Draft PR を作る。
+
+    `setup_epic` は `draft_pr_factory` を受け取らないため、同じ処理をここに置く。
+    """
+    base = gh_live.rest.repos.get_branch(owner=owner, repo=repo, branch=base_branch).parsed_data
+    commit = gh_live.rest.git.create_commit(
+        owner=owner, repo=repo, message="chore: e2e 用の空コミット",
+        tree=base.commit.commit.tree.sha, parents=[base.commit.sha],
+    ).parsed_data
+    gh_live.rest.git.create_ref(owner=owner, repo=repo, ref=f"refs/heads/{branch}", sha=commit.sha)
+    return gh_live.rest.pulls.create(
+        owner=owner, repo=repo, title=title, head=branch, base=base_branch, body=body, draft=True
+    ).parsed_data
+
+
 def setup_epic(
     gh_live, owner, repo, epic_issue_factory, epic_pr_factory, commit_file,
     *, pr_body: str, files: dict[str, str],
     parent_title: str | None = None, parent_body: str | None = None,
-    parent_labels: list[str] | None = None,
+    parent_labels: list[str] | None = None, artifact: str | None = None,
 ):
-    """全 story マージ済みの epic（Issue + PR + ブランチ）を用意する。
+    """全 story マージ済みの epic を用意する。
 
     既定の親は intake Issue。
     上位レイヤーありの経路を再現する場合は parent_* に system Issue の値を渡す。
+    `artifact` を渡すとベース PR に加えて成果物 PR を作り、`pr` / `epic_branch` が成果物側を指す。
     """
     from tests.e2e.実装対象 import EPIC_BODY, EPIC_TITLE, INTAKE_BODY, INTAKE_TITLE
 
@@ -640,13 +675,29 @@ def setup_epic(
         parent_title or INTAKE_TITLE, parent_body or INTAKE_BODY, EPIC_TITLE,
         epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"], parent_labels=parent_labels,
     )
-    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
-    pr = epic_pr_factory(
-        branch=epic_branch, title=EPIC_TITLE, body=pr_body.format(epic_number=epic.number)
-    )
+    epic_base_branch = f"feat/epic/task-edit-{epic.number}/base"
+    if artifact is None:
+        # ベース PR がそのまま作業対象
+        epic_branch = epic_base_branch
+        pr = epic_pr_factory(
+            branch=epic_branch, title=EPIC_TITLE, body=pr_body.format(epic_number=epic.number)
+        )
+        epic_pr = pr
+    else:
+        # ベース PR は要件の SoT（確認ラベルなし = 起動対象にしない）
+        epic_pr = epic_pr_factory(branch=epic_base_branch, title=EPIC_TITLE, body=EPIC_BODY)
+        # 作業対象の成果物 PR
+        epic_branch = f"{artifact}/epic/task-edit-{epic.number}/integration"
+        pr = _create_child_pr(
+            gh_live, owner, repo, epic_branch, EPIC_TITLE,
+            pr_body.format(epic_number=epic.number), epic_base_branch,
+        )
     for path, content in files.items():
         commit_file(epic_branch, path, content, f"chore: e2e 用に {path} を配置")
-    return {"intake": intake, "epic": epic, "pr": pr, "epic_branch": epic_branch}
+    return {
+        "intake": intake, "epic": epic, "pr": pr, "epic_pr": epic_pr,
+        "epic_branch": epic_branch, "epic_base_branch": epic_base_branch,
+    }
 
 
 def result_rows(body: str, *, section_name: str = "## 単一ユースケースシナリオテスト結果") -> list[str]:
