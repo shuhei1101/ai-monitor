@@ -4,7 +4,7 @@ from __future__ import annotations
 import ai_monitor.mcp.server as server
 from tests.e2e.エスカレーション import comments, comments_from, issue, label_names
 from tests.e2e.実装対象 import EPIC_BODY, EPIC_TITLE, INTAKE_BODY, INTAKE_TITLE, STORY_BODY_TEMPLATE, STORY_TITLE
-from tests.e2e.統合テスト import add_merged_subsystem
+from tests.e2e.統合テスト import SUBSYSTEM_BODY, SUBSYSTEM_TITLE
 
 BUG_HANDOVER = """> from: @epic-conductor
 > to: @story-conductor
@@ -37,99 +37,139 @@ FIX_DONE_REPORT = """> from: @subsystem-conductor
 """
 
 
-def _setup_tree(gh_live, owner, repo, epic_issue_factory, story_issue_factory, subsystem_issue_factory):
-    """epic → story（reopen 済み想定）→ subsystem（closed）の Issue ツリーを用意する。"""
+def _setup_tree(
+    gh_live, owner, repo, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory,
+):
+    """epic PR → story PR（reopen 済み想定）→ subsystem PR（closed）のツリーを用意する。
+
+    subsystem は作業を終えて close 済みの状態にする（差し戻しでこの PR が reopen される）。
+    """
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
+    epic_pr = epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=EPIC_BODY)
     story = story_issue_factory(
         epic.number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number), labels=["layer:story", "type:feat"],
     )
-    subsystem = add_merged_subsystem(gh_live, owner, repo, subsystem_issue_factory, story.number)
-    return intake, epic, story, subsystem
+    story_branch = f"feat/story/task-edit-{story.number}/base"
+    story_pr = draft_pr_factory(
+        story_branch, STORY_TITLE, STORY_BODY_TEMPLATE.format(epic_number=epic.number),
+        base_branch=epic_branch,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=story_pr.number, labels=["layer:story", "type:feat"]
+    )
+    subsystem = subsystem_issue_factory(story.number, SUBSYSTEM_TITLE, labels=["layer:subsystem"])
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    subsystem_pr = draft_pr_factory(
+        subsystem_branch, SUBSYSTEM_TITLE, SUBSYSTEM_BODY, base_branch=story_branch,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=subsystem_pr.number,
+        labels=["layer:subsystem", "type:feat", "scope:backend"],
+    )
+    gh_live.rest.issues.update(
+        owner=owner, repo=repo, issue_number=subsystem_pr.number,
+        state="closed", state_reason="completed",
+    )
+    return {
+        "intake": intake, "epic": epic, "epic_pr": epic_pr,
+        "story": story, "story_pr": story_pr,
+        "subsystem": subsystem, "subsystem_pr": subsystem_pr,
+    }
 
 
 def test_normal_when_handover(
-    monitor, gh_live, repo_ctx, epic_issue_factory, story_issue_factory, subsystem_issue_factory, wait_until,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, wait_until,
 ):
     """epic からのバグ差し戻しを該当 subsystem へ中継することを確認する（正常系・差し戻しの中継）。"""
     owner, repo = repo_ctx
-    intake, epic, story, subsystem = _setup_tree(
-        gh_live, owner, repo, epic_issue_factory, story_issue_factory, subsystem_issue_factory
+    ctx = _setup_tree(
+        gh_live, owner, repo, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+        story_issue_factory, subsystem_issue_factory,
     )
+    story_pr, subsystem_pr, epic_pr = ctx["story_pr"], ctx["subsystem_pr"], ctx["epic_pr"]
     # 準備: epic-conductor のバグ差し戻しコメント → 確認ラベル付与（起動トリガー）
     handover = gh_live.rest.issues.create_comment(
-        owner=owner, repo=repo, issue_number=story.number,
-        body=BUG_HANDOVER.format(epic_number=epic.number),
+        owner=owner, repo=repo, issue_number=story_pr.number,
+        body=BUG_HANDOVER.format(epic_number=epic_pr.number),
     ).parsed_data
     gh_live.rest.issues.add_labels(
-        owner=owner, repo=repo, issue_number=story.number, labels=["確認:story-conductor"]
+        owner=owner, repo=repo, issue_number=story_pr.number, labels=["確認:story-conductor"]
     )
 
-    # 実行: 中継の完了を待つ（subsystem reopen + 確認:subsystem-conductor + バグ内容コメント）
+    # 実行: 中継の完了を待つ（subsystem PR reopen + 確認:subsystem-conductor + バグ内容コメント）
     def _relayed():
-        sub_now = issue(gh_live, owner, repo, subsystem.number)
+        sub_now = issue(gh_live, owner, repo, subsystem_pr.number)
         if sub_now.state != "open" or "確認:subsystem-conductor" not in label_names(sub_now):
             return None
-        relayed = comments_from(gh_live, owner, repo, subsystem.number, "story-conductor")
+        relayed = comments_from(gh_live, owner, repo, subsystem_pr.number, "story-conductor")
         if not relayed:
             return None
-        story_now = issue(gh_live, owner, repo, story.number)
+        story_now = issue(gh_live, owner, repo, story_pr.number)
         return (story_now, relayed[-1]) if "確認:story-conductor" not in label_names(story_now) else None
 
     story_now, relayed = wait_until(
-        _relayed, timeout_sec=1800, message="バグ差し戻しの中継（subsystem reopen + 確認ラベル付与）"
+        _relayed, timeout_sec=1800, message="バグ差し戻しの中継（subsystem PR reopen + 確認ラベル付与）"
     )
 
     # 検証: バグ内容コメントが @subsystem-conductor 宛で未解決のまま残っている
     assert "> to: @subsystem-conductor" in (relayed.body or ""), "バグ内容コメントの宛先が違う"
-    assert f"#{epic.number}" in (relayed.body or ""), (
-        f"中継コメントに fail した面 #{epic.number} へのリンクがない: {(relayed.body or '')[:200]}"
+    assert f"#{epic_pr.number}" in (relayed.body or ""), (
+        f"中継コメントに fail した面 #{epic_pr.number} へのリンクがない: {(relayed.body or '')[:200]}"
     )
     assert not server._is_minimized(relayed.node_id), (
         "バグ内容コメントが Resolve されている（受領は subsystem-conductor）"
     )
 
     # 検証: 差し戻しコメントのスレッドに中継結果が返信追記され、Resolve 済み
-    thread = next(c for c in comments(gh_live, owner, repo, story.number) if c.node_id == handover.node_id)
-    assert f"#{subsystem.number}" in (thread.body or ""), "中継結果に対象 subsystem 番号がない"
+    thread = next(
+        c for c in comments(gh_live, owner, repo, story_pr.number) if c.node_id == handover.node_id
+    )
+    assert f"#{subsystem_pr.number}" in (thread.body or ""), "中継結果に対象 subsystem PR 番号がない"
     assert server._is_minimized(handover.node_id), "差し戻しコメントが未 Resolve"
 
-    # 検証: story Issue は open のまま 確認:story-conductor が除去されている
-    assert story_now.state == "open", "story Issue が close されている"
+    # 検証: story PR は open のまま 確認:story-conductor が除去されている
+    assert story_now.state == "open", "story PR が close されている"
     assert "議論中" not in label_names(story_now), "議論中 が付与されている（自動完了のはず）"
 
 
 def test_normal_when_completion(
-    monitor, gh_live, repo_ctx, epic_issue_factory, story_issue_factory, subsystem_issue_factory, wait_until,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    story_issue_factory, subsystem_issue_factory, wait_until,
 ):
     """subsystem の修正完了を親 epic へ中継し story を再クローズすることを確認する（正常系・修正完了の中継）。"""
     owner, repo = repo_ctx
-    intake, epic, story, subsystem = _setup_tree(
-        gh_live, owner, repo, epic_issue_factory, story_issue_factory, subsystem_issue_factory
+    ctx = _setup_tree(
+        gh_live, owner, repo, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+        story_issue_factory, subsystem_issue_factory,
     )
+    story_pr, epic_pr = ctx["story_pr"], ctx["epic_pr"]
     # 準備: subsystem-conductor の修正完了報告 → 確認ラベル付与（起動トリガー）
     report = gh_live.rest.issues.create_comment(
-        owner=owner, repo=repo, issue_number=story.number, body=FIX_DONE_REPORT
+        owner=owner, repo=repo, issue_number=story_pr.number, body=FIX_DONE_REPORT
     ).parsed_data
     gh_live.rest.issues.add_labels(
-        owner=owner, repo=repo, issue_number=story.number, labels=["確認:story-conductor"]
+        owner=owner, repo=repo, issue_number=story_pr.number, labels=["確認:story-conductor"]
     )
 
-    # 実行: 中継の完了を待つ（story close + 親 epic に 確認:epic-conductor + 完了報告）
+    # 実行: 中継の完了を待つ（story PR close + 親 epic PR に 確認:epic-conductor + 完了報告）
     def _relayed():
-        story_now = issue(gh_live, owner, repo, story.number)
+        story_now = issue(gh_live, owner, repo, story_pr.number)
         if story_now.state != "closed" or "確認:story-conductor" in label_names(story_now):
             return None
-        epic_now = issue(gh_live, owner, repo, epic.number)
+        epic_now = issue(gh_live, owner, repo, epic_pr.number)
         if "確認:epic-conductor" not in label_names(epic_now):
             return None
-        relayed = comments_from(gh_live, owner, repo, epic.number, "story-conductor")
+        relayed = comments_from(gh_live, owner, repo, epic_pr.number, "story-conductor")
         return (story_now, relayed[-1]) if relayed else None
 
     story_now, relayed = wait_until(
-        _relayed, timeout_sec=1800, message="修正完了の中継（story close + 親 epic への完了報告）"
+        _relayed, timeout_sec=1800, message="修正完了の中継（story PR close + 親 epic PR への完了報告）"
     )
 
     # 検証: 完了報告が @epic-conductor 宛で未解決のまま残っている
@@ -138,4 +178,4 @@ def test_normal_when_completion(
 
     # 検証: subsystem-conductor の完了報告が Resolve 済み
     assert server._is_minimized(report.node_id), "subsystem-conductor の完了報告が未 Resolve"
-    assert story_now.state == "closed", "story Issue が再クローズされていない"
+    assert story_now.state == "closed", "story PR が再クローズされていない"

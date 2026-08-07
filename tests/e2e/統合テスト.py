@@ -611,15 +611,29 @@ SUBSYSTEM_BODY = """## 概要
 """
 
 
-def add_merged_subsystem(gh_live, owner, repo, subsystem_issue_factory, story_number: int):
-    """PR を story へマージし終えた状態の subsystem Issue（closed）を用意する。"""
+def add_merged_subsystem(
+    gh_live, owner, repo, subsystem_issue_factory, draft_pr_factory,
+    story_number: int, story_branch: str, *, body: str = SUBSYSTEM_BODY,
+):
+    """作業を終えて close 済みの subsystem ベース PR を用意し、その PR を返す。
+
+    Sub-issue リンク用の Issue も作るが、面は PR なので Issue には確認ラベルを付けない。
+    """
     subsystem = subsystem_issue_factory(
-        story_number, SUBSYSTEM_TITLE, body=SUBSYSTEM_BODY, labels=["layer:subsystem", "scope:backend"]
+        story_number, SUBSYSTEM_TITLE, body=body, labels=["layer:subsystem"]
+    )
+    pr = draft_pr_factory(
+        f"feat/backend/task-edit-{subsystem.number}/base", SUBSYSTEM_TITLE, body,
+        base_branch=story_branch,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=pr.number,
+        labels=["layer:subsystem", "type:feat", "scope:backend"],
     )
     gh_live.rest.issues.update(
-        owner=owner, repo=repo, issue_number=subsystem.number, state="closed", state_reason="completed"
+        owner=owner, repo=repo, issue_number=pr.number, state="closed", state_reason="completed"
     )
-    return subsystem
+    return pr
 
 
 def epic_branch_files(*, service: str = SERVICE_PY, complex_e2e_test: str | None = None) -> dict[str, str]:

@@ -7,6 +7,7 @@ from pathlib import Path
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
+from tests.e2e.エスカレーション import answer_review_threads
 
 INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集できる機能を追加する。"
@@ -100,6 +101,11 @@ def test_normal(
         _scenario_done, timeout_sec=1500, message="シナリオ作成の完了（議論中 + assignee + 単一UC .md commit）"
     )
 
+    # 検証: 待機に入る時点でタスク一覧がチェック済み（commit 直後に入れる規定）
+    assert "- [ ]" not in (pr_data.body or ""), (
+        f"成果物 PR のタスク一覧に未チェックの行が残っている: {pr_data.body}"
+    )
+
     # 検証: 単一ユースケース .md が新規に commit されている（master には無いパス）
     master_tree = gh_live.rest.git.get_tree(owner=owner, repo=repo, tree_sha="master", recursive="1").parsed_data
     master_paths = {t.path for t in master_tree.tree}
@@ -115,7 +121,9 @@ def test_normal(
     ).parsed_data
     assert readme_story.sha != readme_master.sha, "シナリオ README が更新されていない"
 
-    # 実行: シナリオ承認を再現（議論中 除去 + assignee 外し）
+    # 実行: 確認事項へ回答してからシナリオ承認を再現（議論中 除去 + assignee 外し）
+    # （未解決の確認事項が残っていると完了処理が応答ループへ戻す）
+    answer_review_threads(gh_live, owner, repo, pr.number)
     try:
         gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr.number, name="議論中")
     except RequestFailed:

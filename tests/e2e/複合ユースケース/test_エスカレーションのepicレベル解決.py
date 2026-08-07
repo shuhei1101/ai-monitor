@@ -74,7 +74,7 @@ def test_normal(
     )
     add_worktree(sandbox["local_path"], ctx["subsystem_branch"])
     add_worktree(sandbox["local_path"], ctx["epic_branch"])
-    epic_body_before = issue(gh_live, owner, repo, ctx["epic"].number).body or ""
+    epic_body_before = issue(gh_live, owner, repo, ctx["epic_pr"].number).body or ""
 
     # 準備: architect のエスカレーション報告 → 確認:subsystem-conductor 付与（UC の起点）
     report = gh_live.rest.issues.create_comment(
@@ -90,13 +90,13 @@ def test_normal(
         pr_number=ctx["pr"].number,
         faces=[
             ("subsystem_pr", ctx["pr"].number),
-            ("story_issue", ctx["story"].number),
-            ("epic_issue", ctx["epic"].number),
+            ("story_pr", ctx["story_pr"].number),
+            ("epic_pr", ctx["epic_pr"].number),
         ],
         choices={
             ("subsystem_pr", "確認:subsystem-conductor"): RELAY_UP_FROM_SUBSYSTEM,
-            ("story_issue", "確認:story-conductor"): RELAY_UP_FROM_STORY,
-            ("epic_issue", "確認:epic-conductor"): EPIC_SCENARIO_FIX,
+            ("story_pr", "確認:story-conductor"): RELAY_UP_FROM_STORY,
+            ("epic_pr", "確認:epic-conductor"): EPIC_SCENARIO_FIX,
             ("subsystem_pr", "確認:architect"): None,
         },
         wait_until=wait_until,
@@ -107,16 +107,16 @@ def test_normal(
     # 検証: subsystem → story → epic の 3 段のゲートと、設計再開後のゲートを通っている
     for expected in (
         ("subsystem_pr", "確認:subsystem-conductor"),
-        ("story_issue", "確認:story-conductor"),
-        ("epic_issue", "確認:epic-conductor"),
+        ("story_pr", "確認:story-conductor"),
+        ("epic_pr", "確認:epic-conductor"),
         ("subsystem_pr", "確認:architect"),
     ):
         assert expected in history, f"想定したゲートが開かなかった: {expected} / 履歴 {history}"
 
-    # 検証: epic Issue 本文が決定内容で更新されている
-    epic_after = issue(gh_live, owner, repo, ctx["epic"].number)
-    assert (epic_after.body or "") != epic_body_before, "epic Issue 本文が更新されていない"
-    assert "## 横断要件" in (epic_after.body or ""), "epic Issue 本文から横断要件が消えている"
+    # 検証: epic PR 本文が決定内容で更新されている
+    epic_after = issue(gh_live, owner, repo, ctx["epic_pr"].number)
+    assert (epic_after.body or "") != epic_body_before, "epic PR 本文が更新されていない"
+    assert "## 横断要件" in (epic_after.body or ""), "epic PR 本文から横断要件が消えている"
 
     # 検証: 修正後の複合 UC シナリオが epic ブランチに積まれている
     assert scenario_changed(
@@ -132,11 +132,11 @@ def test_normal(
 
     # 検証: 各段のエスカレーション関連コメント（報告 / 中継 / 決定通知）が全て Resolve 済み
     assert server._is_minimized(report.node_id), "architect のエスカレーション報告が未 Resolve"
-    _assert_escalation_resolved(gh_live, owner, repo,ctx["story"].number, "subsystem-conductor", "story Issue")
-    _assert_escalation_resolved(gh_live, owner, repo,ctx["epic"].number, "story-conductor", "epic Issue")
+    _assert_escalation_resolved(gh_live, owner, repo,ctx["story_pr"].number, "subsystem-conductor", "story PR")
+    _assert_escalation_resolved(gh_live, owner, repo,ctx["epic_pr"].number, "story-conductor", "epic PR")
     _assert_escalation_resolved(gh_live, owner, repo,ctx["epic_pr"].number, "epic-conductor", "epic PR")
-    _assert_escalation_resolved(gh_live, owner, repo,ctx["epic"].number, "complex-scenario-writer", "epic Issue")
-    _assert_escalation_resolved(gh_live, owner, repo,ctx["story"].number, "epic-conductor", "story Issue")
+    _assert_escalation_resolved(gh_live, owner, repo,ctx["epic_pr"].number, "complex-scenario-writer", "epic PR")
+    _assert_escalation_resolved(gh_live, owner, repo,ctx["story_pr"].number, "epic-conductor", "story PR")
     _assert_escalation_resolved(gh_live, owner, repo,ctx["subsystem"].number, "story-conductor", "subsystem Issue")
 
     # 検証: subsystem PR は tester へ引き渡され、エスカレーション用の確認ラベルが残っていない
@@ -147,7 +147,7 @@ def test_normal(
     )
     assert "議論中" not in label_names(final), "subsystem PR に 議論中 が残っている"
     for name, number, label in (
-        ("epic Issue", ctx["epic"].number, "確認:epic-conductor"),
+        ("epic PR（要件）", ctx["epic_pr"].number, "確認:epic-conductor"),
         ("epic PR", ctx["epic_pr"].number, "確認:complex-scenario-writer"),
         ("subsystem Issue", ctx["subsystem"].number, "確認:subsystem-conductor"),
     ):

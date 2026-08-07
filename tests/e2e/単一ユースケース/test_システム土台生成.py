@@ -19,6 +19,7 @@ from tests.e2e.システム import (
     SYSTEM_BODY,
     SYSTEM_PR_BODY_CONFIRMED,
     SYSTEM_TITLE,
+    foundation_branch,
     system_branch,
 )
 from tests.e2e.実装対象 import add_worktree
@@ -38,6 +39,24 @@ EXPECTED_PAGES = [
 ]
 
 
+# 土台生成の成果物 PR 本文（system-conductor が『構成確定（完了処理）』で作る形）
+FOUNDATION_PR_BODY = """## 紐づく Issue
+
+- #{system_number}
+
+## タスク一覧
+
+- [ ] `README.md` と `.gitignore` を作成
+- [ ] `.claude/settings.json` にルール索引 3 つを設定
+- [ ] `docs/rules.yaml` を空の索引で作成
+- [ ] `docs/wiki/README.md` と各フォルダの README を作成
+- [ ] `設計図/アーキテクチャ図.md` を構成要件から作成
+- [ ] `設計図/非機能要件.md` を作成
+- [ ] `テスト/テスト実行方法.md` を未確定で作成
+- [ ] GitHub ラベルを対象リポジトリへ一括作成
+"""
+
+
 def _file_text(gh_live, owner, repo, path, ref) -> str | None:
     """指定 ref のファイル内容を返す（存在しなければ None）。"""
     try:
@@ -55,9 +74,16 @@ def test_normal(
     system = system_issue_factory(
         SYSTEM_TITLE, SYSTEM_BODY, labels=["layer:system", "type:feat"],
     )
-    branch = system_branch(system.number)
+    # 準備: 要件の SoT になる system ベース PR（確認ラベルなし = 起動対象にしない）
+    base_branch = system_branch(system.number)
+    draft_pr_factory(
+        base_branch, SYSTEM_TITLE, SYSTEM_PR_BODY_CONFIRMED.format(system_number=system.number)
+    )
+    # 準備: 作業対象の土台生成の成果物 PR（base=system ブランチ）。タスク一覧は成果物 PR が持つ
+    branch = foundation_branch(system.number)
     pr = draft_pr_factory(
-        branch, SYSTEM_TITLE, SYSTEM_PR_BODY_CONFIRMED.format(system_number=system.number)
+        branch, f"{SYSTEM_TITLE}（土台生成）",
+        FOUNDATION_PR_BODY.format(system_number=system.number), base_branch=base_branch,
     )
     add_worktree(sandbox["local_path"], branch)
 

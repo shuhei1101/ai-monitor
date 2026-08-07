@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import shutil
 import signal
 import socket
@@ -292,12 +293,22 @@ def _collect_issue_tree(gh_live, owner: str, repo: str, number: int, collected: 
 
 
 def _find_prs_for(gh_live, owner: str, repo: str, numbers: list[int], *, state: str = "open") -> list:
-    """指定番号のいずれかを本文で参照している PR を返す。"""
+    """指定番号のいずれかを本文または head ブランチ名で参照している PR を返す。
+
+    エージェントが本文を書き換えるときに `## 紐づく Issue` を落とすことがあり、
+    本文だけを見ると後片付けから漏れる。ブランチ名には規約上どこかに起点の番号が
+    入る（`{type}/{レイヤー}/{ドメイン}-{番号}/base` 等）ので、そちらでも辿れるようにする。
+    """
     try:
         pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state=state, per_page=100).parsed_data
     except RequestFailed:
         return []
-    return [pr for pr in pulls if any(f"#{number}" in (pr.body or "") for number in numbers)]
+    keys = {str(number) for number in numbers}
+    return [
+        pr for pr in pulls
+        if any(f"#{number}" in (pr.body or "") for number in numbers)
+        or keys & set(re.findall(r"\d+", pr.head.ref))
+    ]
 
 
 def _find_reported_issues_for(gh_live, owner: str, repo: str, numbers: list[int]) -> list[int]:
@@ -381,10 +392,25 @@ def _cleanup(gh_live, owner: str, repo: str, sandbox: dict, root_numbers: list[i
     numbers: list[int] = []
     for number in reversed(root_numbers):
         _collect_issue_tree(gh_live, owner, repo, number, numbers)
-    pulls = _find_prs_for(gh_live, owner, repo, numbers)
-    # マージ済みの PR も番号を拾う（担当エージェントのセッションは PR が閉じても常駐し続ける）
-    closed = _find_prs_for(gh_live, owner, repo, numbers, state="all")
-    numbers.extend({pr.number for pr in [*pulls, *closed]})
+    # RE PR のように別の PR を `## 紐づく Issue` に書く多段構成があるため、
+    # 見つけた PR の番号を検索キーへ足しながら、増えなくなるまで探索を繰り返す
+    # （マージ済みの PR も拾う。担当エージェントのセッションは PR が閉じても常駐し続ける）
+    open_prs: dict[int, object] = {}
+    seen: set[int] = set()
+    while True:
+        fresh = [
+            pr for pr in _find_prs_for(gh_live, owner, repo, numbers, state="all")
+            if pr.number not in seen
+        ]
+        if not fresh:
+            break
+        for pr in fresh:
+            seen.add(pr.number)
+            # close 済みの PR は番号だけ拾う（セッション kill の対象にする）
+            if pr.state == "open":
+                open_prs[pr.number] = pr
+        numbers.extend(pr.number for pr in fresh)
+    pulls = list(open_prs.values())
     # エージェントが起票した不具合報告は親を持たないので、報告元の番号から拾う
     numbers.extend(_find_reported_issues_for(gh_live, owner, repo, numbers))
     branches = [pr.head.ref for pr in pulls]

@@ -6,7 +6,6 @@ from tests.e2e.エスカレーション import comments, comments_from, issue, l
 from tests.e2e.システム import (
     ARCHITECTURE_MD,
     ARCHITECTURE_PATH,
-    ARCHITECTURE_RE_REPORT,
     MIGRATION_TITLE,
     SYSTEM_BODY,
     SYSTEM_BODY_MIGRATION,
@@ -28,11 +27,26 @@ def _approve(gh_live, owner, repo, number, data) -> None:
         )
 
 
+def _system_pr(gh_live, owner, repo, system_number: int):
+    """立ち上げ Issue から作られた system ベース PR（base=master）を返す。"""
+    pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
+    for pr in pulls:
+        if pr.base.ref == "master" and f"#{system_number}" in (pr.body or ""):
+            return pr
+    return None
+
+
 def _wait_drafted(gh_live, owner, repo, number, wait_until, *, message):
-    """本文の草案が入り、ユーザー待ち（議論中 + assignee）になるまで待つ。"""
+    """system PR が作られ、本文の草案が入ってユーザー待ちになるまで待つ。
+
+    `構成確定（初回）` が立ち上げ Issue から system PR を作り、確認ラベルと草案を PR 側へ移す。
+    """
 
     def _done():
-        data = issue(gh_live, owner, repo, number)
+        pr = _system_pr(gh_live, owner, repo, number)
+        if pr is None:
+            return None
+        data = issue(gh_live, owner, repo, pr.number)
         if not waiting_for_user(data):
             return None
         return data if all(section in (data.body or "") for section in SECTIONS) else None
@@ -41,27 +55,31 @@ def _wait_drafted(gh_live, owner, repo, number, wait_until, *, message):
 
 
 def _wait_handed_off(gh_live, owner, repo, number, wait_until, *, message):
-    """完了処理（system PR 作成 + 確認:system-architect 付与）が終わるまで待つ。"""
+    """完了処理（土台生成の成果物 PR 作成 + 確認:system-architect 付与）が終わるまで待つ。"""
 
     def _done():
-        data = issue(gh_live, owner, repo, number)
+        system_pr = _system_pr(gh_live, owner, repo, number)
+        if system_pr is None:
+            return None
+        data = issue(gh_live, owner, repo, system_pr.number)
         if "確認:system-conductor" in label_names(data):
             return None
         pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-        candidates = [p for p in pulls if f"#{number}" in (p.body or "")]
-        if not candidates:
+        artifacts = [p for p in pulls if p.base.ref == system_pr.head.ref]
+        if not artifacts:
             return None
-        pr = candidates[0]
+        pr = artifacts[0]
         pr_labels = {label.name for label in issue(gh_live, owner, repo, pr.number).labels}
-        return (data, pr) if "確認:system-architect" in pr_labels else None
+        return (data, system_pr, pr) if "確認:system-architect" in pr_labels else None
 
     return wait_until(_done, timeout_sec=2400, message=message)
 
 
-def _assert_handed_off(gh_live, owner, repo, system_number, pr, e2e_state_path) -> None:
-    """system Draft PR の内容・監視面・依頼コメントを検証する。"""
-    assert pr.draft is True, "system PR が Draft で作成されていない"
-    assert pr.base.ref == "master", f"base が master でない: {pr.base.ref}"
+def _assert_handed_off(gh_live, owner, repo, system_number, system_pr, pr, e2e_state_path) -> None:
+    """土台生成の成果物 PR の内容・監視面・依頼コメントを検証する。"""
+    assert pr.draft is True, "成果物 PR が Draft で作成されていない"
+    assert pr.base.ref == system_pr.head.ref, f"base が system ブランチでない: {pr.base.ref}"
+    assert pr.head.ref.endswith("/foundation"), f"成果物ブランチが foundation でない: {pr.head.ref}"
     pr_body = (pr.body or "").replace("\r\n", "\n")
     assert "## 紐づく Issue" in pr_body, "PR 本文に ## 紐づく Issue がない"
     assert "## タスク一覧" in pr_body, "PR 本文に ## タスク一覧 がない"
@@ -108,17 +126,17 @@ def test_normal_when_new_project(
     assert len(numeric) == len(set(numeric)), f"着手順が重複している: {numeric}"
 
     # 実行: ユーザー承認 → 完了処理（PR 作成 + 引き継ぎ）を待つ
-    _approve(gh_live, owner, repo, system.number, data)
-    done, pr = _wait_handed_off(
+    _approve(gh_live, owner, repo, data.number, data)
+    done, system_pr, pr = _wait_handed_off(
         gh_live, owner, repo, system.number, wait_until, message="system Draft PR の作成と引き継ぎ",
     )
 
     # 検証: PR の内容・監視面・依頼コメント
-    _assert_handed_off(gh_live, owner, repo, system.number, pr, e2e_state_path)
+    _assert_handed_off(gh_live, owner, repo, system.number, system_pr, pr, e2e_state_path)
 
     # 検証: 確認ラベルが除去され、自分宛コメントが Resolve 済み
     assert "確認:system-conductor" not in label_names(done), "確認:system-conductor が残っている"
-    for comment in comments_from(gh_live, owner, repo, system.number, "system-conductor"):
+    for comment in comments_from(gh_live, owner, repo, system_pr.number, "system-conductor"):
         assert server._is_minimized(comment.node_id), f"自分宛コメントが未 Resolve: {comment.html_url}"
 
 
@@ -145,16 +163,17 @@ def test_normal_when_missing_config(
 
     # 検証: 入力に無かった項目について、選択肢と推奨を含む確認事項が投稿されている
     questions = [
-        c for c in comments_from(gh_live, owner, repo, system.number, "system-conductor")
+        c for c in comments_from(gh_live, owner, repo, data.number, "system-conductor")
         if f"@{me(gh_live)}" in (c.body or "")
     ]
     assert questions, "ユーザー宛の確認事項コメントが投稿されていない"
     assert any("推奨" in (c.body or "") for c in questions), "推奨を含む確認事項がない"
 
-    # 検証: この時点では system Draft PR がまだ作成されていない
+    # 検証: この時点では土台生成の成果物 PR がまだ作成されていない（作るのは完了処理）
+    system_pr = _system_pr(gh_live, owner, repo, system.number)
     pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-    assert not [p for p in pulls if f"#{system.number}" in (p.body or "")], (
-        "承認前に system Draft PR が作成されている"
+    assert not [p for p in pulls if p.base.ref == system_pr.head.ref], (
+        "承認前に土台生成の成果物 PR が作成されている"
     )
 
 
@@ -164,18 +183,16 @@ def test_normal_when_migration(
 ):
     """既存コードと現状のアーキテクチャ図からの構成確定を実環境で確認する（正常系・既存プロジェクトの移行）。"""
     owner, repo = repo_ctx
-    # 準備: RE PR がマージ済みの状態（master に実装と現状のアーキテクチャ図がある）を再現する
+    # 準備: RE がマージ済みの状態（master に実装と現状のアーキテクチャ図がある）を再現する
     for path, content in PROJECT_FILES.items():
         commit_file("master", path, content, f"chore: e2e 用に {path} を配置")
     commit_file("master", ARCHITECTURE_PATH, ARCHITECTURE_MD, "docs: 現状のアーキテクチャ図を追加")
 
+    # RE は完了済みなので `リバースエンジニアリング` ラベルと未解決の完了報告は残さない。
+    # 残すと索引の上位にある「リバースエンジニアリング起動」「RE完了確認」が先にマッチして
+    # 検証したい構成確定へ進めない（本フェーズの入力は本文と master の現状設計書で足りる）。
     system = system_issue_factory(
-        MIGRATION_TITLE, SYSTEM_BODY_MIGRATION,
-        labels=["リバースエンジニアリング", "確認:system-conductor"],
-    )
-    # 準備: architecture-reverse-engineer の完了報告（エピック一覧の材料）
-    gh_live.rest.issues.create_comment(
-        owner=owner, repo=repo, issue_number=system.number, body=ARCHITECTURE_RE_REPORT
+        MIGRATION_TITLE, SYSTEM_BODY_MIGRATION, labels=["確認:system-conductor"],
     )
 
     # 実行: 本文の草案と確認事項の投稿を待つ
@@ -199,12 +216,12 @@ def test_normal_when_migration(
     )
 
     # 実行: ユーザー承認 → 完了処理（PR 作成 + 引き継ぎ）を待つ
-    _approve(gh_live, owner, repo, system.number, data)
-    done, pr = _wait_handed_off(
+    _approve(gh_live, owner, repo, data.number, data)
+    done, system_pr, pr = _wait_handed_off(
         gh_live, owner, repo, system.number, wait_until, message="system Draft PR の作成と引き継ぎ",
     )
 
     # 検証: PR の内容・監視面・依頼コメント
-    _assert_handed_off(gh_live, owner, repo, system.number, pr, e2e_state_path)
+    _assert_handed_off(gh_live, owner, repo, system.number, system_pr, pr, e2e_state_path)
     assert "確認:system-conductor" not in label_names(done), "確認:system-conductor が残っている"
     assert comments(gh_live, owner, repo, system.number), "コメントが 1 件も残っていない"

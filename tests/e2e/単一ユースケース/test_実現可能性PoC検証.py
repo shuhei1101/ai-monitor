@@ -48,7 +48,10 @@ epic の実現可能性 PoC を発注します。
 """
 
 
-def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, tmp_path):
+def test_normal(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    wait_until, tmp_path,
+):
     """方針固め → 承認 → 検証実行 → 承認 → 完了処理までを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
@@ -59,11 +62,15 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic"]
     )
-    # 準備: PoC Draft PR（本文は `## 紐づく Issue` のみ）を作成
-    pr = epic_pr_factory(
-        branch=f"poc/epic/tempfile-{epic.number}",
-        title=f"PoC: 一時ファイル生成機構（epic #{epic.number}）",
-        body=f"## 紐づく Issue\n\n- #{epic.number}\n",
+    # 準備: 要件の SoT になる epic ベース PR（確認ラベルなし = 起動対象にしない）
+    epic_branch = f"feat/epic/tempfile-{epic.number}/base"
+    epic_pr = epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=EPIC_BODY)
+    # 準備: PoC Draft PR（base=epic ブランチ。規約『ブランチ戦略』のとおりマージせず close する枝）
+    pr = draft_pr_factory(
+        f"poc/epic/tempfile-{epic.number}/stdlib",
+        f"PoC: 一時ファイル生成機構（epic #{epic_pr.number}）",
+        f"## 紐づく Issue\n\n- #{intake.number}\n",
+        base_branch=epic_branch,
     )
     # 準備: epic-conductor の指示コメントを投稿してから確認ラベルを付ける
     instruction = gh_live.rest.issues.create_comment(
@@ -134,8 +141,8 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
     pr_data = _get_issue(pr.number)
     assert pr_data.state == "open"
 
-    # 検証: 親 epic Issue 本文の `## PoC 結果` に検証構成 / 成功条件 / 結果 / PoC PR リンクが記録されている
-    epic_data = _get_issue(epic.number)
+    # 検証: 親 epic PR 本文の `## PoC 結果` に検証構成 / 成功条件 / 結果 / PoC PR リンクが記録されている
+    epic_data = _get_issue(epic_pr.number)
     epic_body = (epic_data.body or "").replace("\r\n", "\n")
     assert "## PoC 結果" in epic_body
     # 「未記入」から記入済みへ更新されている（プレースホルダーが残っていない）
@@ -143,10 +150,12 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
     assert "（未記入）" not in poc_section
     assert f"#{pr.number}" in poc_section, "PoC PR リンクが記載されていない"
 
-    # 検証: 親 epic Issue に 確認:epic-conductor + @epic-conductor 宛の完了報告コメント（未 Resolve）が付与・投稿されている
+    # 検証: 親 epic PR に 確認:epic-conductor + @epic-conductor 宛の完了報告コメント（未 Resolve）が付与・投稿されている
     epic_labels = {label.name for label in epic_data.labels}
     assert "確認:epic-conductor" in epic_labels
-    epic_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=epic.number).parsed_data
+    epic_comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=epic_pr.number
+    ).parsed_data
     completion = [c for c in epic_comments if "> to: @epic-conductor" in c.body]
     assert completion, "@epic-conductor 宛の完了報告コメントが投稿されていない"
     assert not server._is_minimized(completion[-1].node_id), "完了報告が Resolve されてしまっている"
@@ -188,7 +197,8 @@ epic の実現可能性 PoC を発注します。
 
 
 def test_error_when_unmet(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, tmp_path
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    wait_until, tmp_path,
 ):
     """全案 ❌ のときの不成立の記録と相談を実環境で確認する（異常系・核心機構が成立しない結論）。"""
     owner, repo = repo_ctx
@@ -196,14 +206,17 @@ def test_error_when_unmet(
     def _get_issue(number):
         return gh_live.rest.issues.get(owner=owner, repo=repo, issue_number=number).parsed_data
 
-    # 準備: 成立しない検証テーマの epic Issue + PoC Draft PR
+    # 準備: 成立しない検証テーマの epic Issue + epic ベース PR + PoC Draft PR
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=UNMET_EPIC_BODY, epic_labels=["layer:epic"]
     )
-    pr = epic_pr_factory(
-        branch=f"poc/epic/pdf-{epic.number}",
-        title=f"PoC: 標準ライブラリでの PDF 生成（epic #{epic.number}）",
-        body=f"## 紐づく Issue\n\n- #{epic.number}\n",
+    epic_branch = f"feat/epic/pdf-{epic.number}/base"
+    epic_pr = epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=UNMET_EPIC_BODY)
+    pr = draft_pr_factory(
+        f"poc/epic/pdf-{epic.number}/stdlib",
+        f"PoC: 標準ライブラリでの PDF 生成（epic #{epic_pr.number}）",
+        f"## 紐づく Issue\n\n- #{intake.number}\n",
+        base_branch=epic_branch,
     )
     gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=pr.number, body=UNMET_INSTRUCTION_BODY
@@ -251,10 +264,10 @@ def test_error_when_unmet(
     consult = [c for c in pr_comments if (c.body or "").lstrip().startswith("> from: @epic-poc-runner")]
     assert consult, "不成立の相談コメントが投稿されていない"
 
-    # 検証: epic Issue の `## PoC 結果` にも不成立が記録され、epic / PoC PR とも open のまま
-    epic_body = (_get_issue(epic.number).body or "").replace("\r\n", "\n")
-    assert "## PoC 結果" in epic_body, "epic 本文に ## PoC 結果 がない"
+    # 検証: 親 epic PR の `## PoC 結果` にも不成立が記録され、epic / PoC PR とも open のまま
+    epic_body = (_get_issue(epic_pr.number).body or "").replace("\r\n", "\n")
+    assert "## PoC 結果" in epic_body, "epic PR 本文に ## PoC 結果 がない"
     assert "（未記入）" not in epic_body, "epic の PoC 結果が未記入のまま"
-    assert _get_issue(epic.number).state == "open", "epic Issue が close されている"
+    assert _get_issue(epic_pr.number).state == "open", "epic PR が close されている"
     assert _get_issue(pr.number).state == "open", "PoC PR が close されている"
     assert intake is not None and tmp_path

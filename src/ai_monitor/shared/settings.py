@@ -109,6 +109,9 @@ class Settings(BaseSettings):
     rate_limit_fallback_min: int = 60
     # git CLI 1 回あたりの上限（秒）。超えたら打ち切ってツールエラーにする
     git_timeout_sec: int = 120
+    # GitHub API 1 回あたりの上限（秒）。githubkit の既定は無制限で、
+    # 応答が返らないとポーリングスレッドが 1 周を終えられなくなる
+    github_timeout_sec: int = 30
     state_path: str = "data/state.yaml"
     ai_monitor_wiki_base: str
     # 不具合 Issue の起票先（owner/name）。未設定なら create_defect_issue が使えない

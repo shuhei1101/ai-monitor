@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import ai_monitor.mcp.server as server
 from tests.e2e.epic起動 import (
+    wait_epic_pr,
     EPIC_SECTIONS,
     assert_comments_resolved,
     assert_linked_issue_only_body,
     assert_task_list_body,
     drive_requirements,
 )
-from tests.e2e.ゲート応答 import open_prs_for
 from tests.e2e.システム import watch_numbers
 from tests.e2e.システム import SYSTEM_REQUIREMENTS, SYSTEM_TITLE
 from tests.e2e.エスカレーション import comments
@@ -21,6 +21,16 @@ INTAKE_BODY = """タスクの期限が近づいたらメールで通知する機
 - 通知タイミング（1 日前 / 1 時間前）も選べるようにしたい
 """
 EPIC_TITLE = "タスク期限のメール通知機能"
+
+
+def _artifact_prs(gh_live, owner, repo, epic_pr) -> list:
+    """epic ブランチを base にする成果物 PR（モック / シナリオ / PoC）を返す。
+
+    `要件確定（完了処理）` が回答に応じて 1 本だけ作る。
+    `## 紐づく Issue` は起点の intake Issue を指すので base で辿る。
+    """
+    pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
+    return [p for p in pulls if p.base.ref == epic_pr.head.ref]
 
 
 def _assert_requirements(gh_live, owner, repo, epic_number: int, first) -> None:
@@ -39,18 +49,19 @@ def test_normal_when_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory
     intake, epic = epic_issue_factory(INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE)
 
     # 実行: 要件確定フローをユーザー役として進める（PoC 不要・画面変更なしと回答）
+    epic_pr = wait_epic_pr(gh_live, owner, repo, wait_until, intake.number)
     first, _ = drive_requirements(
-        gh_live, owner, repo, wait_until, epic.number,
+        gh_live, owner, repo, wait_until, epic_pr.number,
         answer_body="A（PoC 不要）/ A（画面変更なし）でお願いします。",
     )
-    _assert_requirements(gh_live, owner, repo, epic.number, first)
+    _assert_requirements(gh_live, owner, repo, epic_pr.number, first)
 
-    # 検証: epic Draft PR（base=master・本文は 紐づく Issue のみ）が 1 件作成され 確認:complex-scenario-writer 付与
-    prs = open_prs_for(gh_live, owner, repo, epic.number)
-    assert len(prs) == 1, f"epic Draft PR が 1 件でない: {[pr.number for pr in prs]}"
+    # 検証: 成果物 Draft PR（base=epic ブランチ）が 1 件作成され 確認:complex-scenario-writer 付与
+    prs = _artifact_prs(gh_live, owner, repo, epic_pr)
+    assert len(prs) == 1, f"成果物 Draft PR が 1 件でない: {[pr.number for pr in prs]}"
     pr = prs[0]
     assert pr.draft is True
-    assert pr.base.ref == "master"
+    assert pr.base.ref == epic_pr.head.ref
     assert_task_list_body(pr)
     pr_labels = {label.name for label in pr.labels}
     assert "確認:complex-scenario-writer" in pr_labels
@@ -59,7 +70,7 @@ def test_normal_when_no_poc_no_ui(monitor, gh_live, repo_ctx, epic_issue_factory
     assert pr.number in watch_numbers(e2e_state_path, "epic-conductor", epic.number)
 
     # 検証: エージェント投稿の自分宛コメントが全て Resolve 済み
-    assert_comments_resolved(gh_live, owner, repo, epic.number)
+    assert_comments_resolved(gh_live, owner, repo, epic_pr.number)
 
 
 def test_normal_when_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_state_path):
@@ -69,18 +80,19 @@ def test_normal_when_no_poc_with_ui(monitor, gh_live, repo_ctx, epic_issue_facto
     intake, epic = epic_issue_factory(INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE)
 
     # 実行: 要件確定フローをユーザー役として進める（PoC 不要・画面変更ありと回答）
+    epic_pr = wait_epic_pr(gh_live, owner, repo, wait_until, intake.number)
     first, _ = drive_requirements(
-        gh_live, owner, repo, wait_until, epic.number,
+        gh_live, owner, repo, wait_until, epic_pr.number,
         answer_body="A（PoC 不要）/ B（画面変更あり: 通知設定画面を新規作成）でお願いします。",
     )
-    _assert_requirements(gh_live, owner, repo, epic.number, first)
+    _assert_requirements(gh_live, owner, repo, epic_pr.number, first)
 
-    # 検証: epic Draft PR（base=master・本文は 紐づく Issue のみ）が 1 件作成され 確認:mock-designer 付与
-    prs = open_prs_for(gh_live, owner, repo, epic.number)
-    assert len(prs) == 1, f"epic Draft PR が 1 件でない: {[pr.number for pr in prs]}"
+    # 検証: 成果物 Draft PR（base=epic ブランチ）が 1 件作成され 確認:mock-designer 付与
+    prs = _artifact_prs(gh_live, owner, repo, epic_pr)
+    assert len(prs) == 1, f"成果物 Draft PR が 1 件でない: {[pr.number for pr in prs]}"
     pr = prs[0]
     assert pr.draft is True
-    assert pr.base.ref == "master"
+    assert pr.base.ref == epic_pr.head.ref
     assert_task_list_body(pr)
     pr_labels = {label.name for label in pr.labels}
     assert "確認:mock-designer" in pr_labels
@@ -101,20 +113,21 @@ def test_normal_when_poc_required(monitor, gh_live, repo_ctx, epic_issue_factory
     intake, epic = epic_issue_factory(INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE)
 
     # 実行: 要件確定フローをユーザー役として進める（PoC 必要と回答）
+    epic_pr = wait_epic_pr(gh_live, owner, repo, wait_until, intake.number)
     first, _ = drive_requirements(
-        gh_live, owner, repo, wait_until, epic.number,
+        gh_live, owner, repo, wait_until, epic_pr.number,
         answer_body="B（PoC 必要: メール一斉送信のスループット検証）/ A（画面変更なし）でお願いします。",
     )
-    _assert_requirements(gh_live, owner, repo, epic.number, first)
+    _assert_requirements(gh_live, owner, repo, epic_pr.number, first)
 
-    # 検証: PoC Draft PR のみが 1 件作成され（epic Draft PR は作成されない）確認:epic-poc-runner 付与
-    prs = open_prs_for(gh_live, owner, repo, epic.number)
+    # 検証: PoC Draft PR のみが 1 件作成され 確認:epic-poc-runner 付与
+    prs = _artifact_prs(gh_live, owner, repo, epic_pr)
     assert len(prs) == 1, f"PoC Draft PR のみの 1 件でない: {[(pr.number, pr.title) for pr in prs]}"
     pr = prs[0]
     assert pr.title.startswith("PoC:"), f"タイトルが PoC: 始まりでない: {pr.title}"
-    assert f"#{epic.number}" in pr.title
+    assert f"#{epic_pr.number}" in pr.title
     assert pr.draft is True
-    assert pr.base.ref == "master"
+    assert pr.base.ref == epic_pr.head.ref
     assert_linked_issue_only_body(pr)
     pr_labels = {label.name for label in pr.labels}
     assert "確認:epic-poc-runner" in pr_labels
@@ -172,15 +185,16 @@ def test_normal_when_reverse(
     commit_file("master", CURRENT_MOCK_PATH, CURRENT_MOCK_HTML, "docs: 現状モックを追加")
 
     # 実行: 要件確定フローをユーザー役として進める
+    epic_pr = wait_epic_pr(gh_live, owner, repo, wait_until, system.number)
     first, _ = drive_requirements(
-        gh_live, owner, repo, wait_until, epic.number,
+        gh_live, owner, repo, wait_until, epic_pr.number,
         answer_body="現状の設計書どおりで問題ありません。乖離している箇所は現状に合わせてください。",
     )
-    _assert_requirements(gh_live, owner, repo, epic.number, first)
+    _assert_requirements(gh_live, owner, repo, epic_pr.number, first)
 
-    # 検証: epic Draft PR が 1 件作成され mock-designer へ引き継がれている
-    prs = open_prs_for(gh_live, owner, repo, epic.number)
-    assert len(prs) == 1, f"epic Draft PR が 1 件でない: {[pr.number for pr in prs]}"
+    # 検証: 成果物 Draft PR が 1 件作成され mock-designer へ引き継がれている
+    prs = _artifact_prs(gh_live, owner, repo, epic_pr)
+    assert len(prs) == 1, f"成果物 Draft PR が 1 件でない: {[pr.number for pr in prs]}"
     pr = prs[0]
     assert pr.draft is True
     assert_task_list_body(pr)
@@ -190,7 +204,7 @@ def test_normal_when_reverse(
     assert pr.number in watch_numbers(e2e_state_path, "epic-conductor", epic.number)
 
     # 検証: エージェント投稿の自分宛コメントが全て Resolve 済み
-    assert_comments_resolved(gh_live, owner, repo, epic.number)
+    assert_comments_resolved(gh_live, owner, repo, epic_pr.number)
     assert system is not None and master_baseline
 
 
@@ -228,9 +242,11 @@ def test_normal_when_no_questions(
         UNAMBIGUOUS_INTAKE_TITLE, UNAMBIGUOUS_INTAKE_BODY, UNAMBIGUOUS_INTAKE_TITLE
     )
 
-    # 実行: 要件確定（初回）の完了を待つ（議論中 + assignee）
+    # 実行: epic PR の作成と要件確定（初回）の完了を待つ（議論中 + assignee）
+    epic_pr = wait_epic_pr(gh_live, owner, repo, wait_until, _intake.number)
+
     def _first_turn_done():
-        data = issue(gh_live, owner, repo, epic.number)
+        data = issue(gh_live, owner, repo, epic_pr.number)
         return data if waiting_for_user(data) else None
 
     first = wait_until(
@@ -238,11 +254,11 @@ def test_normal_when_no_questions(
     )
 
     # 検証: 確認質問が 1 件も投稿されていない
-    questions = _question_comments(gh_live, owner, repo, epic.number)
+    questions = _question_comments(gh_live, owner, repo, epic_pr.number)
     assert not questions, f"確認質問が投稿されている: {[c.html_url for c in questions]}"
 
     # 検証: 本文 5 セクションが埋まり、完了報告コメントが投稿されている
-    _assert_requirements(gh_live, owner, repo, epic.number, first)
+    _assert_requirements(gh_live, owner, repo, epic_pr.number, first)
 
     # 検証: ユーザーが確認するタイミング自体は残っている
     assert "議論中" in label_names(first)
@@ -257,9 +273,9 @@ def test_normal_when_no_questions(
 
     wait_until(_completed, timeout_sec=1200, message="要件確定（完了処理）の完了（確認:* 除去）")
 
-    # 検証: epic Draft PR が作成され complex-scenario-writer へ引き継がれている
-    prs = open_prs_for(gh_live, owner, repo, epic.number)
-    assert len(prs) == 1, f"epic Draft PR が 1 件でない: {[pr.number for pr in prs]}"
+    # 検証: 成果物 Draft PR が作成され complex-scenario-writer へ引き継がれている
+    prs = _artifact_prs(gh_live, owner, repo, epic_pr)
+    assert len(prs) == 1, f"成果物 Draft PR が 1 件でない: {[pr.number for pr in prs]}"
     pr = prs[0]
     assert pr.draft is True
     assert_task_list_body(pr)
@@ -269,4 +285,4 @@ def test_normal_when_no_questions(
     assert pr.number in watch_numbers(e2e_state_path, "epic-conductor", epic.number)
 
     # 検証: エージェント投稿の自分宛コメントが全て Resolve 済み
-    assert_comments_resolved(gh_live, owner, repo, epic.number)
+    assert_comments_resolved(gh_live, owner, repo, epic_pr.number)

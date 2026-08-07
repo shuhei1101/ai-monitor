@@ -65,7 +65,7 @@ RUNNER_REPORT = """> from: @epic-poc-runner
 | 読み戻し | 書き込んだ文字列と一致 | ✅ |
 | 外部依存 | 標準ライブラリのみ | ✅ |
 
-結論: 成立（epic を進めてよい）。結果は epic Issue 本文の `## PoC 結果` に記録済みです。
+結論: 成立（epic を進めてよい）。結果は epic PR 本文の `## PoC 結果` に記録済みです。
 
 ------
 """
@@ -105,39 +105,50 @@ def _watch_numbers(state_path: Path, epic_number: int) -> list[int]:
     return []
 
 
-def _setup(gh_live, owner, repo, epic_issue_factory, epic_pr_factory, *, epic_body, report_body):
-    """PoC 完了時点（PoC PR は open）の epic 一式を用意する。"""
+def _setup(
+    gh_live, owner, repo, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    *, epic_body, report_body,
+):
+    """PoC 完了時点（PoC PR は open）の epic 一式を用意する。
+
+    PoC の base は epic ブランチ（規約『ブランチ戦略』）なので、PoC を発注した時点で epic PR は既にある。
+    """
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=epic_body, epic_labels=["layer:epic", "type:feat"]
     )
-    poc_branch = f"poc/epic/tempfile-{epic.number}"
-    poc_pr = epic_pr_factory(
-        branch=poc_branch, title=f"PoC: 一時ファイル生成機構（#{epic.number}）",
-        body=POC_PR_BODY.format(epic_number=epic.number),
+    # 要件確定済みの epic ベース PR（面）
+    epic_branch = f"feat/epic/tempfile-{epic.number}/base"
+    epic_pr = epic_pr_factory(branch=epic_branch, title=EPIC_TITLE, body=epic_body)
+    # PoC PR（base=epic ブランチ。マージせず close する枝）
+    poc_branch = f"poc/epic/tempfile-{epic.number}/stdlib"
+    poc_pr = draft_pr_factory(
+        poc_branch, f"PoC: 一時ファイル生成機構（#{epic_pr.number}）",
+        POC_PR_BODY.format(epic_number=intake.number), base_branch=epic_branch,
     )
+    # epic-poc-runner の完了報告は親 epic PR へ返る
     report = gh_live.rest.issues.create_comment(
-        owner=owner, repo=repo, issue_number=epic.number, body=report_body
+        owner=owner, repo=repo, issue_number=epic_pr.number, body=report_body
     ).parsed_data
     gh_live.rest.issues.add_labels(
-        owner=owner, repo=repo, issue_number=epic.number, labels=["確認:epic-conductor"]
+        owner=owner, repo=repo, issue_number=epic_pr.number, labels=["確認:epic-conductor"]
     )
-    return {"intake": intake, "epic": epic, "poc_pr": poc_pr, "poc_branch": poc_branch, "report": report}
+    return {
+        "intake": intake, "epic": epic, "epic_pr": epic_pr, "epic_branch": epic_branch,
+        "poc_pr": poc_pr, "poc_branch": poc_branch, "report": report,
+    }
 
 
-def _epic_prs(gh_live, owner, repo, epic_number: int, poc_number: int) -> list:
-    """PoC PR 以外で epic に紐づく open PR を返す。"""
+def _artifact_prs(gh_live, owner, repo, epic_branch: str, poc_number: int) -> list:
+    """PoC PR 以外で epic ブランチを base にする open PR（成果物 PR）を返す。"""
     pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-    return [
-        pr for pr in pulls
-        if pr.number != poc_number and f"#{epic_number}" in (pr.body or "")
-    ]
+    return [pr for pr in pulls if pr.number != poc_number and pr.base.ref == epic_branch]
 
 
-def _wait_epic_pr(gh_live, owner, repo, ctx, next_label: str, wait_until, *, message):
-    """PoC PR の close と epic Draft PR の作成を待つ。"""
+def _wait_artifact_pr(gh_live, owner, repo, ctx, next_label: str, wait_until, *, message):
+    """PoC PR の close と成果物 Draft PR の作成を待つ。"""
 
     def _done():
-        epic_now = issue(gh_live, owner, repo, ctx["epic"].number)
+        epic_now = issue(gh_live, owner, repo, ctx["epic_pr"].number)
         if "確認:epic-conductor" in label_names(epic_now):
             return None
         poc_now = gh_live.rest.pulls.get(
@@ -145,7 +156,7 @@ def _wait_epic_pr(gh_live, owner, repo, ctx, next_label: str, wait_until, *, mes
         ).parsed_data
         if poc_now.state != "closed":
             return None
-        prs = _epic_prs(gh_live, owner, repo, ctx["epic"].number, ctx["poc_pr"].number)
+        prs = _artifact_prs(gh_live, owner, repo, ctx["epic_branch"], ctx["poc_pr"].number)
         if not prs:
             return None
         pr = prs[0]
@@ -168,60 +179,63 @@ def _wait_poc_branch_deleted(gh_live, owner, repo, ctx, wait_until) -> None:
     wait_until(_done, timeout_sec=1800, message="PoC ブランチの削除")
 
 
-def _assert_epic_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path) -> None:
-    """epic Draft PR の形と PoC の後片付けを検証する。"""
-    assert pr.draft is True, "epic PR が Draft でない"
-    assert pr.base.ref == "master", f"epic PR の base が master でない: {pr.base.ref}"
+def _assert_artifact_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path) -> None:
+    """成果物 Draft PR の形と PoC の後片付けを検証する。"""
+    assert pr.draft is True, "成果物 PR が Draft でない"
+    assert pr.base.ref == ctx["epic_branch"], f"成果物 PR の base が epic ブランチでない: {pr.base.ref}"
+    assert pr.head.ref.startswith("docs/epic/"), f"成果物ブランチが docs/epic/ 配下でない: {pr.head.ref}"
     sections = [
         line for line in (pr.body or "").replace("\r\n", "\n").splitlines() if line.startswith("## ")
     ]
-    assert sections == ["## 紐づく Issue"], f"PR 本文のセクションが 紐づく Issue のみでない: {sections}"
+    assert sections == ["## 紐づく Issue", "## タスク一覧"], f"PR 本文のセクションが想定と異なる: {sections}"
     assert poc_now.merged is False, "PoC PR がマージされている（恒久記録として close するだけ）"
-    assert pr.number in _watch_numbers(e2e_state_path, ctx["epic"].number), (
+    assert pr.number in _watch_numbers(e2e_state_path, ctx["epic_pr"].number), (
         "作成した PR の番号が監視面に登録されていない"
     )
 
 
 def test_normal_when_no_ui(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, e2e_state_path,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    wait_until, e2e_state_path,
 ):
-    """結果に疑問なしのとき epic Draft PR を作り complex-scenario-writer へ引き継ぐことを確認する（正常系・画面変更なし）。"""
+    """結果に疑問なしのとき 成果物 Draft PR を作り complex-scenario-writer へ引き継ぐことを確認する（正常系・画面変更なし）。"""
     owner, repo = repo_ctx
     ctx = _setup(
-        gh_live, owner, repo, epic_issue_factory, epic_pr_factory,
+        gh_live, owner, repo, epic_issue_factory, epic_pr_factory, draft_pr_factory,
         epic_body=EPIC_BODY_NO_UI, report_body=RUNNER_REPORT,
     )
 
-    pr, poc_now = _wait_epic_pr(
+    pr, poc_now = _wait_artifact_pr(
         gh_live, owner, repo, ctx, "確認:complex-scenario-writer", wait_until,
-        message="PoC PR の close と epic Draft PR の作成",
+        message="PoC PR の close と 成果物 Draft PR の作成",
     )
 
     _wait_poc_branch_deleted(gh_live, owner, repo, ctx, wait_until)
-    _assert_epic_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path)
+    _assert_artifact_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path)
 
     # 検証: epic Issue の自分宛コメントが全て Resolve 済み
-    for comment in comments(gh_live, owner, repo, ctx["epic"].number):
+    for comment in comments(gh_live, owner, repo, ctx["epic_pr"].number):
         assert server._is_minimized(comment.node_id), f"未 Resolve のコメント: {comment.html_url}"
 
 
 def test_normal_when_with_ui(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, e2e_state_path,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    wait_until, e2e_state_path,
 ):
     """画面変更ありのとき mock-designer へ指示コメント付きで引き継ぐことを確認する（正常系・画面変更あり）。"""
     owner, repo = repo_ctx
     ctx = _setup(
-        gh_live, owner, repo, epic_issue_factory, epic_pr_factory,
+        gh_live, owner, repo, epic_issue_factory, epic_pr_factory, draft_pr_factory,
         epic_body=EPIC_BODY_WITH_UI, report_body=RUNNER_REPORT,
     )
 
-    pr, poc_now = _wait_epic_pr(
+    pr, poc_now = _wait_artifact_pr(
         gh_live, owner, repo, ctx, "確認:mock-designer", wait_until,
-        message="PoC PR の close と epic Draft PR の作成（mock-designer 引き継ぎ）",
+        message="PoC PR の close と 成果物 Draft PR の作成（mock-designer 引き継ぎ）",
     )
 
     _wait_poc_branch_deleted(gh_live, owner, repo, ctx, wait_until)
-    _assert_epic_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path)
+    _assert_artifact_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path)
 
     # 検証: @mock-designer 宛の指示コメントが未 Resolve で投稿されている
     directed = [
@@ -235,81 +249,82 @@ def test_normal_when_with_ui(
 
 
 def test_error_when_continue(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until, e2e_state_path,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    wait_until, e2e_state_path,
 ):
     """結果への疑問をユーザーが解消したあと次フェーズへ進むことを確認する（異常系・続行指示）。"""
     owner, repo = repo_ctx
     ctx = _setup(
-        gh_live, owner, repo, epic_issue_factory, epic_pr_factory,
+        gh_live, owner, repo, epic_issue_factory, epic_pr_factory, draft_pr_factory,
         epic_body=EPIC_BODY_NO_UI, report_body=INCONSISTENT_REPORT,
     )
 
     # 実行: 矛盾の検知による質問コメント（議論中 + assignee）を待つ
     def _questioned():
-        data = issue(gh_live, owner, repo, ctx["epic"].number)
+        data = issue(gh_live, owner, repo, ctx["epic_pr"].number)
         return data if waiting_for_user(data) else None
 
     data = wait_until(_questioned, timeout_sec=2400, message="PoC 結果への質問コメント")
 
     # 実行: ユーザーが続行を指示（議論中 除去 + assignee 外し）
-    latest = comments(gh_live, owner, repo, ctx["epic"].number)[-1]
+    latest = comments(gh_live, owner, repo, ctx["epic_pr"].number)[-1]
     gh_live.rest.issues.update_comment(
         owner=owner, repo=repo, comment_id=latest.id, body=f"{latest.body}\n\n------\n{CONTINUE_ANSWER}"
     )
     try:
         gh_live.rest.issues.remove_label(
-            owner=owner, repo=repo, issue_number=ctx["epic"].number, name="議論中"
+            owner=owner, repo=repo, issue_number=ctx["epic_pr"].number, name="議論中"
         )
     except RequestFailed:
         pass
     for assignee in data.assignees:
         gh_live.rest.issues.remove_assignees(
-            owner=owner, repo=repo, issue_number=ctx["epic"].number, assignees=[assignee.login]
+            owner=owner, repo=repo, issue_number=ctx["epic_pr"].number, assignees=[assignee.login]
         )
 
-    pr, poc_now = _wait_epic_pr(
+    pr, poc_now = _wait_artifact_pr(
         gh_live, owner, repo, ctx, "確認:complex-scenario-writer", wait_until,
-        message="続行指示後の epic Draft PR の作成",
+        message="続行指示後の 成果物 Draft PR の作成",
     )
     _wait_poc_branch_deleted(gh_live, owner, repo, ctx, wait_until)
-    _assert_epic_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path)
+    _assert_artifact_pr(gh_live, owner, repo, ctx, pr, poc_now, e2e_state_path)
 
     # 検証: 質問とユーザー回答が epic Issue に記録され、自分宛コメントが Resolve 済み
-    for comment in comments(gh_live, owner, repo, ctx["epic"].number):
+    for comment in comments(gh_live, owner, repo, ctx["epic_pr"].number):
         assert server._is_minimized(comment.node_id), f"未 Resolve のコメント: {comment.html_url}"
 
 
 def test_error_when_reverify(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, wait_until,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory, wait_until,
 ):
     """結果への疑問に対しユーザーが再検証を指示したときの差し戻しを確認する（異常系・再検証指示）。"""
     owner, repo = repo_ctx
     ctx = _setup(
-        gh_live, owner, repo, epic_issue_factory, epic_pr_factory,
+        gh_live, owner, repo, epic_issue_factory, epic_pr_factory, draft_pr_factory,
         epic_body=EPIC_BODY_NO_UI, report_body=INCONSISTENT_REPORT,
     )
 
     # 実行: 矛盾の検知による質問コメント（議論中 + assignee）を待つ
     def _questioned():
-        data = issue(gh_live, owner, repo, ctx["epic"].number)
+        data = issue(gh_live, owner, repo, ctx["epic_pr"].number)
         return data if waiting_for_user(data) else None
 
     data = wait_until(_questioned, timeout_sec=2400, message="PoC 結果への質問コメント")
 
     # 実行: ユーザーが再検証を指示（議論中 除去 + assignee 外し）
-    latest = comments(gh_live, owner, repo, ctx["epic"].number)[-1]
+    latest = comments(gh_live, owner, repo, ctx["epic_pr"].number)[-1]
     gh_live.rest.issues.update_comment(
         owner=owner, repo=repo, comment_id=latest.id, body=f"{latest.body}\n\n------\n{REVERIFY_ANSWER}"
     )
     try:
         gh_live.rest.issues.remove_label(
-            owner=owner, repo=repo, issue_number=ctx["epic"].number, name="議論中"
+            owner=owner, repo=repo, issue_number=ctx["epic_pr"].number, name="議論中"
         )
     except RequestFailed:
         pass
     for assignee in data.assignees:
         gh_live.rest.issues.remove_assignees(
-            owner=owner, repo=repo, issue_number=ctx["epic"].number, assignees=[assignee.login]
+            owner=owner, repo=repo, issue_number=ctx["epic_pr"].number, assignees=[assignee.login]
         )
 
     # 実行: 同一 PoC PR への再検証指示を待つ

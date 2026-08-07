@@ -2,11 +2,6 @@
 
 面が Issue のまま手番が渡ってきたとき、story ブランチ + Draft PR を作って確認ラベルを PR へ移す。
 
-通常の story は epic-conductor が『子storyPR作成』で PR まで作るのでこのフェーズは通らない。
-ユーザーが Issue へ直接 `確認:story-conductor` を付けた場合だけ、ここが入口になる（epic-conductor『epicPR作成』と同じ位置づけ）。
-
-PR を作った時点で以降のやり取りは PR 上に移り、次のターンから「要件確定（初回）」が通常どおり動く。
-
 ## 手順
 
 ### ラベルの付与
@@ -65,7 +60,7 @@ MCP `create_draft_pr` を呼ぶ:
 - `head_branch`: 作成した story ブランチ
 - `base_branch`: 決定した base
 - `title`: Issue のタイトル
-- `body`: `## 紐づく Issue`（起点の Issue 番号を 1 件）のみ
+- `body`: `## 紐づく Issue`（起点の Issue 番号を 1 件）。起動要因になった Issue の本文に story の要件セクションが記入済みなら、それも続けて引き継ぐ
 - `labels`:
   - `$AI_MONITOR_LABEL_LAYER_STORY` の値
   - Issue に付いているのと同じ `type:*` ラベルの値

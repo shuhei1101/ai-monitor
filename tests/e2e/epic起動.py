@@ -26,14 +26,36 @@ def answer(gh_live, owner, repo, number: int, body: str, assignees) -> None:
         )
 
 
-def drive_requirements(gh_live, owner, repo, wait_until, epic_number: int, *, answer_body: str):
+def epic_pr_of(gh_live, owner, repo, intake_number: int):
+    """intake Issue から辿れる epic ベース PR（base=master）を返す。
+
+    面が Issue で来た場合は `epicPR作成` が PR を作って確認ラベルをそちらへ移すので、
+    要件確定以降のやり取りは全て PR 上で行われる。
+    """
+    pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
+    for pr in pulls:
+        if pr.base.ref == "master" and f"#{intake_number}" in (pr.body or ""):
+            return pr
+    return None
+
+
+def wait_epic_pr(gh_live, owner, repo, wait_until, intake_number: int):
+    """`epicPR作成` が epic ベース PR を作るまで待って、その PR を返す。"""
+
+    def _created():
+        return epic_pr_of(gh_live, owner, repo, intake_number)
+
+    return wait_until(_created, timeout_sec=1200, message="epic ベース PR の作成")
+
+
+def drive_requirements(gh_live, owner, repo, wait_until, epic_pr_number: int, *, answer_body: str):
     """epic 要件確定を 初回待機 → 回答 → 応答ループ → 承認 → 完了処理 まで進める。
 
-    初回ターンと完了処理後の epic Issue スナップショットを返す。
+    面は `epicPR作成` が作る epic ベース PR。初回ターンと完了処理後のスナップショットを返す。
     """
-    # 草案作成 → 確認質問 → 待機（議論中 + assignee）の完了を待つ
+    # 草案 → 確認質問 → 待機（議論中 + assignee）の完了を待つ
     def _first_turn_done():
-        data = issue(gh_live, owner, repo, epic_number)
+        data = issue(gh_live, owner, repo, epic_pr_number)
         return data if waiting_for_user(data) else None
 
     first = wait_until(
@@ -41,11 +63,11 @@ def drive_requirements(gh_live, owner, repo, wait_until, epic_number: int, *, an
     )
 
     # PoC 要否・画面変更有無への回答を投稿してエージェントのターンへ戻す
-    answer(gh_live, owner, repo, epic_number, answer_body, first.assignees)
+    answer(gh_live, owner, repo, epic_pr_number, answer_body, first.assignees)
 
     # 応答ループの完了を待つ（assignee 再設定）
     def _reply_turn_done():
-        data = issue(gh_live, owner, repo, epic_number)
+        data = issue(gh_live, owner, repo, epic_pr_number)
         return data if data.assignees else None
 
     replied = wait_until(
@@ -53,11 +75,11 @@ def drive_requirements(gh_live, owner, repo, wait_until, epic_number: int, *, an
     )
 
     # ユーザー承認（議論中 除去 + assignee 外し）で完了処理へ進ませる
-    approve(gh_live, owner, repo, epic_number, replied.assignees)
+    approve(gh_live, owner, repo, epic_pr_number, replied.assignees)
 
     # 完了処理の完了を待つ（確認:* の除去）
     def _completed():
-        data = issue(gh_live, owner, repo, epic_number)
+        data = issue(gh_live, owner, repo, epic_pr_number)
         return data if _no_confirm_label(data) else None
 
     completed = wait_until(

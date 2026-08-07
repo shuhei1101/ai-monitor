@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from tests.e2e.epic起動 import drive_requirements
+from tests.e2e.epic起動 import drive_requirements, wait_epic_pr
 from tests.e2e.ゲート応答 import open_prs_for
 from tests.e2e.エスカレーション import (
     approve,
@@ -96,7 +96,10 @@ def test_normal(monitor, gh_live, repo_ctx, intake_issue_factory, wait_until):
     intake, epic = _drive_intake_to_epic(gh_live, owner, repo, wait_until, intake_issue_factory)
 
     # 実行: epic 要件確定（複合 UC 影響なしと回答）
-    drive_requirements(gh_live, owner, repo, wait_until, epic.number, answer_body=EPIC_ANSWER)
+    drive_requirements(
+        gh_live, owner, repo, wait_until,
+        wait_epic_pr(gh_live, owner, repo, wait_until, intake.number).number,
+        answer_body=EPIC_ANSWER)
 
     # 検証: epic 本文に複合 UC 影響なしの判定が記録されている
     epic_data = issue(gh_live, owner, repo, epic.number)
@@ -183,7 +186,10 @@ def test_error_when_impact_found_below(monitor, gh_live, repo_ctx, intake_issue_
 
     # 準備・実行: intake の分解 → epic 起票 → epic 要件確定（複合 UC 影響なし）
     _intake, epic = _drive_intake_to_epic(gh_live, owner, repo, wait_until, intake_issue_factory)
-    drive_requirements(gh_live, owner, repo, wait_until, epic.number, answer_body=EPIC_ANSWER)
+    drive_requirements(
+        gh_live, owner, repo, wait_until,
+        wait_epic_pr(gh_live, owner, repo, wait_until, _intake.number).number,
+        answer_body=EPIC_ANSWER)
 
     def _story_created():
         subs = gh_live.rest.issues.list_sub_issues(

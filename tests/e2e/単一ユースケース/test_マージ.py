@@ -234,7 +234,10 @@ def test_normal_when_story(
         pr_body=STORY_PR_BODY_ALL_PASSED, files=story_branch_files(e2e_test=E2E_TEST_PY),
     )
     # 全 subsystem がマージ済み（closed）の状態にする（子subsystemPR作成 フェーズを避けるため）
-    add_merged_subsystem(gh_live, owner, repo, subsystem_issue_factory, ctx["story"].number)
+    add_merged_subsystem(
+        gh_live, owner, repo, subsystem_issue_factory, draft_pr_factory,
+        ctx["story"].number, ctx["story_base_branch"],
+    )
     add_worktree(sandbox["local_path"], ctx["story_branch"])
 
     # 準備: writer の全 pass 完了報告 → 確認ラベル付与（自動マージの起動トリガー）

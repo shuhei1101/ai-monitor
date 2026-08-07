@@ -14,8 +14,9 @@
 
 1. MCP `comment` を呼ぶ（`number`: RE PR の番号・`is_pr`: true・`sender`: `{自分}`・`receiver`: ユーザーログイン名・`format`: `type` が `plain` で `body` が base の面が closed のため RE をマージせず畳む旨と、起こした成果物へのリンク）
 2. MCP `close` を呼ぶ（`number`: RE PR の番号・`reason`: `not_planned`・`delete_branch`: true）
-3. MCP `remove_watch_targets` を呼ぶ（`agent_name`: `{自分}`・`number`: $number・`watch_numbers`: RE PR の番号）
-4. MCP `report_completion` を呼ぶ（`agent_name`: `{自分}`・`number`: RE PR の番号）
+3. MCP `worktree_remove` を呼ぶ（`branch`: `{RE ブランチ}`。`close` の `delete_branch` はリモートしか消さないため、ローカルの worktree とブランチはここで消す）
+4. MCP `remove_watch_targets` を呼ぶ（`agent_name`: `{自分}`・`number`: $number・`watch_numbers`: RE PR の番号）
+5. MCP `report_completion` を呼ぶ（`agent_name`: `{自分}`・`number`: RE PR の番号）
 
 成果物は closed PR の diff に残るので、上位が再開したときに読み直せる。
 
@@ -28,7 +29,7 @@ commit された `{成果物}` と、完了報告コメントの内容・読み�
 続けて RE PR 本文の `## タスク一覧` が全行 `[x]` になっていることを確認する。
 チェックを入れるのは起こした依頼先なので、ここでは本文を書き換えない。
 
-- 未チェックのまま残っている場合、完了報告コメントに追記して指摘し、チェックを入れてもらう（自分では入れない）
+- 未チェックのまま残っている場合、完了報告コメントに追記して指摘し、チェックを入れてもらう
 
 ### 最終確認コメントの投稿
 

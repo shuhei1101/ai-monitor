@@ -7,7 +7,7 @@ from pathlib import Path
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
-from tests.e2e.エスカレーション import unresolved_review_threads
+from tests.e2e.エスカレーション import answer_review_threads, unresolved_review_threads
 
 INTAKE_TITLE = "タスク編集機能"
 INTAKE_BODY = "既存タスクを編集できる機能を追加する。"
@@ -285,7 +285,9 @@ def test_normal_when_no_er(
         assert _design_paths(gh_live, owner, repo, subsystem_branch), (
             f"{rounds} 回目の待機までに設計 Wiki が commit されていない"
         )
-        # 実行: ユーザー承認（議論中 除去 + assignee 外し）
+        # 実行: 確認事項へ回答してからユーザー承認（議論中 除去 + assignee 外し）
+        # （未解決の確認事項が残っていると完了処理が応答ループへ戻す）
+        answer_review_threads(gh_live, owner, repo, pr.number)
         try:
             gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr.number, name="議論中")
         except RequestFailed:
@@ -466,6 +468,8 @@ def _drive_design(gh_live, owner, repo, pr_number, wait_until, *, max_rounds: in
         if kind == "handoff":
             return rounds
         rounds += 1
+        # 未解決の確認事項が残っていると完了処理が応答ループへ戻すので、承認より先に畳ませる
+        answer_review_threads(gh_live, owner, repo, pr_number)
         try:
             gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr_number, name="議論中")
         except RequestFailed:
@@ -579,22 +583,18 @@ def test_normal_when_interface_report(
         owner=owner, repo=repo, issue_number=ctx["pr"].number, labels=["確認:architect"]
     )
 
-    # 実行: 親 subsystem Issue へのインターフェース確定報告（確認:subsystem-conductor 付与）を待つ
+    # 実行: 親 subsystem ベース PR へのインターフェース確定報告を待つ
     def _reported():
-        data = gh_live.rest.issues.get(
-            owner=owner, repo=repo, issue_number=ctx["subsystem"].number
-        ).parsed_data
-        labels = {label.name for label in data.labels}
-        if "確認:subsystem-conductor" not in labels:
-            return None
+        # 付与された 確認:subsystem-conductor は中継フェーズが 1 分ほどで外すため、
+        # ラベルではなく報告コメントの有無で判定する（ポーリング間隔では取り逃す）
         comments = gh_live.rest.issues.list_comments(
-            owner=owner, repo=repo, issue_number=ctx["subsystem"].number
+            owner=owner, repo=repo, issue_number=ctx["subsystem_pr"].number
         ).parsed_data
         reports = [c for c in comments if "> to: @subsystem-conductor" in (c.body or "")]
-        return (data, reports) if reports else None
+        return reports or None
 
-    _, reports = wait_until(
-        _reported, timeout_sec=2400, message="インターフェース確定報告（確認:subsystem-conductor 付与）"
+    reports = wait_until(
+        _reported, timeout_sec=2400, message="親 subsystem PR へのインターフェース確定報告"
     )
 
     # 検証: インターフェース定義が commit されている
@@ -615,8 +615,10 @@ def test_normal_when_interface_report(
         f"subsystem PR に確認ラベルが 2 つ立っている: {sorted(pr_labels)}"
     )
 
-    # 検証: 中間報告が未 Resolve のまま投稿されている
-    assert not server._is_minimized(reports[-1].node_id), "インターフェース確定報告が Resolve されている"
+    # 検証: 中間報告に確定したインターフェース定義のページ名が載っている
+    assert "設計図/インターフェース定義/" in (reports[-1].body or ""), (
+        f"インターフェース確定報告にページ名がない: {reports[-1].body}"
+    )
 
 
 def test_normal_when_bounced(

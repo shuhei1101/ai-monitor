@@ -13,7 +13,6 @@ from tests.e2e.実装対象 import (
     INTAKE_TITLE,
     STORY_BODY_TEMPLATE,
     STORY_TITLE,
-    SUBSYSTEM_TITLE,
 )
 from tests.e2e.統合テスト import (
     BUGGY_SERVICE_PY,
@@ -43,19 +42,22 @@ BUG_HANDOVER = """> from: @story-conductor
 """
 
 
-def _fix_prs(gh_live, owner, repo, subsystem_number: int) -> list:
-    """修正用 PR（fix/*）の一覧を返す。"""
+def _fix_prs(gh_live, owner, repo, base_branch: str) -> list:
+    """修正用 PR（fix/*）の一覧を返す。
+
+    `## 紐づく Issue` は起点の intake Issue を指すので、base ブランチで辿る。
+    """
     pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
     return [
         pr for pr in pulls
-        if pr.head.ref.startswith(FIX_BRANCH_PREFIX) and f"#{subsystem_number}" in (pr.body or "")
+        if pr.head.ref.startswith(FIX_BRANCH_PREFIX) and pr.base.ref == base_branch
     ]
 
 
-def _cleanup(gh_live, owner, repo, sandbox, subsystem_number: int) -> None:
+def _cleanup(gh_live, owner, repo, sandbox, base_branch: str, subsystem_number: int) -> None:
     """作成された修正用 PR / ブランチ / worktree を片付ける。"""
     local_path = sandbox["local_path"]
-    for pr in _fix_prs(gh_live, owner, repo, subsystem_number):
+    for pr in _fix_prs(gh_live, owner, repo, base_branch):
         branch = pr.head.ref
         try:
             gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
@@ -101,9 +103,11 @@ def test_normal(
     )
     for path, content in story_branch_files(service=BUGGY_SERVICE_PY, e2e_test=E2E_TEST_PY).items():
         commit_file(story_branch, path, content, f"chore: e2e 用に {path} を配置")
-    subsystem = add_merged_subsystem(gh_live, owner, repo, subsystem_issue_factory, story.number)
+    subsystem = add_merged_subsystem(
+        gh_live, owner, repo, subsystem_issue_factory, draft_pr_factory, story.number, story_branch
+    )
 
-    # 準備: subsystem Issue を reopen + バグ内容コメント → 確認ラベル付与（起動トリガー）
+    # 準備: subsystem PR を reopen + バグ内容コメント → 確認ラベル付与（起動トリガー）
     gh_live.rest.issues.update(
         owner=owner, repo=repo, issue_number=subsystem.number, state="open"
     )
@@ -117,7 +121,7 @@ def test_normal(
     try:
         # 実行: 修正用 PR の作成と architect への委任を待つ
         def _started():
-            prs = _fix_prs(gh_live, owner, repo, subsystem.number)
+            prs = _fix_prs(gh_live, owner, repo, story_branch)
             if not prs:
                 return None
             pr = prs[0]
@@ -158,7 +162,7 @@ def test_normal(
         # 検証: subsystem Issue は open のまま 確認:subsystem-conductor が除去されている
         assert sub_now.state == "open", "subsystem Issue が close されている"
     finally:
-        _cleanup(gh_live, owner, repo, sandbox, subsystem.number)
+        _cleanup(gh_live, owner, repo, sandbox, story_branch, subsystem.number)
 
 
 # SA（システム要件）自体の誤りが原因のバグ差し戻し。SA の変更を誘発する
@@ -237,12 +241,9 @@ def test_normal_when_sa_changed(
     )
     for path, content in story_branch_files(service=BUGGY_SERVICE_PY, e2e_test=E2E_TEST_PY).items():
         commit_file(story_branch, path, content, f"chore: e2e 用に {path} を配置")
-    subsystem = subsystem_issue_factory(
-        story.number, SUBSYSTEM_TITLE,
-        body=SA_CONFLICT_SUBSYSTEM_BODY, labels=["layer:subsystem", "scope:backend"],
-    )
-    gh_live.rest.issues.update(
-        owner=owner, repo=repo, issue_number=subsystem.number, state="closed", state_reason="completed"
+    subsystem = add_merged_subsystem(
+        gh_live, owner, repo, subsystem_issue_factory, draft_pr_factory,
+        story.number, story_branch, body=SA_CONFLICT_SUBSYSTEM_BODY,
     )
 
     # 準備: subsystem Issue を reopen + SA の誤りを指すバグ内容コメント → 確認ラベル付与
@@ -276,7 +277,7 @@ def test_normal_when_sa_changed(
 
         # 実行: 修正用 PR の作成と architect への委任を待つ
         def _started():
-            prs = _fix_prs(gh_live, owner, repo, subsystem.number)
+            prs = _fix_prs(gh_live, owner, repo, story_branch)
             if not prs:
                 return None
             pr = prs[0]
@@ -299,4 +300,4 @@ def test_normal_when_sa_changed(
         assert fix_pr.draft is True, "修正用 PR が Draft でない"
         assert intake is not None
     finally:
-        _cleanup(gh_live, owner, repo, sandbox, subsystem.number)
+        _cleanup(gh_live, owner, repo, sandbox, story_branch, subsystem.number)

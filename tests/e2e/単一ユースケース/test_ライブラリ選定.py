@@ -7,7 +7,16 @@ from pathlib import Path
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
-from tests.e2e.エスカレーション import append_user_block, comments, comments_from, issue, label_names, me, waiting_for_user
+from tests.e2e.エスカレーション import (
+    answer_review_threads,
+    append_user_block,
+    comments,
+    comments_from,
+    issue,
+    label_names,
+    me,
+    waiting_for_user,
+)
 from tests.e2e.ライブラリPoC import (
     EXTERNAL_LIB_INDEX_MD,
     EXTERNAL_LIB_INDEX_PATH,
@@ -128,7 +137,11 @@ def _factories(epic_issue_factory, epic_pr_factory, draft_pr_factory, story_issu
 
 
 def _unassign(gh_live, owner, repo, number) -> None:
-    """ユーザー役の返信操作（assignee 外しのみ・議論中 は残す）。"""
+    """ユーザー役の返信操作（確認事項への回答 + assignee 外し・議論中 は残す）。
+
+    未解決のインライン確認事項が残っていると完了処理が応答ループへ戻すため、先に畳ませる。
+    """
+    answer_review_threads(gh_live, owner, repo, number)
     data = issue(gh_live, owner, repo, number)
     for assignee in data.assignees:
         gh_live.rest.issues.remove_assignees(
@@ -136,16 +149,20 @@ def _unassign(gh_live, owner, repo, number) -> None:
         )
 
 
-def _poc_prs(gh_live, owner, repo, subsystem_number: int, *, state: str = "open") -> list:
-    """発注された PoC PR の一覧を返す。"""
+def _poc_prs(gh_live, owner, repo, base_branch: str, *, state: str = "open") -> list:
+    """発注された PoC PR の一覧を返す。
+
+    ライブラリ PoC の base は subsystem ブランチ（規約『ブランチ戦略』）。
+    `## 紐づく Issue` は起点の intake Issue を指すので、base で辿る。
+    """
     pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state=state, per_page=100).parsed_data
-    return [p for p in pulls if p.head.ref.startswith("poc/") and f"#{subsystem_number}" in (p.body or "")]
+    return [p for p in pulls if p.head.ref.startswith("poc/") and p.base.ref == base_branch]
 
 
-def _cleanup_poc(gh_live, owner, repo, sandbox, subsystem_number: int) -> None:
+def _cleanup_poc(gh_live, owner, repo, sandbox, base_branch: str) -> None:
     """残った PoC PR / ブランチ / worktree を片付ける。"""
     local_path = sandbox["local_path"]
-    for pr in _poc_prs(gh_live, owner, repo, subsystem_number):
+    for pr in _poc_prs(gh_live, owner, repo, base_branch):
         branch = pr.head.ref
         try:
             gh_live.rest.pulls.update(owner=owner, repo=repo, pull_number=pr.number, state="closed")
@@ -189,7 +206,7 @@ def test_normal_when_with_poc(
         _unassign(gh_live, owner, repo, ctx["pr"].number)
 
         def _ordered():
-            prs = _poc_prs(gh_live, owner, repo, ctx["subsystem"].number)
+            prs = _poc_prs(gh_live, owner, repo, ctx["subsystem_base_branch"])
             if not prs:
                 return None
             poc = prs[0]
@@ -203,7 +220,9 @@ def test_normal_when_with_poc(
         )
 
         # 検証: base=master・本文に必須セクションが揃っている
-        assert poc.base.ref == "master", f"PoC PR の base が master でない: {poc.base.ref}"
+        assert poc.base.ref == ctx["subsystem_base_branch"], (
+            f"PoC PR の base が subsystem ブランチでない: {poc.base.ref}"
+        )
         body = (poc.body or "").replace("\r\n", "\n")
         for section in ("## 紐づく Issue", "## 発注元 PR", "## 検証対象", "## 調査結果", "## 検証観点と結果"):
             assert section in body, f"PoC PR 本文に {section} がない"
@@ -221,7 +240,7 @@ def test_normal_when_with_poc(
             f"設計の応答ループ状態が保たれていない: {sorted(names)}"
         )
     finally:
-        _cleanup_poc(gh_live, owner, repo, sandbox, ctx["subsystem"].number)
+        _cleanup_poc(gh_live, owner, repo, sandbox, ctx["subsystem_base_branch"])
 
 
 def test_normal_when_reverify(
@@ -237,13 +256,14 @@ def test_normal_when_reverify(
         commit_file, sandbox, comparison=SINGLE_CANDIDATE_COMPARISON, login=login,
     )
     # 準備: 検証済みの PoC PR と、結果まとめの待機状態を再現する
+    # ライブラリ PoC の base は subsystem ブランチ（規約『ブランチ戦略』）
     poc_branch = f"poc/backend/task-edit-{ctx['subsystem'].number}/sqlite3"
     poc = draft_pr_factory(
         poc_branch, f"PoC: sqlite3（#{ctx['subsystem'].number}）",
         POC_PR_BODY_DONE.format(
             subsystem_number=ctx["subsystem"].number, origin_pr_number=ctx["pr"].number
         ),
-        base_branch="master",
+        base_branch=ctx["subsystem_base_branch"],
     )
     gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=poc.number, body=PREVIOUS_REPORT
@@ -277,11 +297,11 @@ def test_normal_when_reverify(
         assert "> to: @library-poc-runner" in (instruction.body or ""), "再検証指示の宛先が違う"
         assert not server._is_minimized(instruction.node_id), "再検証指示が Resolve されている"
         assert poc_now.state == "open", "PoC PR が close されている"
-        assert [p.number for p in _poc_prs(gh_live, owner, repo, ctx["subsystem"].number)] == [poc.number], (
+        assert [p.number for p in _poc_prs(gh_live, owner, repo, ctx["subsystem_base_branch"])] == [poc.number], (
             "PoC PR が増えている（同一 PR へ差し戻すはず）"
         )
     finally:
-        _cleanup_poc(gh_live, owner, repo, sandbox, ctx["subsystem"].number)
+        _cleanup_poc(gh_live, owner, repo, sandbox, ctx["subsystem_base_branch"])
 
 
 def test_normal_when_without_poc(
@@ -321,7 +341,7 @@ def test_normal_when_without_poc(
     )
 
     # 検証: PoC PR が一切作られていない
-    assert not _poc_prs(gh_live, owner, repo, ctx["subsystem"].number), (
+    assert not _poc_prs(gh_live, owner, repo, ctx["subsystem_base_branch"]), (
         "PoC 不要のはずが PoC PR が作成されている"
     )
     assert any("uuid" in path for path in pages), f"採用ライブラリのページがない: {pages}"
@@ -378,7 +398,7 @@ def test_error_when_no_candidate(
         if c.node_id != consult.node_id
     ] or [consult]
     assert proposals, "相談コメントが投稿されていない"
-    assert not _poc_prs(gh_live, owner, repo, ctx["subsystem"].number), "PoC PR が作成されている"
+    assert not _poc_prs(gh_live, owner, repo, ctx["subsystem_base_branch"]), "PoC PR が作成されている"
     assert "確認:architect" in label_names(data), "確認:architect が保持されていない"
 
 

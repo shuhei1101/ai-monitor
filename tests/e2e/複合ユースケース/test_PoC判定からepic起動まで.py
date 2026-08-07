@@ -6,6 +6,7 @@ from pathlib import Path
 from githubkit.exception import RequestFailed
 
 from tests.e2e.epic起動 import (
+    wait_epic_pr,
     assert_comments_resolved,
     assert_task_list_body,
     drive_poc_verification,
@@ -36,7 +37,10 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, wait_until, e2e_
     intake, epic = epic_issue_factory(INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE)
 
     # 実行: epic 要件確定をユーザー役として進める（PoC 必要・画面変更なしと回答）
-    drive_requirements(gh_live, owner, repo, wait_until, epic.number, answer_body=REQUIREMENTS_ANSWER)
+    drive_requirements(
+        gh_live, owner, repo, wait_until,
+        wait_epic_pr(gh_live, owner, repo, wait_until, intake.number).number,
+        answer_body=REQUIREMENTS_ANSWER)
 
     # 検証: PoC Draft PR のみが作成され 確認:epic-poc-runner + @epic-poc-runner 宛の指示コメントが付いている
     prs = open_prs_for(gh_live, owner, repo, epic.number)

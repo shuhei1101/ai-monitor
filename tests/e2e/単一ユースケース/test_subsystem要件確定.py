@@ -145,7 +145,7 @@ def test_normal(
     wait_until,
     e2e_state_path,
 ):
-    """SA 確定 → 承認 → subsystem Draft PR 作成 → タスク一覧承認 → architect 引き継ぎを実環境で確認する（正常系）。"""
+    """SA 確定 → 承認 → インターフェース定義の成果物 PR 作成 → architect 引き継ぎを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
     def _get(number):
@@ -168,112 +168,108 @@ def test_normal(
         story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
     )
     commit_file(story_branch, SCENARIO_PATH, SCENARIO_MD, "docs: 単一UC シナリオ（タスク編集）を追加")
-    # 準備: 子 subsystem Issue（layer:subsystem + 確認:subsystem-conductor + 本文空）
-    subsystem = subsystem_issue_factory(story.number, SUBSYSTEM_TITLE)
+    # 準備: 子 subsystem Issue（Sub-issue リンク用。面は PR なので Issue に確認ラベルは付けない）
+    subsystem = subsystem_issue_factory(story.number, SUBSYSTEM_TITLE, labels=["layer:subsystem"])
+    # 準備: SA 未記入の subsystem ベース PR（story-conductor が作った直後の状態）
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    pr = draft_pr_factory(
+        subsystem_branch, SUBSYSTEM_TITLE,
+        f"## 紐づく Issue\n\n- #{intake.number}\n", base_branch=story_branch,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=pr.number,
+        labels=["layer:subsystem", "scope:backend", "確認:subsystem-conductor"],
+    )
 
     # 実行: モニターの polling 検知 → 要件確定（初回）の完了を待つ（議論中 + assignee）
     def _first_turn_done():
-        data = _get(subsystem.number)
+        data = _get(pr.number)
         labels = {label.name for label in data.labels}
         return data if "議論中" in labels and data.assignees else None
 
     data = wait_until(_first_turn_done, timeout_sec=1800, message="要件確定（初回）の完了（議論中 + assignee）")
 
-    # 検証: 本文に 現状 2 サブセクションと システム要件（SA）3 サブセクションが揃っている
+    # 検証: subsystem PR 本文に 現状 2 サブセクションと システム要件（SA）3 サブセクションが揃っている
     body = (data.body or "").replace("\r\n", "\n")
     assert "## 現状" in body, "本文に ## 現状 がない"
     assert "## システム要件（SA）" in body, "本文に ## システム要件（SA） がない"
     for section in CURRENT_SUBSECTIONS + SA_SUBSECTIONS:
         assert section in body, f"本文に {section} がない"
     assert f"#{story.number}" in body, "背景に親 story の番号がない"
-    comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=subsystem.number).parsed_data
+    comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
     assert comments, "完了報告・確認質問コメントが投稿されていない"
 
     # 実行: ユーザー回答（回答コメント + assignee 外し）
     gh_live.rest.issues.create_comment(
-        owner=owner, repo=repo, issue_number=subsystem.number,
+        owner=owner, repo=repo, issue_number=pr.number,
         body="A（本 subsystem の担当範囲で合っています）でお願いします。",
     )
     for assignee in data.assignees:
         gh_live.rest.issues.remove_assignees(
-            owner=owner, repo=repo, issue_number=subsystem.number, assignees=[assignee.login]
+            owner=owner, repo=repo, issue_number=pr.number, assignees=[assignee.login]
         )
 
     # 応答ループの完了を待つ（assignee 再設定）
     def _reply_turn_done():
-        data = _get(subsystem.number)
+        data = _get(pr.number)
         return data if data.assignees else None
 
     data = wait_until(_reply_turn_done, timeout_sec=1200, message="応答ループの完了（assignee 再設定）")
 
     # 実行: SA 承認（議論中 除去 + assignee 外し）
     try:
-        gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=subsystem.number, name="議論中")
+        gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr.number, name="議論中")
     except RequestFailed:
         pass
     for assignee in data.assignees:
         gh_live.rest.issues.remove_assignees(
-            owner=owner, repo=repo, issue_number=subsystem.number, assignees=[assignee.login]
-        )
-
-    # 要件確定（完了処理）の完了を待つ（subsystem PR 作成 + PR 側 議論中 + assignee）
-    def _pr_gate_open():
-        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data
-        candidates = [pr for pr in pulls if f"#{subsystem.number}" in (pr.body or "")]
-        if len(candidates) != 1:
-            return None
-        pr_data = _get(candidates[0].number)
-        labels = {label.name for label in pr_data.labels}
-        return candidates[0] if "議論中" in labels and pr_data.assignees else None
-
-    pr = wait_until(_pr_gate_open, timeout_sec=1800, message="要件確定（完了処理）の完了（PR 作成 + 議論中 + assignee）")
-
-    # 検証: subsystem Draft PR が base=親 story ブランチで、本文に 紐づく Issue と タスク一覧がある
-    assert pr.draft is True
-    assert pr.base.ref == story_branch, f"subsystem PR の base が親 story ブランチでない: {pr.base.ref}"
-    pr_body = (pr.body or "").replace("\r\n", "\n")
-    sections = [line for line in pr_body.splitlines() if line.startswith("## ")]
-    assert sections == ["## 紐づく Issue", "## タスク一覧"], f"PR 本文のセクションが想定と異なる: {sections}"
-    assert f"- #{subsystem.number}" in pr_body, "紐づく Issue に subsystem Issue 番号がない"
-    assert "- [ ]" in pr_body, "タスク一覧がチェックボックス形式で記入されていない"
-
-    # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
-    assert pr.number in _watch_numbers(e2e_state_path, subsystem.number)
-
-    # 検証: タスク一覧の確認コメントが投稿されている
-    pr_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
-    assert pr_comments, "タスク一覧の確認コメントが投稿されていない"
-
-    # 実行: タスク一覧の承認（議論中 除去 + assignee 外し）
-    pr_data = _get(pr.number)
-    try:
-        gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr.number, name="議論中")
-    except RequestFailed:
-        pass
-    for assignee in pr_data.assignees:
-        gh_live.rest.issues.remove_assignees(
             owner=owner, repo=repo, issue_number=pr.number, assignees=[assignee.login]
         )
 
-    # 要件確定（完了処理）の完了を待つ（PR に 確認:architect + Issue から 確認:subsystem-conductor 除去）
+    # 要件確定（完了処理）の完了を待つ（成果物 PR の作成 + architect への引き渡し）
     def _handed_off():
-        pr_now = _get(pr.number)
-        issue_now = _get(subsystem.number)
-        pr_labels = {label.name for label in pr_now.labels}
-        issue_labels = {label.name for label in issue_now.labels}
-        if "確認:architect" not in pr_labels:
+        pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open").parsed_data
+        artifacts = [p for p in pulls if p.base.ref == subsystem_branch]
+        if len(artifacts) != 1:
             return None
-        return (pr_now, issue_now) if not any(n.startswith("確認:") for n in issue_labels) else None
+        artifact_labels = {label.name for label in _get(artifacts[0].number).labels}
+        if "確認:architect" not in artifact_labels:
+            return None
+        base_labels = {label.name for label in _get(pr.number).labels}
+        return artifacts[0] if not any(n.startswith("確認:") for n in base_labels) else None
 
-    wait_until(_handed_off, timeout_sec=1200, message="要件確定（完了処理）の完了（確認:architect 付与 + 確認:* 除去）")
+    artifact = wait_until(
+        _handed_off, timeout_sec=1800, message="要件確定（完了処理）の完了（成果物 PR 作成 + 確認:architect）"
+    )
 
-    # 検証: Issue / PR のエージェント投稿コメントが全て Resolve 済み
-    for number in (subsystem.number, pr.number):
-        comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=number).parsed_data
-        agent_comments = [c for c in comments if c.body.lstrip().startswith("> from:")]
-        assert agent_comments, f"#{number} にエージェントのコメントが見つからない"
-        for comment in agent_comments:
-            assert server._is_minimized(comment.node_id), f"コメント {comment.html_url} が未 Resolve"
+    # 検証: 成果物 PR がインターフェース定義のブランチで、base が自分の subsystem ブランチ
+    assert artifact.draft is True
+    assert artifact.head.ref.startswith("docs/") and artifact.head.ref.endswith("/interface"), (
+        f"成果物ブランチがインターフェース定義の形でない: {artifact.head.ref}"
+    )
+    artifact_body = (artifact.body or "").replace("\r\n", "\n")
+    sections = [line for line in artifact_body.splitlines() if line.startswith("## ")]
+    assert sections == ["## 紐づく Issue", "## タスク一覧"], f"成果物 PR のセクションが想定と異なる: {sections}"
+    assert f"- #{intake.number}" in artifact_body, "紐づく Issue が起点の intake Issue になっていない"
+    assert "- [ ]" in artifact_body, "タスク一覧がチェックボックス形式で記入されていない"
+
+    # 検証: 作成した成果物 PR の番号が自セッションの監視面（モニターの台帳）に登録されている
+    assert artifact.number in _watch_numbers(e2e_state_path, pr.number)
+
+    # 検証: architect への設計の委任コメントが投稿されている
+    artifact_comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=artifact.number
+    ).parsed_data
+    assert [c for c in artifact_comments if "> to: @architect" in (c.body or "")], (
+        "architect への設計の委任コメントが投稿されていない"
+    )
+
+    # 検証: subsystem PR のエージェント投稿コメントが全て Resolve 済み
+    comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
+    agent_comments = [c for c in comments if c.body.lstrip().startswith("> from:")]
+    assert agent_comments, f"#{pr.number} にエージェントのコメントが見つからない"
+    for comment in agent_comments:
+        assert server._is_minimized(comment.node_id), f"コメント {comment.html_url} が未 Resolve"
 
 
 # base（親 story ブランチ）にある現状の設計書（RE PR がマージ済みの状態）
@@ -314,35 +310,47 @@ def test_normal_when_reverse(
     )
     commit_file(story_branch, SCENARIO_PATH, SCENARIO_MD, "docs: 単一UC シナリオ（タスク編集）を追加")
     commit_file(story_branch, CURRENT_MODULE_PATH, CURRENT_MODULE_MD, "docs: 現状のモジュール構成を追加")
+    # 準備: 子 subsystem Issue（Sub-issue リンク用。面は PR なので Issue に確認ラベルは付けない）
     subsystem = subsystem_issue_factory(
         story.number, SUBSYSTEM_TITLE,
+        labels=["layer:subsystem", "type:docs", "リバースエンジニアリング"],
+    )
+    # 準備: SA 未記入の subsystem ベース PR（RE 経路なので RE ラベル付き）
+    subsystem_branch = f"feat/backend/task-edit-{subsystem.number}/base"
+    subsystem_pr = draft_pr_factory(
+        subsystem_branch, SUBSYSTEM_TITLE, f"## 紐づく Issue\n\n- #{intake.number}\n",
+        base_branch=story_branch,
+    )
+    gh_live.rest.issues.add_labels(
+        owner=owner, repo=repo, issue_number=subsystem_pr.number,
         labels=["layer:subsystem", "type:docs", "scope:backend", "リバースエンジニアリング",
                 "確認:subsystem-conductor"],
     )
 
     def _faces():
-        # subsystem Issue と、作成された subsystem PR が応答対象の面
-        faces = [("subsystem_issue", subsystem.number)]
+        # subsystem ベース PR と、その配下に切られた RE PR / 成果物 PR が応答対象の面
+        faces = [("subsystem_pr", subsystem_pr.number)]
         pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
-        faces += [("subsystem_pr", p.number) for p in pulls if f"#{subsystem.number}" in (p.body or "")]
+        faces += [("artifact_pr", p.number) for p in pulls if p.base.ref == subsystem_branch]
         return faces
 
     def _handed_to_architect():
+        # 成果物 PR は base で辿る（`## 紐づく Issue` は起点の intake Issue を指すため）
         pulls = gh_live.rest.pulls.list(owner=owner, repo=repo, state="open", per_page=100).parsed_data
         for pr in pulls:
-            if f"#{subsystem.number}" not in (pr.body or ""):
+            if pr.base.ref != subsystem_branch:
                 continue
             if "確認:architect" in label_names(issue(gh_live, owner, repo, pr.number)):
                 return pr
         return None
 
-    # 実行: SA 確認 → タスク一覧確認 の各ゲートに応答して architect への引き渡しまで進める
+    # 実行: RE 完了確認 → SA 確認 の各ゲートに応答して architect への引き渡しまで進める
     history, pr = drive_gates(
         gh_live, owner, repo,
         faces=_faces,
         choices={
-            ("subsystem_issue", "確認:subsystem-conductor"): "現状の設計書どおりの担当範囲で合っています。",
-            ("subsystem_pr", "確認:subsystem-conductor"): None,
+            ("subsystem_pr", "確認:subsystem-conductor"): "現状の設計書どおりの担当範囲で合っています。",
+            ("artifact_pr", "確認:subsystem-conductor"): None,
         },
         terminal=_handed_to_architect,
         wait_until=wait_until,
@@ -350,20 +358,20 @@ def test_normal_when_reverse(
     )
     assert history, "ユーザー確認ゲートが 1 度も開いていない"
 
-    # 検証: 本文に 現状 と システム要件（SA）が揃い、現状の設計書が更新対象に挙がっている
-    body = (issue(gh_live, owner, repo, subsystem.number).body or "").replace("\r\n", "\n")
+    # 検証: subsystem PR 本文に 現状 と システム要件（SA）が揃い、現状の設計書が更新対象に挙がっている
+    body = (issue(gh_live, owner, repo, subsystem_pr.number).body or "").replace("\r\n", "\n")
     assert "## 現状" in body, "本文に ## 現状 がない"
     assert "## システム要件（SA）" in body, "本文に ## システム要件（SA） がない"
     assert CURRENT_MODULE_PATH.split("docs/wiki/")[1] in body or "モジュール構成" in body, (
         "関連ドキュメントに現状の設計書が挙がっていない"
     )
 
-    # 検証: subsystem Draft PR が base=親 story ブランチで、タスク一覧が記入されている
+    # 検証: 引き渡された成果物 PR が base=自分の subsystem ブランチで、タスク一覧が記入されている
     assert pr.draft is True
-    assert pr.base.ref == story_branch, f"subsystem PR の base が親 story ブランチでない: {pr.base.ref}"
+    assert pr.base.ref == subsystem_branch, f"成果物 PR の base が subsystem ブランチでない: {pr.base.ref}"
     pr_body = (pr.body or "").replace("\r\n", "\n")
     assert "## タスク一覧" in pr_body, "PR 本文にタスク一覧がない"
 
     # 検証: 作成した PR の番号が自セッションの監視面（モニターの台帳）に登録されている
-    assert pr.number in _watch_numbers(e2e_state_path, subsystem.number)
+    assert pr.number in _watch_numbers(e2e_state_path, subsystem_pr.number)
     assert intake is not None

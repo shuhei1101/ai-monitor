@@ -68,7 +68,7 @@ def test_normal(
     )
     add_worktree(sandbox["local_path"], ctx["subsystem_branch"])
     add_worktree(sandbox["local_path"], ctx["story_branch"])
-    story_body_before = issue(gh_live, owner, repo, ctx["story"].number).body or ""
+    story_body_before = issue(gh_live, owner, repo, ctx["story_pr"].number).body or ""
 
     # 準備: architect のエスカレーション報告 → 確認:subsystem-conductor 付与（UC の起点）
     report = gh_live.rest.issues.create_comment(
@@ -82,10 +82,10 @@ def test_normal(
     history = drive_until_tester(
         gh_live, owner, repo,
         pr_number=ctx["pr"].number,
-        faces=[("subsystem_pr", ctx["pr"].number), ("story_issue", ctx["story"].number)],
+        faces=[("subsystem_pr", ctx["pr"].number), ("story_pr", ctx["story_pr"].number)],
         choices={
             ("subsystem_pr", "確認:subsystem-conductor"): RELAY_UP_FROM_SUBSYSTEM,
-            ("story_issue", "確認:story-conductor"): STORY_SCENARIO_FIX,
+            ("story_pr", "確認:story-conductor"): STORY_SCENARIO_FIX,
             ("subsystem_pr", "確認:architect"): None,
         },
         wait_until=wait_until,
@@ -95,7 +95,7 @@ def test_normal(
     # 検証: subsystem → story の 2 段のゲートと、設計再開後のゲートを通っている
     for expected in (
         ("subsystem_pr", "確認:subsystem-conductor"),
-        ("story_issue", "確認:story-conductor"),
+        ("story_pr", "確認:story-conductor"),
         ("subsystem_pr", "確認:architect"),
     ):
         assert expected in history, f"想定したゲートが開かなかった: {expected} / 履歴 {history}"
@@ -106,10 +106,10 @@ def test_normal(
         "docs/wiki/設計図/シナリオ/単一ユースケース/", SCENARIO_MD,
     ), "単一 UC シナリオの修正 commit が積まれていない"
 
-    # 検証: story Issue 本文のユースケース要件が決定内容で更新されている
-    story_after = issue(gh_live, owner, repo, ctx["story"].number)
-    assert (story_after.body or "") != story_body_before, "story Issue 本文が更新されていない"
-    assert "## ユースケース要件" in (story_after.body or ""), "story Issue 本文からユースケース要件が消えている"
+    # 検証: story PR 本文のユースケース要件が決定内容で更新されている
+    story_after = issue(gh_live, owner, repo, ctx["story_pr"].number)
+    assert (story_after.body or "") != story_body_before, "story PR 本文が更新されていない"
+    assert "## ユースケース要件" in (story_after.body or ""), "story PR 本文からユースケース要件が消えている"
 
     # 検証: 決定した方針に沿った設計 Wiki が subsystem ブランチに積まれている
     paths = design_paths(gh_live, owner, repo, ctx["subsystem_branch"])

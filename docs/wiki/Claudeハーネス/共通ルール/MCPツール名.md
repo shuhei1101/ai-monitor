@@ -29,3 +29,5 @@ ToolSearch(query: "select:mcp__ai-monitor-tools__get_issue_or_pr,mcp__ai-monitor
 
 - **完全名の推測はしない**（`mcp__plugin_ai-monitor_ai-monitor-tools__*` や `mcp__ai-monitor__*` は誤りで、ToolSearch でヒットしない）
 - **`gh` CLI で MCP ツールを代替しない**（コメント Resolve / ラベル遷移 等は MCP ツール経由で行う。gh 直叩きだと Resolve が漏れる 等の不整合が起きる）
+
+例外は MCP サーバー自体が応答しなくなったときだけで、扱いは共通ルール『不具合の報告』の `## MCP サーバーが応答しないとき`。

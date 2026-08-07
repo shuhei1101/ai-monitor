@@ -270,11 +270,12 @@ def setup_poc_pr(
         story_issue_factory, subsystem_issue_factory, commit_file,
         pr_body=SUBSYSTEM_PR_BODY, branch_type="docs", artifact="interface",
     )
+    # ライブラリ PoC の base は subsystem ブランチ（規約『ブランチ戦略』）
     poc_branch = f"poc/backend/task/task-edit-{ctx['subsystem'].number}/sqlite3"
     poc_pr = draft_pr_factory(
         poc_branch, f"PoC: sqlite3（#{ctx['subsystem'].number}）",
         poc_body.format(subsystem_number=ctx["subsystem"].number, origin_pr_number=ctx["pr"].number),
-        base_branch="master",
+        base_branch=ctx["subsystem_base_branch"],
     )
     for path, content in (poc_files or {}).items():
         commit_file(poc_branch, path, content, f"chore: e2e 用に {path} を配置")

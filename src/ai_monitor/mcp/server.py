@@ -12,6 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx
 import yaml
 from anyio import to_thread
 from githubkit import GitHub
@@ -67,6 +68,9 @@ from ai_monitor.shared.settings import LabelSettings, MonitoredProject, Settings
 logger = logging.getLogger(__name__)
 
 SETTINGS_PATH = Path.home() / ".config" / "ai-monitor" / "settings.yaml"
+
+# GitHub API 1 回あたりの上限（秒）。settings.yaml に github_timeout_sec があればそちらを使う
+DEFAULT_GITHUB_TIMEOUT_SEC = 30
 
 # 呼び出し元が対象プロジェクトを名乗るリクエストヘッダ
 PROJECT_HEADER = "X-Project"
@@ -168,7 +172,11 @@ def _get_client() -> GitHub:
         # 初回呼び出し時に設定ファイルを読み込む
         settings = yaml.safe_load(SETTINGS_PATH.read_text(encoding="utf-8"))
         # github_token で GitHub クライアントを生成してモジュール内に保持する
-        _client = GitHub(settings["github_token"])
+        # （githubkit の既定は無制限。応答が返らないとツール呼び出しが戻らなくなる）
+        _client = GitHub(
+            settings["github_token"],
+            timeout=httpx.Timeout(settings.get("github_timeout_sec", DEFAULT_GITHUB_TIMEOUT_SEC)),
+        )
     # 2 回目以降は保持済みの同一インスタンスを返す
     return _client
 

@@ -1032,16 +1032,22 @@ def setup_subsystem(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic", "type:feat"]
     )
     epic_branch = f"feat/epic/task-edit-{epic.number}/base"
+    # epic のベース PR（要件の SoT。epic レベルの決定はここへ反映される）
     epic_pr = epic_pr_factory(
-        branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
+        branch=epic_branch, title=EPIC_TITLE,
+        body=f"## 紐づく Issue\n\n- #{epic.number}\n\n{EPIC_BODY}",
     )
     story = story_issue_factory(
         epic.number, STORY_TITLE,
         body=STORY_BODY_TEMPLATE.format(epic_number=epic.number), labels=["layer:story", "type:feat"],
     )
     story_branch = f"feat/story/task-edit-{story.number}/base"
+    # story のベース PR（要件の SoT。エスカレーションの決定はここへ反映される）
     story_pr = draft_pr_factory(
-        story_branch, STORY_TITLE, f"## 紐づく Issue\n\n- #{story.number}\n", base_branch=epic_branch
+        story_branch, STORY_TITLE,
+        f"## 紐づく Issue\n\n- #{story.number}\n\n"
+        + STORY_BODY_TEMPLATE.format(epic_number=epic.number),
+        base_branch=epic_branch,
     )
     commit_file(story_branch, SCENARIO_PATH, SCENARIO_MD, "docs: 単一UC シナリオ（タスク編集）を追加")
     # subsystem Issue は確認ラベルなしで作る（起動対象は subsystem PR 側）

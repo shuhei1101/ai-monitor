@@ -43,20 +43,20 @@ class SessionRegistry:
                     session.last_seen_at = datetime.now(timezone.utc).astimezone().isoformat()
             save_sessions(self._state_path, self.sessions)
 
-    def add_watch(self, project: str, agent_name: str, primary_number: int, numbers: list[int]) -> None:
+    def add_watch(self, project: str, agent_name: str, number: int, numbers: list[int]) -> None:
         """監視面番号一覧に番号を追加して永続化する。"""
         with self._lock:
-            session = self._find_by_primary(project, agent_name, primary_number)
+            session = self._find_for_watch(project, agent_name, number)
             # 未登録の番号だけを追加する（登録済みは無視する冪等操作）
-            for number in numbers:
-                if number not in session.watch_numbers:
-                    session.watch_numbers.append(number)
+            for watch_number in numbers:
+                if watch_number not in session.watch_numbers:
+                    session.watch_numbers.append(watch_number)
             save_sessions(self._state_path, self.sessions)
 
-    def remove_watch(self, project: str, agent_name: str, primary_number: int, numbers: list[int]) -> None:
+    def remove_watch(self, project: str, agent_name: str, number: int, numbers: list[int]) -> None:
         """監視面番号一覧から番号を取り除いて永続化する。"""
         with self._lock:
-            session = self._find_by_primary(project, agent_name, primary_number)
+            session = self._find_for_watch(project, agent_name, number)
             # 未登録の番号は無視する冪等操作
             session.watch_numbers = [n for n in session.watch_numbers if n not in numbers]
             save_sessions(self._state_path, self.sessions)
@@ -76,13 +76,14 @@ class SessionRegistry:
             save_sessions(self._state_path, self.sessions)
             return released
 
-    def _find_by_primary(self, project: str, agent_name: str, primary_number: int) -> AgentSession:
+    def _find_for_watch(self, project: str, agent_name: str, number: int) -> AgentSession:
+        """監視面を更新する対象のセッションを主番号または監視面番号で解決する。
+
+        面が Issue から PR へ移ったエージェントは、以降のターンで起動要因の番号が
+        主番号ではなく監視面番号になるため、`find` と同じ解決規則にする。
+        """
         with self._lock:
-            for session in self.sessions:
-                if (
-                    session.project == project
-                    and session.agent_name == agent_name
-                    and session.primary_number == primary_number
-                ):
-                    return session
-            raise KeyError(f"{project}/{agent_name}/{primary_number}")
+            session = self.find(project, agent_name, number)
+            if session is None:
+                raise KeyError(f"{project}/{agent_name}/{number}")
+            return session

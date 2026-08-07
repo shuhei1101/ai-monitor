@@ -7,6 +7,7 @@ from pathlib import Path
 from githubkit.exception import RequestFailed
 
 import ai_monitor.mcp.server as server
+from tests.e2e.エスカレーション import answer_review_threads
 
 INTAKE_TITLE = "タスク編集画面の追加"
 INTAKE_BODY = "既存タスク一覧画面から編集画面へ遷移して編集できるようにする。"
@@ -45,8 +46,29 @@ epic 全体の UI 設計を発注します。
 ------
 """
 
+# モック成果物 PR の本文（epic-conductor が『要件確定（完了処理）』で作る形）
+MOCK_ARTIFACT_PR_BODY = """## 紐づく Issue
 
-def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, sandbox, wait_until, tmp_path):
+- #{intake_number}
+
+## タスク一覧
+
+- [ ] タスク編集画面のモックを作成
+- [ ] `## UI 設計` の画面一覧・画面遷移・モックを記入
+"""
+
+
+def _worktree(local_path, branch):
+    """対象ブランチのローカル worktree を用意する（本番では conductor が worktree_create で用意する）。"""
+    worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
+    subprocess.run(["git", "-C", local_path, "fetch", "origin", branch], check=True)
+    subprocess.run(["git", "-C", local_path, "worktree", "add", str(worktree_path), branch], check=True)
+
+
+def test_normal(
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    sandbox, wait_until, tmp_path,
+):
     """方針提案 → 承認 → モック作成 → 承認 → 完了処理までを実環境で確認する（正常系）。"""
     owner, repo = repo_ctx
 
@@ -57,19 +79,18 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
     intake, epic = epic_issue_factory(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY, epic_labels=["layer:epic"]
     )
-    # 準備: epic Draft PR（本文は `## 紐づく Issue` のみ）
-    branch = f"feat/epic/task-edit-{epic.number}/base"
-    pr = epic_pr_factory(
-        branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
+    # 準備: 要件の SoT になる epic ベース PR（確認ラベルなし = 起動対象にしない）
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
+    epic_pr = epic_pr_factory(
+        branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
     )
-    # 準備: epic ブランチのローカル worktree（mock-designer が commit するため。本番では epic-conductor が worktree_create で用意する）
-    local_path = sandbox["local_path"]
-    worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
-    subprocess.run(["git", "-C", local_path, "fetch", "origin", branch], check=True)
-    subprocess.run(
-        ["git", "-C", local_path, "worktree", "add", str(worktree_path), branch],
-        check=True,
+    # 準備: 作業対象のモック成果物 PR（base=epic ブランチ）。UI 設計は成果物 PR 本文が持つ
+    branch = f"docs/epic/task-edit-{epic.number}/mock"
+    pr = draft_pr_factory(
+        branch, f"{EPIC_TITLE}（モック）",
+        MOCK_ARTIFACT_PR_BODY.format(intake_number=intake.number), base_branch=epic_branch,
     )
+    _worktree(sandbox["local_path"], branch)
     # 準備: epic-conductor の指示コメントを投稿してから確認ラベルを付ける
     instruction = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=pr.number, body=INSTRUCTION_BODY
@@ -95,7 +116,9 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
     assert "### 画面一覧" in body
     assert "### 画面遷移" in body
 
-    # 実行: 方針のユーザー承認を再現（議論中 除去 + assignee 外し）
+    # 実行: 確認事項へ回答してから方針のユーザー承認を再現（議論中 除去 + assignee 外し）
+    # （未解決の確認事項が残っていると完了処理が応答ループへ戻す）
+    answer_review_threads(gh_live, owner, repo, pr.number)
     try:
         gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr.number, name="議論中")
     except RequestFailed:
@@ -120,19 +143,31 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
     body = (pr_data.body or "").replace("\r\n", "\n")
     assert "### モック" in body
 
-    # 検証: モック HTML が epic ブランチにコミットされている
+    # 検証: 待機に入る時点でタスク一覧がチェック済み（commit 直後に入れる規定）
+    assert "- [ ]" not in body, f"成果物 PR のタスク一覧に未チェックの行が残っている: {body}"
+
+    # 検証: モック HTML が epic PR 番号配下へ、モック成果物ブランチにコミットされている
     tree = gh_live.rest.git.get_tree(
         owner=owner, repo=repo, tree_sha=branch, recursive="1"
     ).parsed_data
-    mock_files = [t.path for t in tree.tree if t.path.startswith("docs/mock/pages/") and t.path.endswith("index.html")]
-    assert mock_files, "モック HTML が epic ブランチにコミットされていない"
+    mock_files = [
+        t.path for t in tree.tree
+        if t.path.startswith("docs/mock/pages/") and f"/{epic_pr.number}/" in t.path
+        and t.path.endswith("index.html")
+    ]
+    assert mock_files, (
+        f"モック HTML が epic PR 番号 {epic_pr.number} 配下にコミットされていない: "
+        f"{[t.path for t in tree.tree if t.path.startswith('docs/mock/pages/')]}"
+    )
 
     # 検証: PR に raw.githack.com の URL を含むコメント（モック URL 共有）が投稿されている
     pr_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
     mock_url_comments = [c for c in pr_comments if "raw.githack.com" in c.body]
     assert mock_url_comments, "モック URL コメント（raw.githack.com）が投稿されていない"
 
-    # 実行: モックのユーザー承認を再現（議論中 除去 + assignee 外し）
+    # 実行: 確認事項へ回答してからモックのユーザー承認を再現（議論中 除去 + assignee 外し）
+    # （未解決の確認事項が残っていると完了処理が応答ループへ戻す）
+    answer_review_threads(gh_live, owner, repo, pr.number)
     try:
         gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=pr.number, name="議論中")
     except RequestFailed:
@@ -142,20 +177,22 @@ def test_normal(monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
             owner=owner, repo=repo, issue_number=pr.number, assignees=[assignee.login]
         )
 
-    # 実行: 完了処理完了を待つ（PR の 確認:mock-designer 除去 + 親 epic に 確認:epic-conductor 付与）
+    # 実行: 完了処理完了を待つ（成果物 PR の 確認:mock-designer 除去 + 親 epic PR に 確認:epic-conductor 付与）
     def _wrapped_up():
         pr_now = _get(pr.number)
-        epic_now = _get(epic.number)
+        epic_pr_now = _get(epic_pr.number)
         pr_labels = {label.name for label in pr_now.labels}
-        epic_labels = {label.name for label in epic_now.labels}
-        if "確認:mock-designer" not in pr_labels and "確認:epic-conductor" in epic_labels:
-            return (pr_now, epic_now)
+        epic_pr_labels = {label.name for label in epic_pr_now.labels}
+        if "確認:mock-designer" not in pr_labels and "確認:epic-conductor" in epic_pr_labels:
+            return (pr_now, epic_pr_now)
         return None
 
-    pr_data, epic_data = wait_until(_wrapped_up, timeout_sec=1200, message="完了処理の完了")
+    pr_data, epic_pr_data = wait_until(_wrapped_up, timeout_sec=1200, message="完了処理の完了")
 
-    # 検証: 親 epic Issue に @epic-conductor 宛の完了報告コメント（未 Resolve）が投稿されている
-    epic_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=epic.number).parsed_data
+    # 検証: 親 epic PR に @epic-conductor 宛の完了報告コメント（未 Resolve）が投稿されている
+    epic_comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=epic_pr.number
+    ).parsed_data
     completion = [c for c in epic_comments if "> to: @epic-conductor" in c.body]
     assert completion, "@epic-conductor 宛の完了報告コメントが投稿されていない"
     assert not server._is_minimized(completion[-1].node_id), "完了報告が Resolve されてしまっている"
@@ -190,7 +227,9 @@ CURRENT_MOCK_HTML = (
 
 
 def _approve(gh_live, owner, repo, number, assignees):
-    """ユーザー役の承認操作（議論中 除去 + assignee 外し）。"""
+    """ユーザー役の承認操作（確認事項への回答 + 議論中 除去 + assignee 外し）。"""
+    # 未解決の確認事項が残っていると完了処理が応答ループへ戻す
+    answer_review_threads(gh_live, owner, repo, number)
     try:
         gh_live.rest.issues.remove_label(owner=owner, repo=repo, issue_number=number, name="議論中")
     except RequestFailed:
@@ -202,8 +241,8 @@ def _approve(gh_live, owner, repo, number, assignees):
 
 
 def test_normal_when_reverse(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, commit_file, sandbox,
-    wait_until, master_baseline,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
+    commit_file, sandbox, wait_until,
 ):
     """現状モックを入力にした全体 UI 設計を実環境で確認する（正常系・リバースエンジニアリング）。"""
     owner, repo = repo_ctx
@@ -216,15 +255,19 @@ def test_normal_when_reverse(
         INTAKE_TITLE, INTAKE_BODY, EPIC_TITLE, epic_body=EPIC_BODY,
         epic_labels=["layer:epic", "type:docs", "リバースエンジニアリング"],
     )
-    branch = f"feat/epic/task-edit-{epic.number}/base"
-    pr = epic_pr_factory(branch=branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n")
-    # 準備: RE PR がマージ済み（現状モックが master にある）状態を再現する
-    commit_file("master", CURRENT_MOCK_PATH, CURRENT_MOCK_HTML, "docs: 現状モックを追加")
-    # 準備: epic ブランチのローカル worktree（mock-designer が commit するため）
-    local_path = sandbox["local_path"]
-    worktree_path = Path(local_path) / ".claude" / "worktrees" / branch.replace("/", "-")
-    subprocess.run(["git", "-C", local_path, "fetch", "origin", branch], check=True)
-    subprocess.run(["git", "-C", local_path, "worktree", "add", str(worktree_path), branch], check=True)
+    epic_branch = f"feat/epic/task-edit-{epic.number}/base"
+    epic_pr = epic_pr_factory(
+        branch=epic_branch, title=EPIC_TITLE, body=f"## 紐づく Issue\n\n- #{epic.number}\n"
+    )
+    # 準備: 現状モック RE PR がマージ済み（現状モックが epic ブランチにある）状態を再現する
+    commit_file(epic_branch, CURRENT_MOCK_PATH, CURRENT_MOCK_HTML, "docs: 現状モックを追加")
+    # 準備: 作業対象のモック成果物 PR（base=epic ブランチ。現状モックを引き継ぐ）
+    branch = f"docs/epic/task-edit-{epic.number}/mock"
+    pr = draft_pr_factory(
+        branch, f"{EPIC_TITLE}（モック）",
+        MOCK_ARTIFACT_PR_BODY.format(intake_number=intake.number), base_branch=epic_branch,
+    )
+    _worktree(sandbox["local_path"], branch)
     # 準備: epic-conductor の採取指示コメントを投稿してから確認ラベルを付ける
     instruction = gh_live.rest.issues.create_comment(
         owner=owner, repo=repo, issue_number=pr.number, body=RE_INSTRUCTION_BODY
@@ -262,13 +305,16 @@ def test_normal_when_reverse(
 
     pr_data = wait_until(_mock_done, timeout_sec=2400, message="モック作成の完了")
 
-    # 検証: モックが epic 番号配下へ commit され、URL がコメントで共有されている
+    # 検証: モックが epic PR 番号配下へ commit され、URL がコメントで共有されている
     tree = gh_live.rest.git.get_tree(owner=owner, repo=repo, tree_sha=branch, recursive="1").parsed_data
     mock_files = [
         t.path for t in tree.tree
-        if t.path.startswith("docs/mock/pages/") and f"issues/{epic.number}/" in t.path
+        if t.path.startswith("docs/mock/pages/") and f"/{epic_pr.number}/" in t.path
     ]
-    assert mock_files, f"epic 番号配下にモックが commit されていない: {epic.number}"
+    assert mock_files, (
+        f"epic PR 番号 {epic_pr.number} 配下にモックが commit されていない: "
+        f"{[t.path for t in tree.tree if t.path.startswith('docs/mock/pages/')]}"
+    )
     pr_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=pr.number).parsed_data
     assert [c for c in pr_comments if "raw.githack.com" in (c.body or "")], (
         "モック URL コメント（raw.githack.com）が投稿されていない"
@@ -279,17 +325,19 @@ def test_normal_when_reverse(
     # 実行: 完了処理の完了を待つ
     def _wrapped_up():
         pr_now = _get(pr.number)
-        epic_now = _get(epic.number)
+        epic_pr_now = _get(epic_pr.number)
         if "確認:mock-designer" in {label.name for label in pr_now.labels}:
             return None
-        return epic_now if "確認:epic-conductor" in {label.name for label in epic_now.labels} else None
+        return epic_pr_now if "確認:epic-conductor" in {label.name for label in epic_pr_now.labels} else None
 
     wait_until(_wrapped_up, timeout_sec=1800, message="完了処理の完了")
 
-    # 検証: 親 epic Issue に完了報告（未 Resolve）が投稿され、PR 側のコメントは全て Resolve 済み
-    epic_comments = gh_live.rest.issues.list_comments(owner=owner, repo=repo, issue_number=epic.number).parsed_data
+    # 検証: 親 epic PR に完了報告（未 Resolve）が投稿され、成果物 PR 側のコメントは全て Resolve 済み
+    epic_comments = gh_live.rest.issues.list_comments(
+        owner=owner, repo=repo, issue_number=epic_pr.number
+    ).parsed_data
     completion = [c for c in epic_comments if "> to: @epic-conductor" in (c.body or "")]
     assert completion, "@epic-conductor 宛の完了報告コメントが投稿されていない"
     assert not server._is_minimized(completion[-1].node_id), "完了報告が Resolve されてしまっている"
     assert server._is_minimized(instruction.node_id), "採取指示コメントが未 Resolve"
-    assert intake is not None and master_baseline
+    assert intake is not None

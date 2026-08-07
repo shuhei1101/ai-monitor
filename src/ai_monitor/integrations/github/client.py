@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 
+import httpx
 from githubkit import GitHub
 from githubkit.exception import GitHubException
 
@@ -20,7 +21,10 @@ def get_client(settings: Settings | None = None) -> GitHub:
     if _client is None:
         if settings is None:
             raise RuntimeError("初回の get_client には settings が必要")
-        _client = GitHub(settings.github_token.get_secret_value())
+        _client = GitHub(
+            settings.github_token.get_secret_value(),
+            timeout=httpx.Timeout(settings.github_timeout_sec),
+        )
     # 2 回目以降は保持済みの同一インスタンスを返す
     return _client
 

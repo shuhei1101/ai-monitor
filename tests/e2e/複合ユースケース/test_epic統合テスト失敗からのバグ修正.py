@@ -65,7 +65,7 @@ def _cleanup_fix_prs(gh_live, owner, repo, sandbox, subsystem_number: int) -> No
 
 
 def test_normal(
-    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory,
+    monitor, gh_live, repo_ctx, epic_issue_factory, epic_pr_factory, draft_pr_factory,
     story_issue_factory, subsystem_issue_factory, commit_file, wait_until, sandbox,
     master_baseline,
 ):
@@ -83,7 +83,18 @@ def test_normal(
         body=STORY_BODY_TEMPLATE.format(epic_number=ctx["epic"].number),
         labels=["layer:story", "type:feat"],
     )
-    subsystem = add_merged_subsystem(gh_live, owner, repo, subsystem_issue_factory, story.number)
+    story_branch = f"feat/story/task-edit-{story.number}/base"
+    story_pr = draft_pr_factory(
+        story_branch, STORY_TITLE, STORY_BODY_TEMPLATE.format(epic_number=ctx["epic"].number),
+        base_branch=ctx["epic_branch"],
+    )
+    subsystem = add_merged_subsystem(
+        gh_live, owner, repo, subsystem_issue_factory, draft_pr_factory, story.number, story_branch
+    )
+    # story もマージ済み（closed）にする
+    gh_live.rest.issues.update(
+        owner=owner, repo=repo, issue_number=story_pr.number, state="closed", state_reason="completed"
+    )
     gh_live.rest.issues.update(
         owner=owner, repo=repo, issue_number=story.number, state="closed", state_reason="completed"
     )

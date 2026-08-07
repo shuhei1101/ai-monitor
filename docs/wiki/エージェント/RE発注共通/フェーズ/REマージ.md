@@ -57,8 +57,6 @@ MCP `transition_phase` を呼ぶ:
 - `add_labels_`:
   - `{自分}` の確認ラベル（担当範囲表の環境変数名）の値
 
-RE PR 側の `確認:{自分}` は merged で polling の対象から外れるため、ここでは触らない。
-
 ### 作業完了報告
 
 MCP `report_completion` を呼ぶ:

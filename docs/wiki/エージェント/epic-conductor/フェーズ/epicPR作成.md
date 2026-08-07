@@ -2,11 +2,6 @@
 
 面が Issue のまま手番が渡ってきたとき、epic ブランチ + Draft PR を作って確認ラベルを PR へ移す。
 
-通常の epic は intake-issue-triager が PR まで作るのでこのフェーズは通らない。
-ユーザーが Issue へ直接 `確認:epic-conductor` を付けた場合だけ、ここが入口になる（system-conductor の立ち上げ Issue と同じ位置づけ）。
-
-PR を作った時点で以降のやり取りは PR 上に移り、次のターンから「要件確定（初回）」が通常どおり動く。
-
 ## 手順
 
 ### ラベルの付与
@@ -27,6 +22,8 @@ MCP `add_labels` を呼ぶ:
 初期処理で取得した `parent` が `layer:system` の PR なら、その `head_ref` が base になる。
 `parent` が無い、または親が intake Issue の場合は `master`。
 
+`parent` が `layer:system` の Issue で対応する system PR がまだ無い場合は、共通ルール『不具合の報告』に沿って報告する（以降の手順は実行しない）。
+
 ### epic ブランチの作成
 
 Issue のタイトルと本文から決めたドメイン名で epic ブランチを組み立てる。
@@ -41,7 +38,7 @@ MCP `create_draft_pr` を呼ぶ:
 - `head_branch`: 作成した epic ブランチ
 - `base_branch`: 決定した base
 - `title`: Issue のタイトル
-- `body`: `## 紐づく Issue`（起点の Issue 番号を 1 件）のみ
+- `body`: `## 紐づく Issue`（起点の Issue 番号を 1 件）。起動要因になった Issue の本文に epic の 5 セクションが記入済みなら、それも続けて引き継ぐ
 - `labels`:
   - `$AI_MONITOR_LABEL_LAYER_EPIC` の値
   - Issue に付いているのと同じ `type:*` ラベルの値

@@ -144,6 +144,14 @@ def test_add_watch_when_duplicate_number(registry, save_mock):
     assert registry.find("sandbox", "architect", 52).watch_numbers == [60, 61, 62]
 
 
+def test_add_watch_when_number_is_watch_number(registry, save_mock):
+    """監視面番号を渡したときの解決を確認する（正常系）。"""
+    # 実行: 主番号 52 のセッションを、監視面番号 60 で引いて追加する
+    registry.add_watch("sandbox", "architect", 60, [70])
+    # 検証
+    assert registry.find("sandbox", "architect", 52).watch_numbers == [60, 61, 70]
+
+
 def test_add_watch_when_session_missing(registry, save_mock):
     """セッション不明を確認する（異常系）。"""
     # 準備
@@ -164,6 +172,14 @@ def test_remove_watch(registry, save_mock):
     # 検証
     assert registry.find("sandbox", "architect", 52).watch_numbers == [61]
     save_mock.assert_called_once()
+
+
+def test_remove_watch_when_number_is_watch_number(registry, save_mock):
+    """監視面番号を渡したときの解決を確認する（正常系）。"""
+    # 実行: 主番号 52 のセッションを、監視面番号 61 で引いて除去する
+    registry.remove_watch("sandbox", "architect", 61, [60])
+    # 検証
+    assert registry.find("sandbox", "architect", 52).watch_numbers == [61]
 
 
 def test_remove_watch_when_number_missing(registry, save_mock):

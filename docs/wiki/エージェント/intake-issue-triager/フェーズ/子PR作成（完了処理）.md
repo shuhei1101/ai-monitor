@@ -27,7 +27,6 @@ intake 起点の作業には親 system が無いため base は常に `master` �
 - `body`: `## 紐づく Issue`（`- #$issue_number`）のみ
 - `labels`: 作業単位のレイヤーに対応する `$AI_MONITOR_LABEL_LAYER_*` の値
 
-詳細な本文は書かない。
 要件は担当の conductor が起動後に intake Issue を辿って埋める。
 
 ### 確認ラベルの付与

@@ -78,7 +78,8 @@ def test_normal(
         files=story_branch_files(service=BUGGY_SERVICE_PY, e2e_test=E2E_TEST_PY), artifact="test",
     )
     subsystem = add_merged_subsystem(
-        gh_live, owner, repo, subsystem_issue_factory, ctx["story"].number
+        gh_live, owner, repo, subsystem_issue_factory, draft_pr_factory,
+        ctx["story"].number, ctx["story_base_branch"],
     )
     add_worktree(sandbox["local_path"], ctx["story_branch"])
     story_number = ctx["story"].number

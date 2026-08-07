@@ -1,8 +1,6 @@
 # PoC結果確認
 
-epic-poc-runner の検証結果を確認し、問題なければ PoC を畳んで epic Draft PR を作成する。
-PoC を指示した本人が結果を確認してから次へ進める（epic-poc-runner は勝手に次フェーズへ飛ばさない）。
-
+epic-poc-runner の検証結果を確認し、問題なければ PoC を畳んで次の成果物 Draft PR を作成する。
 ## 手順
 
 ### 結果の照合
@@ -33,16 +31,20 @@ MCP `resolve_comments` で自分宛コメント（完了報告含む）を一括
    - `delete_branch`: true
 2. MCP `worktree_remove` を呼ぶ（`branch`: PoC ブランチ）
 
-### epic Draft PR の作成
+### 成果物 Draft PR の作成
 
-MCP `worktree_create`（`branch`: `{type}/epic/{ドメイン}/base`・`base_ref`: `origin/{自分の epic ブランチ}`）→ MCP `create_draft_pr`（`base_branch`: 自分の epic ブランチ・`body`: `## 紐づく Issue` と `## タスク一覧`・`labels`: `$AI_MONITOR_LABEL_LAYER_EPIC` の値）→ MCP `add_watch_targets`（作成した PR の番号）の順に呼ぶ。
+要件確定で確定した画面変更の有無に応じて、次の担当が作業する成果物ブランチ + Draft PR を 1 本作る。
+手順とタスク一覧の作り方は「要件確定（完了処理）」の `### 成果物 Draft PR の作成` と同じ。
 
-`## タスク一覧` の作り方は「要件確定（完了処理）」と同じ（モック作成・複合 UC シナリオ・シナリオ索引・複合 UC E2E テストの作成 / 実行を全行未チェックで列挙する）。
+| 画面変更 | 作るブランチ | title | 次の担当 |
+| --- | --- | --- | --- |
+| あり | `docs/epic/{ドメイン}/mock` | `{epic のタイトル}（モック）` | mock-designer |
+| なし | `docs/epic/{ドメイン}/scenario` | `{epic のタイトル}（複合ユースケースシナリオ）` | complex-scenario-writer |
 
-要件確定で確定した画面変更の有無で次の担当を割り当てる（MCP `add_labels`・`is_pr`: true）:
+続けて MCP `add_labels`（`number`: 作成した PR の番号・`is_pr`: true）で次の担当の確認ラベルを付ける。
 
-- 画面変更あり → `$AI_MONITOR_LABEL_CONFIRM_MOCK_DESIGNER` の値 + 指示コメント（`receiver`: `mock-designer`・画面方針の要点）
-- 画面変更なし → `$AI_MONITOR_LABEL_CONFIRM_COMPLEX_SCENARIO_WRITER` の値
+- 画面変更ありの場合、`$AI_MONITOR_LABEL_CONFIRM_MOCK_DESIGNER` の値 + 指示コメント（`receiver`: `mock-designer`・画面方針の要点）
+- 画面変更なしの場合、`$AI_MONITOR_LABEL_CONFIRM_COMPLEX_SCENARIO_WRITER` の値
 
 ### ラベル除去
 
