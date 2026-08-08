@@ -15,7 +15,7 @@ template_version: 2.1.0
 | セットアップ | 説明 | 補足 |
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
-| epic PR | ユースケース一覧に 2 UC を記入済み | 衝突面が重ならない 2 UC |
+| epic PR | `## 単一ユースケース` に 2 UC を記入済み | 衝突面が重ならない 2 UC |
 | epic PR | epic ブランチの Draft PR | story PR の base |
 | story PR | 本文が `## 紐づく Issue` のみ + `確認:story-conductor` の PR を 2 件、同じ epic ブランチを base にして同時に作成 | 2 セッションの同時起動を誘発 |
 
