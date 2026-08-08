@@ -74,7 +74,7 @@ sequenceDiagram
 
 ### 期待値
 
-- epic PR 本文に `## 概要` / `## 背景` / `## 単一ユースケース` / `## 複合ユースケース` が揃っており、`## 横断要件` が無い
+- epic PR 本文に `## 概要` / `## 背景` / `## 単一ユースケース` / `## 複合ユースケース` が揃っている
 - `## 単一ユースケース` の `対応 story` 列が全行 `未作成` / `追従` のいずれか
 - `## 単一ユースケース` / `## 複合ユースケース` の `変更種別` 列が全行 `新規` / `変更` / `削除` のいずれかで埋まっている（未記入の行がない）
 - `変更種別` が `変更` / `削除` の行の UC 名が既存シナリオへの Pages リンク（`https://shuhei1101.github.io/ai-monitor/wiki/{パス}.html`）になっている
@@ -95,7 +95,7 @@ sequenceDiagram
 | Mock | なし（実環境で実行） | - |
 | epic PR | `layer:epic` + `確認:epic-conductor` 付きの Draft PR が存在 | 本文は `## 紐づく Issue` のみ |
 | 起点の intake Issue | 対象範囲・PoC 要否・画面変更の有無・複合 UC への影響が本文から一意に読み取れる内容で書かれている | 確認事項が 0 件になる状況を決定的に誘発 |
-| 起点の intake Issue の対象範囲 | 記述が 1 操作に閉じており、導かれる単一ユースケースが 1 件になる | 複合ユースケースが定型の `なし（理由）` になる状況を決定的に誘発 |
+| 起点の intake Issue の対象範囲 | 記述が 1 操作に閉じており、導かれる単一ユースケースが 1 件になる | 複合ユースケースが `なし（理由）` になる状況を決定的に誘発 |
 | 既存の設計書 | 対象の複合 UC シナリオが epic ブランチに存在する | 修正箇所の有無を判定する材料 |
 | assignee | 未設定 | エージェント起動条件 |
 | モニター | polling 中 | - |
@@ -134,13 +134,68 @@ sequenceDiagram
 
 - 確認事項コメントが 1 件も投稿されていない（本文から一意に定まる論点を質問していない）
 - `## 単一ユースケース` が 1 行（起点の intake の対象範囲が 1 操作に閉じているため）
-- `## 複合ユースケース` が定型の `なし（本 epic の単一ユースケースは 1 件のため、複数 UC を連鎖させる複合ユースケースは発生しない）` になっている（表を書いていない）
+- `## 複合ユースケース` が `なし（{理由}）` の 1 行になっている（表を書かず、括弧内に `なし` と判断した理由が書かれている）
 - `議論中` が付与されず assignee も設定されていない（ユーザーを止めずに通り抜けている）
 - 確認事項コメントに、質問せずに前提として置いた判断とその根拠が書かれている
 - 複合UCシナリオの成果物ブランチと PR が作られていない（epic ブランチ上で作業する担当が居ないため）
 - epic PR 本文に `## タスク一覧` が無い
 - story ブランチと Draft PR が作成され `確認:story-conductor` が付与されている
 - epic PR から `確認:epic-conductor` が除去されている
+
+## 正常シナリオ（単一 UC 影響なし）
+
+### セットアップ
+
+| セットアップ | 説明 | 補足 |
+| --- | --- | --- |
+| Mock | なし（実環境で実行） | - |
+| epic PR | `layer:epic` + `確認:epic-conductor` 付きの Draft PR が存在 | 本文は `## 紐づく Issue` のみ |
+| 起点の intake Issue | 既存の各単一 UC の振る舞いは変えず、UC 間の繋ぎ方だけを変える内容で書かれている | `## 単一ユースケース` が `なし（理由）` になる状況を決定的に誘発 |
+| 既存の設計書 | 対象の複合 UC シナリオと、それが連鎖させる単一 UC シナリオが epic ブランチに存在する | `変更種別` が `変更` になる行の Pages リンクの貼り先 |
+| assignee | 未設定 | エージェント起動条件 |
+| モニター | polling 中 | - |
+| ユーザー回答 | 応答ループで PoC 不要・画面変更なしと回答する | 分岐を決定的に誘発 |
+
+### フロー
+
+```mermaid
+sequenceDiagram
+  actor U as ユーザー
+  participant GH as GitHub
+  participant ORC as モニター
+
+  Note over GH: epic PR に 確認:epic-conductor 付与済み
+  ORC-->>GH: polling（確認ラベル + assignee なし を検知）
+  create participant MON as epic-conductor
+  ORC->>MON: tmux セッション作成 +<br>フェーズドキュメント注入
+  participant REPO as リポジトリ
+  activate MON
+  MON-->>GH: 紐づく Issue から intake の本文を読み<br>対象範囲を抽出
+  MON-->>REPO: 既存の単一 UC シナリオと照合し<br>振る舞いが変わる UC が無いと判定
+  MON->>GH: 単一ユースケースに なし（理由）・<br>複合ユースケースに変更行を書いて<br>epic PR 本文に反映
+  MON->>GH: epic PR に 議論中 付与 +<br>assignee=ユーザー 設定
+  deactivate MON
+
+  U->>GH: epic PR の 議論中 除去 + assignee 外し
+  ORC-->>GH: polling（議論中 除去 + assignee なし を検知）
+  ORC->>MON: 既存セッションへ送信（完了処理）
+  activate MON
+  MON->>GH: epic PR の自分宛コメント一括 Resolve
+  MON->>GH: epic PR 本文に タスク一覧 を追記
+  MON->>REPO: 複合UCシナリオの成果物ブランチ作成<br>（docs/epic/{ドメイン}/scenario・<br>base=epic ブランチ）+ 空 commit push
+  MON->>GH: 成果物 Draft PR 作成 +<br>確認:complex-scenario-writer 付与
+  MON->>ORC: 作成した PR の番号を<br>自セッションの監視面として台帳に登録
+  MON->>GH: epic PR の 確認:epic-conductor 除去
+  deactivate MON
+  Note over MON: セッションは epic PR マージまで常駐
+```
+
+### 期待値
+
+- `## 単一ユースケース` が `なし（{理由}）` の 1 行になっている（表を書かず、括弧内に `なし` と判断した理由が書かれている）
+- `## 複合ユースケース` が表で埋まっており、`変更種別` が `変更` の行の UC 名が既存シナリオへの Pages リンクになっている
+- epic PR 本文の `## タスク一覧` に複合 UC シナリオの修正・シナリオ索引の更新・複合 UC E2E テストの実行が列挙されている
+- 複合UCシナリオの成果物ブランチと Draft PR が作成され、`確認:complex-scenario-writer` が付与されている
 
 ## 正常シナリオ（PoC 不要・画面変更あり）
 
@@ -229,7 +284,7 @@ sequenceDiagram
 | --- | --- | --- |
 | Mock | なし（実環境で実行） | - |
 | `リバースエンジニアリング` ラベル | 対象の PR に付与済み | 本経路を選ぶ判定材料。ユーザーが立ち上げ Issue に付け、子 PR へ引き継がれる |
-| epic PR | `layer:epic` + `type:docs` + `確認:epic-conductor` 付きで存在 | 本文の `## 単一ユースケース` は作成時に記入済み |
+| epic PR | `layer:epic` + `type:docs` + `確認:epic-conductor` 付きで存在 | 本文の `## 単一ユースケース` は UC 名だけ作成時に記入済み（`変更種別` / Pages リンク / `対応 story` は未記入） |
 | エピック一覧 | 親 system PR の `## エピック一覧` に当該 epic の所属 UC と着手順が確定済み | [システム構成確定](./システム構成確定.md) の成果物 |
 | assignee | 未設定 | エージェント起動条件 |
 | 現状の設計書 | 現状モックと現状の複合 UC シナリオが epic ブランチに存在 | RE PR がマージ済みであることが前提 |
@@ -251,6 +306,7 @@ sequenceDiagram
   activate MON
   MON-->>GH: 親 system PR の エピック一覧から<br>当該 epic の範囲と所属 UC を読む
   MON-->>REPO: epic ブランチの現状モックと現状シナリオから<br>現在の振る舞いを把握
+  MON->>GH: 単一ユースケースの 変更種別 /<br>Pages リンク / 対応 story を<br>現状の設計書と突き合わせて補正
   MON->>GH: 概要 / 背景 / 複合ユースケースを<br>現状の設計書から逆算して epic PR 本文に反映
   MON->>GH: epic PR に確認事項コメント<br>（実装と要件が乖離している箇所・<br>あるべき姿に直す範囲）を投稿
   MON->>GH: epic PR に 議論中 付与 +<br>assignee=ユーザー 設定
