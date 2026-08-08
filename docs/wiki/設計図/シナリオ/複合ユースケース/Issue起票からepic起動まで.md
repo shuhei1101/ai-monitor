@@ -47,7 +47,7 @@ flowchart TD
 
 - intake Issue に紐づく epic PR が作成され、`layer:epic` + `type:*` が付与されている
 - intake Issue の本文がユーザー起票時のまま書き換わっていない
-- epic PR 本文に `## 概要` / `## 背景` / `## ユースケース一覧` / `## 横断要件` が揃い、ユースケース一覧の `対応 story` 列が全行 `未作成`
+- epic PR 本文に `## 概要` / `## 背景` / `## 単一ユースケース` / `## 複合ユースケース` が揃い、単一ユースケースの `対応 story` 列が全行 `未作成`
 - epic Draft PR（base=master・本文は `## 紐づく Issue` のみ）が作成され、`確認:complex-scenario-writer` が付与されている
 - epic PR の番号が epic-conductor セッションの監視面（モニターの台帳）に登録されている
 - intake Issue と epic PR がともに open のまま（`確認:*` はどちらにも残っていない）
